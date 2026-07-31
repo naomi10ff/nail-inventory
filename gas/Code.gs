@@ -45,7 +45,7 @@ function routeAction_(action, p) {
     case 'setStaffActive':
       return setStaffActive_(validateToken_(p.token), p);
     case 'lookupProduct':
-      return lookupProduct_(p.code);
+      return lookupProductForClient_(validateToken_(p.token), p);
     case 'registerProduct':
       return registerProduct_(validateToken_(p.token), p);
     case 'recordIncoming':
@@ -65,7 +65,7 @@ function routeAction_(action, p) {
     case 'listStores':
       return { stores: STORES };
     case 'listProducts':
-      return listProducts_(validateToken_(p.token));
+      return listProducts_(validateToken_(p.token), p.store);
     case 'deleteProduct':
       return deleteProduct_(validateToken_(p.token), p);
     case 'getLogEntries':
@@ -79,7 +79,7 @@ function routeAction_(action, p) {
     case 'updateProduct':
       return updateProduct_(validateToken_(p.token), p);
     case 'getBrandList':
-      return getBrandList_(validateToken_(p.token));
+      return getBrandList_(validateToken_(p.token), p.store);
     case 'addBrand':
       return addBrand_(validateToken_(p.token), p);
     case 'resetProductStock':
@@ -134,81 +134,107 @@ function setStaffActive_(session, p) {
 }
 
 // ---- 商品マスタ ----
+// 商品は「店舗」×「コード」で一意。店舗ごとに独立したマスタを持ち、同じバーコードでも
+// 店舗が違えば別の商品として登録できる。
 
-function lookupProduct_(code) {
-  if (!code) return null;
+/** 内部用の純粋な検索。store・codeを直接指定する(セッションの解釈は呼び出し側で行う)。 */
+function lookupProduct_(store, code) {
+  if (!store || !code) return null;
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(code)) {
+    if (data[i][0] === store && String(data[i][1]) === String(code)) {
       return {
-        code: data[i][0],
-        name: data[i][1],
-        brand: data[i][2],
-        category: data[i][3],
-        maker: data[i][4],
-        unit: data[i][5],
-        colorNo: data[i][8]
+        store: data[i][0],
+        code: data[i][1],
+        name: data[i][2],
+        brand: data[i][3],
+        category: data[i][4],
+        maker: data[i][5],
+        unit: data[i][6],
+        colorNo: data[i][9]
       };
     }
   }
   return null;
 }
 
+/** クライアントの「lookupProduct」action用。storeはセッションから解決する。 */
+function lookupProductForClient_(session, p) {
+  var store = session.role === 'hq' ? (p.store || session.store) : session.store;
+  return lookupProduct_(store, p.code);
+}
+
 /**
  * 新規商品登録。バーコードがある商品はそのコードで、ない商品は code を空にして
  * 呼ぶと自前QRコードを発行する。店舗・本社どちらのアカウントからも呼べるが、
- * 既存商品の上書きはできない(コードが重複していればエラーになる)。
- * 既存商品の修正は updateProduct_ (本社のみ)を使う。
+ * 既存商品の上書きはできない(店舗+コードが重複していればエラーになる)。
+ * 既存商品の修正は updateProduct_ (本社のみ)を使う。ブランドは新しい名前なら
+ * その店舗のブランドマスタに自動登録される。
  */
 function registerProduct_(session, p) {
   if (!p.name) throw new Error('品名を入力してください');
+  var store = session.role === 'hq' ? p.store : session.store;
+  requireStoreAccess_(session, store);
+  if (!store) throw new Error('店舗を指定してください');
 
   var code = p.code;
   if (!code) {
     code = 'QR-' + Utilities.getUuid().split('-')[0].toUpperCase();
-  } else if (lookupProduct_(code)) {
+  } else if (lookupProduct_(store, code)) {
     throw new Error('このコードは既に登録されています');
   }
 
+  ensureBrandExists_(store, p.brand);
+
   var sheet = getSheet_(SHEET_PRODUCTS);
   sheet.appendRow([
-    code, p.name, p.brand || '', p.category || '', p.maker || '',
+    store, code, p.name, p.brand || '', p.category || '', p.maker || '',
     p.unit || '本', p.memo || '', new Date(), p.colorNo || ''
   ]);
-  return { code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
+  return { store: store, code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
 }
 
 /** 既存商品の品名・ブランド・カテゴリー・カラーNOの修正。本社アカウントのみ。 */
 function updateProduct_(session, p) {
   requireRole_(session, ['hq']);
-  if (!p.code) throw new Error('コードが指定されていません');
+  if (!p.store || !p.code) throw new Error('店舗とコードを指定してください');
+
+  ensureBrandExists_(p.store, p.brand);
 
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(p.code)) {
+    if (data[i][0] === p.store && String(data[i][1]) === String(p.code)) {
       var row = i + 1;
-      sheet.getRange(row, 2).setValue(p.name || '');
-      sheet.getRange(row, 3).setValue(p.brand || '');
-      sheet.getRange(row, 4).setValue(p.category || '');
-      sheet.getRange(row, 9).setValue(p.colorNo || '');
+      sheet.getRange(row, 3).setValue(p.name || '');
+      sheet.getRange(row, 4).setValue(p.brand || '');
+      sheet.getRange(row, 5).setValue(p.category || '');
+      sheet.getRange(row, 10).setValue(p.colorNo || '');
       refreshSummary_(); // ブランド名等の変更をサマリ表示にも反映する
-      return { code: p.code };
+      return { store: p.store, code: p.code };
     }
   }
   throw new Error('商品が見つかりません');
 }
 
-function listProducts_(session) {
+/** 指定した店舗の商品マスタ一覧。本社は店舗を指定して閲覧する。 */
+function listProducts_(session, storeParam) {
+  var store = session.role === 'hq' ? storeParam : session.store;
+  if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
+    throw new Error('他店舗のデータにはアクセスできません');
+  }
+  if (!store) throw new Error('店舗を指定してください');
+
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
   var list = [];
   for (var i = 1; i < data.length; i++) {
+    if (data[i][0] !== store) continue;
     list.push({
-      code: data[i][0], name: data[i][1], brand: data[i][2],
-      category: data[i][3], maker: data[i][4], unit: data[i][5],
-      colorNo: data[i][8]
+      code: data[i][1], name: data[i][2], brand: data[i][3],
+      category: data[i][4], maker: data[i][5], unit: data[i][6],
+      colorNo: data[i][9]
     });
   }
   return { products: list };
@@ -217,10 +243,11 @@ function listProducts_(session) {
 /** 既存商品の削除。本社アカウントのみ。 */
 function deleteProduct_(session, p) {
   requireRole_(session, ['hq']);
+  if (!p.store || !p.code) throw new Error('店舗とコードを指定してください');
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(p.code)) {
+    if (data[i][0] === p.store && String(data[i][1]) === String(p.code)) {
       sheet.deleteRow(i + 1);
       return { deleted: p.code };
     }
@@ -229,25 +256,46 @@ function deleteProduct_(session, p) {
 }
 
 // ---- ブランドマスタ ----
-// 本社が追加登録したブランド名が、店舗側の新規商品登録フォームのプルダウンに反映される。
+// 店舗ごとに独立したブランド一覧。商品登録・編集時に新しいブランド名が入力されると
+// 自動でその店舗のブランドマスタに追加され、以後は入力候補として表示される。
+// 本社の「ブランド管理」画面からも、店舗を指定して手動で追加できる。
 
-function getBrandList_(session) {
+function getBrandNamesForStore_(store) {
   var sheet = getSheet_(SHEET_BRANDS);
   var data = sheet.getDataRange().getValues();
   var brands = [];
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0]) brands.push(data[i][0]);
+    if (data[i][0] === store && data[i][1]) brands.push(data[i][1]);
   }
-  return { brands: brands };
+  return brands;
 }
 
+function getBrandList_(session, storeParam) {
+  var store = session.role === 'hq' ? storeParam : session.store;
+  if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
+    throw new Error('他店舗のデータにはアクセスできません');
+  }
+  if (!store) throw new Error('店舗を指定してください');
+  return { brands: getBrandNamesForStore_(store) };
+}
+
+/** 新しいブランド名なら自動でそのブランドマスタに追加する(登録・編集の裏側で使う)。 */
+function ensureBrandExists_(store, name) {
+  if (!store || !name) return;
+  if (getBrandNamesForStore_(store).indexOf(name) !== -1) return;
+  getSheet_(SHEET_BRANDS).appendRow([store, name]);
+}
+
+/** 本社が手動でブランドを追加登録する。 */
 function addBrand_(session, p) {
   requireRole_(session, ['hq']);
+  if (!p.store) throw new Error('店舗を指定してください');
   if (!p.name) throw new Error('ブランド名を入力してください');
-  var existing = getBrandList_(session).brands;
-  if (existing.indexOf(p.name) !== -1) throw new Error('このブランド名は既に登録されています');
-  getSheet_(SHEET_BRANDS).appendRow([p.name]);
-  return { name: p.name };
+  if (getBrandNamesForStore_(p.store).indexOf(p.name) !== -1) {
+    throw new Error('このブランド名は既に登録されています');
+  }
+  getSheet_(SHEET_BRANDS).appendRow([p.store, p.name]);
+  return { store: p.store, name: p.name };
 }
 
 // ---- 取引ログ(入荷・使用済・棚卸) ----
@@ -260,7 +308,7 @@ function appendLog_(store, staffName, product, type, quantity, memo) {
 function recordIncoming_(session, p) {
   var store = session.role === 'hq' ? p.store : session.store;
   requireStoreAccess_(session, store);
-  var product = lookupProduct_(p.code);
+  var product = lookupProduct_(store, p.code);
   if (!product) throw new Error('商品が見つかりません。先に新規商品登録をしてください');
   var quantity = Number(p.quantity) || 1;
   appendLog_(store, p.staffName, product, '入荷', quantity, p.memo);
@@ -271,7 +319,7 @@ function recordIncoming_(session, p) {
 function recordUsed_(session, p) {
   var store = session.role === 'hq' ? p.store : session.store;
   requireStoreAccess_(session, store);
-  var product = lookupProduct_(p.code);
+  var product = lookupProduct_(store, p.code);
   if (!product) throw new Error('商品が見つかりません');
   appendLog_(store, p.staffName, product, '使用済', 1, p.memo);
   refreshSummary_();
@@ -287,7 +335,7 @@ function submitStocktake_(session, p) {
   var recorded = [];
   var unknownCodes = [];
   items.forEach(function (item) {
-    var product = lookupProduct_(item.code);
+    var product = lookupProduct_(store, item.code);
     if (!product) {
       unknownCodes.push(item.code);
       return;
@@ -395,13 +443,13 @@ function monthEndCutoff_(month) {
   return new Date(year, monthIndex1based, 1); // Dateの月は0始まりなので、これで「指定月の翌月1日」になる
 }
 
-/** コード(バーコード)→カラーNOの対応表。在庫一覧の検索用にカラーNOも一緒に返すために使う。 */
+/** 「店舗||コード」→カラーNOの対応表。在庫一覧の検索用にカラーNOも一緒に返すために使う。 */
 function getProductColorNoMap_() {
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
   var map = {};
   for (var i = 1; i < data.length; i++) {
-    map[data[i][0]] = data[i][8] || '';
+    map[data[i][0] + '||' + data[i][1]] = data[i][9] || '';
   }
   return map;
 }
@@ -423,7 +471,7 @@ function getInventorySummary_(session, storeParam, month) {
       code: e.code,
       name: e.name,
       brand: e.brand,
-      colorNo: colorNoMap[e.code] || '',
+      colorNo: colorNoMap[e.store + '||' + e.code] || '',
       currentStock: e.current,
       outOfStock: e.current <= 0,
       lastStocktakeCount: e.lastStocktakeCount
@@ -459,7 +507,7 @@ function lookupCurrentStock_(session, p) {
   if (!p.code) throw new Error('コードが指定されていません');
   var store = session.role === 'hq' ? (p.store || session.store) : session.store;
 
-  var product = lookupProduct_(p.code);
+  var product = lookupProduct_(store, p.code);
   if (!product) return { found: false };
 
   var all = computeAllSummary_();
@@ -493,7 +541,7 @@ function resetProductStock_(session, p) {
   verifyOwnPassword_(session, p.password);
   if (!p.store || !p.code) throw new Error('店舗と商品コードを指定してください');
 
-  var product = lookupProduct_(p.code);
+  var product = lookupProduct_(p.store, p.code);
   if (!product) throw new Error('商品が見つかりません');
 
   appendLog_(p.store, session.username, product, '棚卸', 0, '本社による個別リセット');

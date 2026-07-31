@@ -13,17 +13,20 @@ var SHEET_BRANDS = 'ブランドマスタ';
 
 var STORES = ['生駒店', '西大寺宝来店', '木津店'];
 
+// 商品マスタ・ブランドマスタの列定義(店舗ごとに独立管理するため「店舗」列を先頭に持つ)
+var PRODUCTS_HEADERS = ['店舗', 'コード', '商品名', 'ブランド', 'カテゴリ', 'メーカー', '単位', '備考', '登録日', 'カラーNO'];
+var BRANDS_HEADERS = ['店舗', 'ブランド名'];
+
 function setupSpreadsheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // カラーNOは末尾に追加(既存行の列インデックスに影響を与えないため)
-  setupSheet_(ss, SHEET_PRODUCTS, ['コード', '商品名', 'ブランド', 'カテゴリ', 'メーカー', '単位', '備考', '登録日', 'カラーNO']);
+  setupSheet_(ss, SHEET_PRODUCTS, PRODUCTS_HEADERS);
   setupSheet_(ss, SHEET_STAFF, ['店舗名', 'スタッフ名', '有効']);
   setupSheet_(ss, SHEET_ACCOUNTS, ['店舗名', 'ユーザー名', 'パスワードハッシュ', 'ソルト', '権限']);
   setupSheet_(ss, SHEET_LOG, ['タイムスタンプ', '店舗', 'スタッフ名', 'コード', '商品名', 'ブランド', '種別', '数量', 'メモ']);
   setupSheet_(ss, SHEET_SUMMARY, ['店舗', 'ブランド', '商品名', 'コード', '現在庫', '直近棚卸数', '欠品', '更新日時']);
   setupSheet_(ss, SHEET_SESSIONS, ['トークン', 'ユーザー名', '店舗', '権限', '発行日時']);
-  setupSheet_(ss, SHEET_BRANDS, ['ブランド名']);
+  setupSheet_(ss, SHEET_BRANDS, BRANDS_HEADERS);
 
   seedAccounts_(ss);
 }
@@ -37,6 +40,32 @@ function setupSheet_(ss, name, headers) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
+}
+
+/**
+ * 商品マスタを「店舗ごとの独立管理」に切り替えるための一回限りの移行スクリプト。
+ * 商品マスタ・ブランドマスタ・取引ログ・現在庫サマリの中身(テストデータ)を消去し、
+ * 新しい列構成(店舗列つき)のヘッダーを書き直す。Apps Scriptエディタから手動で1回だけ実行する。
+ * アカウント・スタッフマスタ・セッションは消さない。
+ */
+function migrateToPerStoreMasters_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  resetSheetContent_(ss, SHEET_PRODUCTS, PRODUCTS_HEADERS);
+  resetSheetContent_(ss, SHEET_BRANDS, BRANDS_HEADERS);
+  resetSheetContent_(ss, SHEET_LOG, ['タイムスタンプ', '店舗', 'スタッフ名', 'コード', '商品名', 'ブランド', '種別', '数量', 'メモ']);
+  resetSheetContent_(ss, SHEET_SUMMARY, ['店舗', 'ブランド', '商品名', 'コード', '現在庫', '直近棚卸数', '欠品', '更新日時']);
+  Logger.log('商品マスタ・ブランドマスタ・取引ログ・現在庫サマリをリセットしました(店舗ごとの管理に対応した新しい列構成)。');
+}
+
+function resetSheetContent_(ss, name, headers) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  } else {
+    sheet.clear();
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
 }
 
 /** 既にアカウントが登録済みなら上書きしない(パスワード変更後の再実行で消えないように)。 */

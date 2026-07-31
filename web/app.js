@@ -281,16 +281,13 @@ document.getElementById('btn-manual-add-3').addEventListener('click', () => {
 
 async function loadBrandOptions() {
   const data = await apiCall('getBrandList', {});
-  const select = document.getElementById('new-product-brand');
-  const current = select.value;
-  select.innerHTML = '<option value="">選択してください</option>';
+  const datalist = document.getElementById('brand-datalist-store');
+  datalist.innerHTML = '';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
-    opt.textContent = brand;
-    select.appendChild(opt);
+    datalist.appendChild(opt);
   });
-  if (current && data.brands.includes(current)) select.value = current;
 }
 
 document.getElementById('btn-back-1').addEventListener('click', async () => {
@@ -748,6 +745,8 @@ async function enterDashboard() {
   fillStoreSelect('store-filter', true);
   fillStoreSelect('staff-store-select', false);
   fillStoreSelect('log-store-filter', true);
+  fillStoreSelect('product-store-select', false);
+  fillStoreSelect('brand-store-select', false);
   showScreen('screen-dashboard');
   await loadDashboard();
 }
@@ -773,7 +772,14 @@ document.getElementById('nav-products').addEventListener('click', async () => {
   await loadHqBrandOptions();
   await loadProducts();
 });
+document.getElementById('product-store-select').addEventListener('change', async () => {
+  cancelEditProduct();
+  await loadHqBrandOptions();
+  await loadProducts();
+});
+
 document.getElementById('nav-brands').addEventListener('click', async () => { showScreen('screen-brands'); await loadBrands(); });
+document.getElementById('brand-store-select').addEventListener('change', loadBrands);
 document.getElementById('nav-staff').addEventListener('click', async () => { showScreen('hq-screen-staff'); await loadStaff(); });
 document.getElementById('nav-accounts').addEventListener('click', () => showScreen('screen-accounts'));
 document.getElementById('nav-logs').addEventListener('click', async () => { showScreen('screen-logs'); await loadLogs(); });
@@ -885,24 +891,28 @@ document.getElementById('btn-bulk-reset').addEventListener('click', () => {
 // 本社アカウントのみ(updateProduct/deleteProduct はサーバー側でもhq権限を要求している)。
 
 async function loadHqBrandOptions() {
-  const data = await apiCall('getBrandList', {});
-  const select = document.getElementById('p-brand');
-  const current = select.value;
-  select.innerHTML = '<option value="">選択してください</option>';
+  const store = document.getElementById('product-store-select').value;
+  if (!store) return;
+  const data = await apiCall('getBrandList', { store });
+  const datalist = document.getElementById('brand-datalist-hq');
+  datalist.innerHTML = '';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
-    opt.textContent = brand;
-    select.appendChild(opt);
+    datalist.appendChild(opt);
   });
-  if (current && data.brands.includes(current)) select.value = current;
 }
 
 let editingProductCode = null;
 
 async function loadProducts() {
-  const data = await apiCall('listProducts', {});
+  const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('products-table');
+  if (!store) {
+    container.textContent = '店舗を選択してください';
+    return;
+  }
+  const data = await apiCall('listProducts', { store });
   container.innerHTML = '';
   const table = document.createElement('table');
   table.className = 'stock-table';
@@ -919,7 +929,7 @@ async function loadProducts() {
   container.querySelectorAll('button[data-code]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!confirm('削除しますか?')) return;
-      await apiCall('deleteProduct', { code: btn.dataset.code });
+      await apiCall('deleteProduct', { store, code: btn.dataset.code });
       await loadProducts();
     });
   });
@@ -959,7 +969,13 @@ document.getElementById('btn-cancel-edit-product').addEventListener('click', can
 
 document.getElementById('btn-add-product').addEventListener('click', async () => {
   const statusEl = document.getElementById('product-status');
+  const store = document.getElementById('product-store-select').value;
+  if (!store) {
+    statusEl.textContent = '店舗を選択してください';
+    return;
+  }
   const payload = {
+    store,
     brand: document.getElementById('p-brand').value,
     name: document.getElementById('p-name').value.trim(),
     colorNo: document.getElementById('p-color-no').value.trim(),
@@ -976,6 +992,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
       ['p-code', 'p-name', 'p-color-no'].forEach((id) => (document.getElementById(id).value = ''));
       document.getElementById('p-brand').value = '';
       document.getElementById('p-category').selectedIndex = 0;
+      await loadHqBrandOptions();
     }
     await loadProducts();
   } catch (e) {
@@ -985,8 +1002,13 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
 
 // ---- ブランド管理 ----
 async function loadBrands() {
-  const data = await apiCall('getBrandList', {});
+  const store = document.getElementById('brand-store-select').value;
   const container = document.getElementById('brands-table');
+  if (!store) {
+    container.textContent = '店舗を選択してください';
+    return;
+  }
+  const data = await apiCall('getBrandList', { store });
   if (!data.brands.length) {
     container.textContent = 'まだブランドが登録されていません';
     return;
@@ -1005,10 +1027,15 @@ async function loadBrands() {
 
 document.getElementById('btn-add-brand').addEventListener('click', async () => {
   const statusEl = document.getElementById('brand-status');
+  const store = document.getElementById('brand-store-select').value;
   const name = document.getElementById('new-brand-name').value.trim();
+  if (!store) {
+    statusEl.textContent = '店舗を選択してください';
+    return;
+  }
   if (!name) return;
   try {
-    await apiCall('addBrand', { name });
+    await apiCall('addBrand', { store, name });
     document.getElementById('new-brand-name').value = '';
     statusEl.textContent = '追加しました';
     await loadBrands();

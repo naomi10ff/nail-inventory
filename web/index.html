@@ -133,8 +133,9 @@
       <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
       <pre id="ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
     </div>
-    <label for="new-product-brand">ブランド</label>
-    <select id="new-product-brand"><option value="">選択してください</option></select>
+    <label for="new-product-brand">ブランド(一度登録した名前は候補に出ます)</label>
+    <input type="text" id="new-product-brand" list="brand-datalist-store" autocomplete="off">
+    <datalist id="brand-datalist-store"></datalist>
     <label for="new-product-name">品名</label>
     <input type="text" id="new-product-name">
     <label for="new-product-color-no">カラーNO</label>
@@ -199,16 +200,19 @@
   <div id="hq-inventory-container"></div>
 </section>
 
-<!-- 商品マスタ管理 -->
+<!-- 商品マスタ管理(店舗ごとに独立管理) -->
 <section id="screen-products" class="screen">
   <div class="topbar"><button class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
   <h2>商品マスタ</h2>
+  <label for="product-store-select">店舗</label>
+  <select id="product-store-select"></select>
   <div class="card">
     <h3 style="margin-top:0;" id="product-form-title">新規登録</h3>
     <label for="p-code">コード(空欄で自動発行。編集時は変更不可)</label>
     <input type="text" id="p-code">
-    <label for="p-brand">ブランド</label>
-    <select id="p-brand"><option value="">選択してください</option></select>
+    <label for="p-brand">ブランド(一度登録した名前は候補に出ます)</label>
+    <input type="text" id="p-brand" list="brand-datalist-hq" autocomplete="off">
+    <datalist id="brand-datalist-hq"></datalist>
     <label for="p-name">品名</label>
     <input type="text" id="p-name">
     <label for="p-color-no">カラーNO</label>
@@ -229,7 +233,9 @@
 <section id="screen-brands" class="screen">
   <div class="topbar"><button class="link" id="btn-back-brands">&lt; ダッシュボードへ</button></div>
   <h2>ブランド管理</h2>
-  <p class="hint">ここで追加したブランド名が、店舗側の新規商品登録画面のブランド選択肢に反映されます。</p>
+  <p class="hint">選んだ店舗のブランド一覧です。商品登録時に新しい名前を入力すると自動でも追加されます。</p>
+  <label for="brand-store-select">店舗</label>
+  <select id="brand-store-select"></select>
   <div class="card">
     <label for="new-brand-name">新しいブランド名</label>
     <input type="text" id="new-brand-name">
