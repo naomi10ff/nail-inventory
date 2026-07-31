@@ -1,0 +1,127 @@
+:root {
+  color-scheme: light;
+  --bg: #faf7f5;
+  --fg: #2b2320;
+  --accent: #b98a5e;
+  --accent-dark: #8a6440;
+  --line: #e4dcd4;
+  --danger: #b3453d;
+  --ok: #4c7a5e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+}
+
+.screen { display: none; padding: 20px 16px 40px; max-width: 480px; margin: 0 auto; }
+.screen.active { display: block; }
+
+h1 { font-size: 1.3rem; margin: 0 0 4px; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+p.hint { color: #756a62; font-size: 0.85rem; margin-top: 0; }
+
+label { display: block; font-size: 0.85rem; margin: 14px 0 4px; }
+
+input[type="text"], input[type="password"], input[type="number"], select {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+button {
+  font-size: 1rem;
+  padding: 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 14px;
+}
+
+button.primary { background: var(--accent); color: #fff; }
+button.primary:active { background: var(--accent-dark); }
+button.secondary { background: #fff; border: 1px solid var(--line); color: var(--fg); }
+button.danger { background: var(--danger); color: #fff; }
+button.link { background: none; color: var(--accent-dark); text-decoration: underline; width: auto; padding: 6px 0; }
+
+.menu-grid { display: grid; gap: 12px; margin-top: 20px; }
+.menu-grid button { margin-top: 0; padding: 20px; font-size: 1.05rem; }
+
+.error { color: var(--danger); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
+.status { color: var(--ok); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
+
+#reader, #reader-2, #reader-4 { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 12px; }
+
+.tally-group { margin-top: 16px; }
+.tally-group h3 { font-size: 0.9rem; color: var(--accent-dark); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.tally-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.95rem; }
+.tally-name { flex: 1; }
+.tally-stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.stepper-btn {
+  width: 34px; height: 34px; padding: 0; margin: 0;
+  border-radius: 6px; border: 1px solid var(--line); background: #fff;
+  font-size: 1.2rem; line-height: 1; color: var(--fg);
+}
+.tally-count-input {
+  width: 52px; padding: 4px; text-align: center;
+  border: 1px solid var(--line); border-radius: 6px; font-size: 0.95rem;
+}
+
+.confirm-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  padding-top: 10px;
+  padding-bottom: 6px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.confirm-bar p.hint { text-align: center; margin: 0 0 6px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+table.stock-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+table.stock-table th, table.stock-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+tr.out-of-stock td { color: var(--danger); font-weight: bold; }
+
+.card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 14px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.topbar .store-name { font-weight: bold; }
+
+#qr-result { text-align: center; margin-top: 16px; }
+#qr-result canvas { margin: 12px auto; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+.modal-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-box h3 { margin: 0 0 10px; }
+.modal-box .error { background: #fdecea; padding: 10px; border-radius: 8px; }
