@@ -48,7 +48,7 @@ function setupSheet_(ss, name, headers) {
  * 新しい列構成(店舗列つき)のヘッダーを書き直す。Apps Scriptエディタから手動で1回だけ実行する。
  * アカウント・スタッフマスタ・セッションは消さない。
  */
-function migrateToPerStoreMasters_() {
+function migrateToPerStoreMasters() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   resetSheetContent_(ss, SHEET_PRODUCTS, PRODUCTS_HEADERS);
   resetSheetContent_(ss, SHEET_BRANDS, BRANDS_HEADERS);
