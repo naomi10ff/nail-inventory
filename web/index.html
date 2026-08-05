@@ -47,7 +47,6 @@
   <div class="menu-grid">
     <button class="primary" id="btn-nav-stocktake">棚卸(バーコードスキャン)</button>
     <button class="secondary" id="btn-nav-inventory">在庫情報を見る</button>
-    <button class="secondary" id="btn-nav-incoming">新規在庫追加</button>
     <button class="secondary" id="btn-nav-stock-lookup">在庫検索</button>
   </div>
 </section>
@@ -105,60 +104,6 @@
   <p class="status" id="stock-lookup-status"></p>
 </section>
 
-<!-- 新規在庫追加画面 -->
-<section id="screen-incoming" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-3">&lt; メニューへ戻る</button></div>
-  <h2>新規在庫追加(入荷登録)</h2>
-  <div id="reader-2"></div>
-  <label for="manual-code-2">バーコードが読めない場合は手入力</label>
-  <div style="display:flex; gap:8px;">
-    <input type="text" id="manual-code-2" style="flex:1;">
-    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-2">検索</button>
-  </div>
-  <button class="secondary" id="btn-rescan" style="display:none;">別の商品を読み直す</button>
-
-  <div id="incoming-known" class="card" style="display:none;">
-    <p><strong id="incoming-product-name"></strong>(<span id="incoming-product-brand"></span>)</p>
-    <label for="incoming-quantity">入荷本数</label>
-    <input type="number" id="incoming-quantity" value="1" min="1">
-    <button class="primary" id="btn-submit-incoming">入荷を登録</button>
-  </div>
-
-  <div id="incoming-unknown" class="card" style="display:none;">
-    <p class="hint">このコードは商品マスタに未登録です。新規商品として登録してください。</p>
-    <label for="label-photo-input">ラベルを撮影して商品名・ブランドを自動入力</label>
-    <input type="file" accept="image/*" capture="environment" id="label-photo-input">
-    <p class="status" id="ocr-status"></p>
-    <div id="ocr-raw-text" class="card" style="display:none;">
-      <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
-      <pre id="ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
-    </div>
-    <label for="new-product-brand">ブランド(一度登録した名前は候補に出ます)</label>
-    <input type="text" id="new-product-brand" list="brand-datalist-store" autocomplete="off">
-    <datalist id="brand-datalist-store"></datalist>
-    <label for="new-product-name">品名</label>
-    <input type="text" id="new-product-name">
-    <label for="new-product-color-no">カラーNO</label>
-    <input type="text" id="new-product-color-no">
-    <label for="new-product-category">カテゴリー</label>
-    <select id="new-product-category">
-      <option value="ベース/トップ">ベース/トップ</option>
-      <option value="カラー">カラー</option>
-      <option value="その他">その他</option>
-    </select>
-    <button class="secondary" id="btn-register-with-code">このバーコードで登録</button>
-    <button class="secondary" id="btn-register-with-qr">バーコードなし(QRラベルを発行)</button>
-  </div>
-
-  <div id="qr-result" style="display:none;">
-    <p>発行したQRコードを印刷して商品/棚に貼ってください</p>
-    <div id="qr-canvas-holder"></div>
-    <button class="secondary" id="btn-print-qr">印刷する</button>
-  </div>
-
-  <p class="status" id="incoming-status"></p>
-</section>
-
 <!-- ==================== 本社用画面 ==================== -->
 
 <!-- ダッシュボード(サマリーのみ。詳細な一覧は screen-total-inventory に分離) -->
@@ -167,6 +112,8 @@
   <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
     <button class="secondary" id="nav-total-inventory">総在庫</button>
     <button class="secondary" id="nav-products">商品マスタ</button>
+    <button class="secondary" id="nav-hq-incoming">入荷登録</button>
+    <button class="secondary" id="nav-hq-disposal">破棄登録</button>
     <button class="secondary" id="nav-brands">ブランド管理</button>
     <button class="secondary" id="nav-staff">スタッフ</button>
     <button class="secondary" id="nav-accounts">アカウント</button>
@@ -200,6 +147,65 @@
   <div id="hq-inventory-container"></div>
 </section>
 
+<!-- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) -->
+<section id="screen-hq-incoming" class="screen">
+  <div class="topbar"><button class="link" id="btn-back-hq-incoming">&lt; ダッシュボードへ</button></div>
+  <h2>入荷登録</h2>
+  <label for="hq-incoming-store-select">店舗</label>
+  <select id="hq-incoming-store-select"></select>
+  <p class="hint">商品マスタに登録済みの商品のみ入荷を記録できます。未登録の商品は先に「商品マスタ」で登録してください。</p>
+  <div id="reader-hq-incoming"></div>
+  <label for="manual-code-hq-incoming">バーコードが読めない場合は手入力</label>
+  <div style="display:flex; gap:8px;">
+    <input type="text" id="manual-code-hq-incoming" style="flex:1;">
+    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-incoming">検索</button>
+  </div>
+  <button class="secondary" id="btn-rescan-hq-incoming" style="display:none;">別の商品を読み直す</button>
+
+  <div id="hq-incoming-known" class="card" style="display:none;">
+    <p><strong id="hq-incoming-product-name"></strong>(<span id="hq-incoming-product-brand"></span>)</p>
+    <label for="hq-incoming-quantity">入荷本数</label>
+    <input type="number" id="hq-incoming-quantity" value="1" min="1">
+    <button class="primary" id="btn-submit-hq-incoming">入荷を登録</button>
+  </div>
+
+  <div id="hq-incoming-unknown" class="card" style="display:none;">
+    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。</p>
+  </div>
+
+  <p class="status" id="hq-incoming-status"></p>
+</section>
+
+<!-- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) -->
+<section id="screen-hq-disposal" class="screen">
+  <div class="topbar"><button class="link" id="btn-back-hq-disposal">&lt; ダッシュボードへ</button></div>
+  <h2>破棄登録</h2>
+  <label for="hq-disposal-store-select">店舗</label>
+  <select id="hq-disposal-store-select"></select>
+  <p class="hint">廃棄する商品のバーコードをスキャンし、現在庫を確認してから廃棄本数を入力してください。この操作は取消せません(取引ログから該当行を削除すれば戻せます)。</p>
+  <div id="reader-hq-disposal"></div>
+  <label for="manual-code-hq-disposal">バーコードが読めない場合は手入力</label>
+  <div style="display:flex; gap:8px;">
+    <input type="text" id="manual-code-hq-disposal" style="flex:1;">
+    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-disposal">検索</button>
+  </div>
+  <button class="secondary" id="btn-rescan-hq-disposal" style="display:none;">別の商品を読み直す</button>
+
+  <div id="hq-disposal-known" class="card" style="display:none;">
+    <p><strong id="hq-disposal-product-name"></strong>(<span id="hq-disposal-product-brand"></span> <span id="hq-disposal-product-colorno"></span>)</p>
+    <p>現在庫: <strong id="hq-disposal-current-stock"></strong></p>
+    <label for="hq-disposal-quantity">廃棄本数</label>
+    <input type="number" id="hq-disposal-quantity" value="1" min="1">
+    <button class="danger" id="btn-submit-hq-disposal">廃棄を登録</button>
+  </div>
+
+  <div id="hq-disposal-unknown" class="card" style="display:none;">
+    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。</p>
+  </div>
+
+  <p class="status" id="hq-disposal-status"></p>
+</section>
+
 <!-- 商品マスタ管理(店舗ごとに独立管理) -->
 <section id="screen-products" class="screen">
   <div class="topbar"><button class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
@@ -208,7 +214,14 @@
   <select id="product-store-select"></select>
   <div class="card">
     <h3 style="margin-top:0;" id="product-form-title">新規登録</h3>
-    <label for="p-code">コード(空欄で自動発行。編集時は変更不可)</label>
+    <label for="p-photo">ラベルを撮影して品名・ブランドを自動入力</label>
+    <input type="file" accept="image/*" capture="environment" id="p-photo">
+    <p class="status" id="p-ocr-status"></p>
+    <div id="p-ocr-raw-text" class="card" style="display:none;">
+      <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
+      <pre id="p-ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
+    </div>
+    <label for="p-code">コード(空欄で自動発行してQRラベルを出力。編集時は変更不可)</label>
     <input type="text" id="p-code">
     <label for="p-brand">ブランド(一度登録した名前は候補に出ます)</label>
     <input type="text" id="p-brand" list="brand-datalist-hq" autocomplete="off">
@@ -226,6 +239,11 @@
     <button class="primary" id="btn-add-product">登録</button>
     <button class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
     <p class="status" id="product-status"></p>
+    <div id="p-qr-result" style="display:none;">
+      <p>発行したQRコードを印刷して商品/棚に貼ってください</p>
+      <div id="p-qr-canvas-holder"></div>
+      <button class="secondary" id="btn-print-p-qr">印刷する</button>
+    </div>
   </div>
   <div id="products-table"></div>
 </section>

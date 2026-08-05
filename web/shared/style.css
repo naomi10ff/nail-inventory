@@ -96,8 +96,8 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .topbar .store-name { font-weight: bold; }
 
-#qr-result { text-align: center; margin-top: 16px; }
-#qr-result canvas { margin: 12px auto; }
+#p-qr-result { text-align: center; margin-top: 16px; }
+#p-qr-result canvas { margin: 12px auto; }
 
 .modal-overlay {
   position: fixed;

@@ -16,7 +16,8 @@ const state = {
 };
 
 let scannerStocktake = null;
-let scannerIncoming = null;
+let scannerHqIncoming = null;
+let scannerHqDisposal = null;
 
 // ---- API通信 ----
 // GAS Web AppはCORSのpreflightに対応していないため、
@@ -228,14 +229,6 @@ document.getElementById('btn-confirm-inventory-month').addEventListener('click',
   await loadInventory(month);
 });
 
-document.getElementById('btn-nav-incoming').addEventListener('click', () => {
-  resetIncomingScreen();
-  showScreen('screen-incoming');
-  rearmGate(incomingGate);
-  loadBrandOptions().catch((e) => console.error(e));
-  startScanner('reader-2', onIncomingScan, incomingGate).catch((e) => console.error(e));
-});
-
 // ---- 在庫検索(スキャンで自店の最新在庫を確認) ----
 const stockLookupGate = createGate({ rearmOnMiss: true, requiredMisses: 8 });
 let scannerStockLookup = null;
@@ -279,26 +272,11 @@ document.getElementById('btn-manual-add-3').addEventListener('click', () => {
   if (code) onStockLookupScan(code);
 });
 
-async function loadBrandOptions() {
-  const data = await apiCall('getBrandList', {});
-  const datalist = document.getElementById('brand-datalist-store');
-  datalist.innerHTML = '';
-  data.brands.forEach((brand) => {
-    const opt = document.createElement('option');
-    opt.value = brand;
-    datalist.appendChild(opt);
-  });
-}
-
 document.getElementById('btn-back-1').addEventListener('click', async () => {
   await stopScanner(scannerStocktake);
   showScreen('screen-menu');
 });
 document.getElementById('btn-back-2').addEventListener('click', () => showScreen('screen-menu'));
-document.getElementById('btn-back-3').addEventListener('click', async () => {
-  await stopScanner(scannerIncoming);
-  showScreen('screen-menu');
-});
 
 // ---- バーコード/QRスキャナ共通処理 ----
 //
@@ -308,7 +286,7 @@ document.getElementById('btn-back-3').addEventListener('click', async () => {
 // かったフレームでも毎回コールバックを呼ぶので、それを利用して「連続で一定回数
 // 検出できなかった=現物が画面から外れた」とみなし、そこで初めて次のスキャンを
 // 受け付ける。棚卸(rearmOnMiss:true)は現物を離せば自動で次を受け付け、
-// 新規在庫追加(rearmOnMiss:false)は登録操作が終わるまで自動では再開しない。
+// 入荷登録・破棄登録(rearmOnMiss:false)は登録操作が終わるまで自動では再開しない。
 function createGate(options) {
   return {
     armed: true,
@@ -324,7 +302,8 @@ function rearmGate(gate) {
 }
 
 const stocktakeGate = createGate({ rearmOnMiss: true, requiredMisses: 8 });
-const incomingGate = createGate({ rearmOnMiss: false });
+const hqIncomingGate = createGate({ rearmOnMiss: false });
+const hqDisposalGate = createGate({ rearmOnMiss: false });
 
 async function startScanner(elementId, onSuccess, gate) {
   const formats = [
@@ -338,8 +317,9 @@ async function startScanner(elementId, onSuccess, gate) {
   ];
   const scanner = new Html5Qrcode(elementId, { formatsToSupport: formats, verbose: false });
   if (elementId === 'reader') scannerStocktake = scanner;
-  if (elementId === 'reader-2') scannerIncoming = scanner;
   if (elementId === 'reader-4') scannerStockLookup = scanner;
+  if (elementId === 'reader-hq-incoming') scannerHqIncoming = scanner;
+  if (elementId === 'reader-hq-disposal') scannerHqDisposal = scanner;
 
   await scanner.start(
     { facingMode: 'environment' },
@@ -589,22 +569,6 @@ document.getElementById('btn-export-inventory').addEventListener('click', () => 
   downloadCsv(`在庫情報_${state.store}_${currentInventoryMonth}.csv`, rows);
 });
 
-// ---- 新規在庫追加 ----
-function resetIncomingScreen() {
-  document.getElementById('incoming-known').style.display = 'none';
-  document.getElementById('incoming-unknown').style.display = 'none';
-  document.getElementById('qr-result').style.display = 'none';
-  document.getElementById('btn-rescan').style.display = 'none';
-  document.getElementById('incoming-status').textContent = '';
-  document.getElementById('ocr-status').textContent = '';
-  document.getElementById('ocr-raw-text').style.display = 'none';
-  document.getElementById('label-photo-input').value = '';
-  document.getElementById('new-product-name').value = '';
-  document.getElementById('new-product-color-no').value = '';
-  document.getElementById('new-product-brand').value = '';
-  document.getElementById('new-product-category').selectedIndex = 0;
-}
-
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -613,129 +577,6 @@ function fileToBase64(file) {
     reader.readAsDataURL(file);
   });
 }
-
-document.getElementById('label-photo-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('ocr-status');
-  statusEl.textContent = '認識中です。少々お待ちください...';
-  try {
-    const imageBase64 = await fileToBase64(file);
-    const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
-    document.getElementById('new-product-name').value = result.guessedName;
-    document.getElementById('new-product-brand').value = result.guessedBrand;
-    if (result.rawText) {
-      document.getElementById('ocr-raw-text').style.display = 'block';
-      document.getElementById('ocr-raw-text-content').textContent = result.rawText;
-    }
-    statusEl.textContent = '認識しました。内容を確認し、違う場合は直接修正してください';
-  } catch (err) {
-    statusEl.textContent = '認識に失敗しました: ' + err.message;
-  } finally {
-    e.target.value = '';
-  }
-});
-
-let currentScannedCode = null;
-
-async function onIncomingScan(code) {
-  currentScannedCode = code;
-  try {
-    const product = await apiCall('lookupProduct', { code });
-    resetIncomingScreen();
-    if (product) {
-      document.getElementById('incoming-known').style.display = 'block';
-      document.getElementById('incoming-product-name').textContent = product.name;
-      document.getElementById('incoming-product-brand').textContent = product.brand || '';
-    } else {
-      document.getElementById('incoming-unknown').style.display = 'block';
-    }
-    document.getElementById('btn-rescan').style.display = 'block';
-  } catch (e) {
-    document.getElementById('incoming-status').textContent = e.message;
-    rearmGate(incomingGate); // 通信エラー時はすぐ再スキャンできるようにする
-  }
-}
-
-document.getElementById('btn-manual-add-2').addEventListener('click', () => {
-  const input = document.getElementById('manual-code-2');
-  const code = input.value.trim();
-  if (code) onIncomingScan(code);
-});
-
-document.getElementById('btn-rescan').addEventListener('click', () => {
-  resetIncomingScreen();
-  rearmGate(incomingGate);
-});
-
-document.getElementById('btn-submit-incoming').addEventListener('click', async () => {
-  const quantity = Number(document.getElementById('incoming-quantity').value) || 1;
-  try {
-    await apiCall('recordIncoming', { staffName: state.staffName, code: currentScannedCode, quantity });
-    resetIncomingScreen();
-    document.getElementById('incoming-status').textContent = '入荷を登録しました';
-    rearmGate(incomingGate); // 登録が完了したので次の商品のスキャンを受け付ける
-  } catch (e) {
-    document.getElementById('incoming-status').textContent = e.message;
-  }
-});
-
-function newProductPayload() {
-  return {
-    brand: document.getElementById('new-product-brand').value,
-    name: document.getElementById('new-product-name').value.trim(),
-    colorNo: document.getElementById('new-product-color-no').value.trim(),
-    category: document.getElementById('new-product-category').value
-  };
-}
-
-document.getElementById('btn-register-with-code').addEventListener('click', async () => {
-  const payload = newProductPayload();
-  if (!payload.name) {
-    document.getElementById('incoming-status').textContent = '品名を入力してください';
-    return;
-  }
-  try {
-    await apiCall('registerProduct', Object.assign({ code: currentScannedCode }, payload));
-    document.getElementById('incoming-status').textContent = '商品を登録しました。入荷本数を入力してください';
-    document.getElementById('incoming-unknown').style.display = 'none';
-    document.getElementById('incoming-known').style.display = 'block';
-    document.getElementById('incoming-product-name').textContent = payload.name;
-    document.getElementById('incoming-product-brand').textContent = payload.brand;
-  } catch (e) {
-    document.getElementById('incoming-status').textContent = e.message;
-  }
-});
-
-document.getElementById('btn-register-with-qr').addEventListener('click', async () => {
-  const payload = newProductPayload();
-  if (!payload.name) {
-    document.getElementById('incoming-status').textContent = '品名を入力してください';
-    return;
-  }
-  try {
-    const result = await apiCall('registerProduct', payload); // code省略 = 自動発行
-    currentScannedCode = result.code;
-    document.getElementById('incoming-unknown').style.display = 'none';
-    document.getElementById('qr-result').style.display = 'block';
-    const holder = document.getElementById('qr-canvas-holder');
-    holder.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    holder.appendChild(canvas);
-    await QRCode.toCanvas(canvas, result.code, { width: 220 });
-    const label = document.createElement('p');
-    label.textContent = result.code + ' / ' + payload.name;
-    holder.appendChild(label);
-
-    document.getElementById('incoming-known').style.display = 'block';
-    document.getElementById('incoming-product-name').textContent = payload.name;
-    document.getElementById('incoming-product-brand').textContent = payload.brand;
-  } catch (e) {
-    document.getElementById('incoming-status').textContent = e.message;
-  }
-});
-
-document.getElementById('btn-print-qr').addEventListener('click', () => window.print());
 
 // ==================== 本社用 ====================
 
@@ -747,6 +588,8 @@ async function enterDashboard() {
   fillStoreSelect('log-store-filter', true);
   fillStoreSelect('product-store-select', false);
   fillStoreSelect('brand-store-select', false);
+  fillStoreSelect('hq-incoming-store-select', false);
+  fillStoreSelect('hq-disposal-store-select', false);
   showScreen('screen-dashboard');
   await loadDashboard();
 }
@@ -784,12 +627,148 @@ document.getElementById('nav-staff').addEventListener('click', async () => { sho
 document.getElementById('nav-accounts').addEventListener('click', () => showScreen('screen-accounts'));
 document.getElementById('nav-logs').addEventListener('click', async () => { showScreen('screen-logs'); await loadLogs(); });
 
+document.getElementById('nav-hq-incoming').addEventListener('click', () => {
+  resetHqIncomingScreen();
+  showScreen('screen-hq-incoming');
+  rearmGate(hqIncomingGate);
+  startScanner('reader-hq-incoming', onHqIncomingScan, hqIncomingGate).catch((e) => console.error(e));
+});
+document.getElementById('nav-hq-disposal').addEventListener('click', () => {
+  resetHqDisposalScreen();
+  showScreen('screen-hq-disposal');
+  rearmGate(hqDisposalGate);
+  startScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate).catch((e) => console.error(e));
+});
+document.getElementById('hq-incoming-store-select').addEventListener('change', resetHqIncomingScreen);
+document.getElementById('hq-disposal-store-select').addEventListener('change', resetHqDisposalScreen);
+
 document.getElementById('btn-back-total-inventory').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-products').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-brands').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-staff').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-accounts').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-logs').addEventListener('click', () => showScreen('screen-dashboard'));
+document.getElementById('btn-back-hq-incoming').addEventListener('click', async () => {
+  await stopScanner(scannerHqIncoming);
+  showScreen('screen-dashboard');
+});
+document.getElementById('btn-back-hq-disposal').addEventListener('click', async () => {
+  await stopScanner(scannerHqDisposal);
+  showScreen('screen-dashboard');
+});
+
+// ---- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) ----
+function resetHqIncomingScreen() {
+  document.getElementById('hq-incoming-known').style.display = 'none';
+  document.getElementById('hq-incoming-unknown').style.display = 'none';
+  document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
+  document.getElementById('hq-incoming-status').textContent = '';
+}
+
+let hqIncomingScannedCode = null;
+
+async function onHqIncomingScan(code) {
+  hqIncomingScannedCode = code;
+  const store = document.getElementById('hq-incoming-store-select').value;
+  try {
+    const product = await apiCall('lookupProduct', { store, code });
+    resetHqIncomingScreen();
+    if (product) {
+      document.getElementById('hq-incoming-known').style.display = 'block';
+      document.getElementById('hq-incoming-product-name').textContent = product.name;
+      document.getElementById('hq-incoming-product-brand').textContent = product.brand || '';
+      document.getElementById('hq-incoming-quantity').value = 1;
+    } else {
+      document.getElementById('hq-incoming-unknown').style.display = 'block';
+    }
+    document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
+  } catch (e) {
+    document.getElementById('hq-incoming-status').textContent = e.message;
+    rearmGate(hqIncomingGate); // 通信エラー時はすぐ再スキャンできるようにする
+  }
+}
+
+document.getElementById('btn-manual-add-hq-incoming').addEventListener('click', () => {
+  const input = document.getElementById('manual-code-hq-incoming');
+  const code = input.value.trim();
+  if (code) onHqIncomingScan(code);
+});
+
+document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () => {
+  resetHqIncomingScreen();
+  rearmGate(hqIncomingGate);
+});
+
+document.getElementById('btn-submit-hq-incoming').addEventListener('click', async () => {
+  const store = document.getElementById('hq-incoming-store-select').value;
+  const quantity = Number(document.getElementById('hq-incoming-quantity').value) || 1;
+  try {
+    await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity });
+    resetHqIncomingScreen();
+    document.getElementById('hq-incoming-status').textContent = '入荷を登録しました';
+    rearmGate(hqIncomingGate); // 登録が完了したので次の商品のスキャンを受け付ける
+  } catch (e) {
+    document.getElementById('hq-incoming-status').textContent = e.message;
+  }
+});
+
+// ---- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) ----
+function resetHqDisposalScreen() {
+  document.getElementById('hq-disposal-known').style.display = 'none';
+  document.getElementById('hq-disposal-unknown').style.display = 'none';
+  document.getElementById('btn-rescan-hq-disposal').style.display = 'none';
+  document.getElementById('hq-disposal-status').textContent = '';
+}
+
+let hqDisposalScannedCode = null;
+
+async function onHqDisposalScan(code) {
+  hqDisposalScannedCode = code;
+  const store = document.getElementById('hq-disposal-store-select').value;
+  try {
+    const result = await apiCall('lookupCurrentStock', { store, code });
+    resetHqDisposalScreen();
+    if (result.found) {
+      document.getElementById('hq-disposal-known').style.display = 'block';
+      document.getElementById('hq-disposal-product-name').textContent = result.name;
+      document.getElementById('hq-disposal-product-brand').textContent = result.brand || '';
+      document.getElementById('hq-disposal-product-colorno').textContent = result.colorNo || '';
+      document.getElementById('hq-disposal-current-stock').textContent =
+        result.currentStock + '本' + (result.outOfStock ? '(欠品)' : '');
+      document.getElementById('hq-disposal-quantity').value = 1;
+    } else {
+      document.getElementById('hq-disposal-unknown').style.display = 'block';
+    }
+    document.getElementById('btn-rescan-hq-disposal').style.display = 'block';
+  } catch (e) {
+    document.getElementById('hq-disposal-status').textContent = e.message;
+    rearmGate(hqDisposalGate); // 通信エラー時はすぐ再スキャンできるようにする
+  }
+}
+
+document.getElementById('btn-manual-add-hq-disposal').addEventListener('click', () => {
+  const input = document.getElementById('manual-code-hq-disposal');
+  const code = input.value.trim();
+  if (code) onHqDisposalScan(code);
+});
+
+document.getElementById('btn-rescan-hq-disposal').addEventListener('click', () => {
+  resetHqDisposalScreen();
+  rearmGate(hqDisposalGate);
+});
+
+document.getElementById('btn-submit-hq-disposal').addEventListener('click', async () => {
+  const store = document.getElementById('hq-disposal-store-select').value;
+  const quantity = Number(document.getElementById('hq-disposal-quantity').value) || 1;
+  try {
+    await apiCall('recordDisposal', { store, code: hqDisposalScannedCode, quantity });
+    resetHqDisposalScreen();
+    document.getElementById('hq-disposal-status').textContent = '廃棄を登録しました';
+    rearmGate(hqDisposalGate); // 登録が完了したので次の商品のスキャンを受け付ける
+  } catch (e) {
+    document.getElementById('hq-disposal-status').textContent = e.message;
+  }
+});
 
 // ---- 本社ダッシュボード(サマリーのみ) ----
 async function loadDashboard() {
@@ -887,8 +866,8 @@ document.getElementById('btn-bulk-reset').addEventListener('click', () => {
 });
 
 // ---- 商品マスタ(本社) ----
-// 店舗アカウントは新規登録のみ可能(registerProduct)。既存商品の修正・削除は
-// 本社アカウントのみ(updateProduct/deleteProduct はサーバー側でもhq権限を要求している)。
+// 商品マスタの新規登録・修正・削除はすべて本社アカウントのみ(registerProduct/updateProduct/
+// deleteProduct はサーバー側でもhq権限を要求している)。店舗アカウントからは登録できない。
 
 async function loadHqBrandOptions() {
   const store = document.getElementById('product-store-select').value;
@@ -952,6 +931,10 @@ function startEditProduct(product) {
   document.getElementById('p-category').value = product.category || 'ベース/トップ';
   document.getElementById('btn-add-product').textContent = '更新する';
   document.getElementById('btn-cancel-edit-product').style.display = 'block';
+  document.getElementById('p-qr-result').style.display = 'none';
+  document.getElementById('p-ocr-status').textContent = '';
+  document.getElementById('p-ocr-raw-text').style.display = 'none';
+  document.getElementById('p-photo').value = '';
 }
 
 function cancelEditProduct() {
@@ -963,9 +946,35 @@ function cancelEditProduct() {
   document.getElementById('p-category').selectedIndex = 0;
   document.getElementById('btn-add-product').textContent = '登録';
   document.getElementById('btn-cancel-edit-product').style.display = 'none';
+  document.getElementById('p-qr-result').style.display = 'none';
+  document.getElementById('p-ocr-status').textContent = '';
+  document.getElementById('p-ocr-raw-text').style.display = 'none';
+  document.getElementById('p-photo').value = '';
 }
 
 document.getElementById('btn-cancel-edit-product').addEventListener('click', cancelEditProduct);
+
+document.getElementById('p-photo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('p-ocr-status');
+  statusEl.textContent = '認識中です。少々お待ちください...';
+  try {
+    const imageBase64 = await fileToBase64(file);
+    const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
+    document.getElementById('p-name').value = result.guessedName;
+    document.getElementById('p-brand').value = result.guessedBrand;
+    if (result.rawText) {
+      document.getElementById('p-ocr-raw-text').style.display = 'block';
+      document.getElementById('p-ocr-raw-text-content').textContent = result.rawText;
+    }
+    statusEl.textContent = '認識しました。内容を確認し、違う場合は直接修正してください';
+  } catch (err) {
+    statusEl.textContent = '認識に失敗しました: ' + err.message;
+  } finally {
+    e.target.value = '';
+  }
+});
 
 document.getElementById('btn-add-product').addEventListener('click', async () => {
   const statusEl = document.getElementById('product-status');
@@ -974,6 +983,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
     statusEl.textContent = '店舗を選択してください';
     return;
   }
+  const codeInput = document.getElementById('p-code').value.trim();
   const payload = {
     store,
     brand: document.getElementById('p-brand').value,
@@ -987,18 +997,36 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
       statusEl.textContent = '更新しました';
       cancelEditProduct();
     } else {
-      await apiCall('registerProduct', Object.assign({ code: document.getElementById('p-code').value.trim() || undefined }, payload));
+      document.getElementById('p-qr-result').style.display = 'none';
+      const result = await apiCall('registerProduct', Object.assign({ code: codeInput || undefined }, payload));
       statusEl.textContent = '登録しました';
       ['p-code', 'p-name', 'p-color-no'].forEach((id) => (document.getElementById(id).value = ''));
       document.getElementById('p-brand').value = '';
       document.getElementById('p-category').selectedIndex = 0;
+      document.getElementById('p-ocr-status').textContent = '';
+      document.getElementById('p-ocr-raw-text').style.display = 'none';
+      document.getElementById('p-photo').value = '';
       await loadHqBrandOptions();
+
+      if (!codeInput) {
+        const holder = document.getElementById('p-qr-canvas-holder');
+        holder.innerHTML = '';
+        const canvas = document.createElement('canvas');
+        holder.appendChild(canvas);
+        await QRCode.toCanvas(canvas, result.code, { width: 220 });
+        const label = document.createElement('p');
+        label.textContent = result.code + ' / ' + result.name;
+        holder.appendChild(label);
+        document.getElementById('p-qr-result').style.display = 'block';
+      }
     }
     await loadProducts();
   } catch (e) {
     statusEl.textContent = e.message;
   }
 });
+
+document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
 
 // ---- ブランド管理 ----
 async function loadBrands() {

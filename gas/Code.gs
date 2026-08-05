@@ -50,8 +50,8 @@ function routeAction_(action, p) {
       return registerProduct_(validateToken_(p.token), p);
     case 'recordIncoming':
       return recordIncoming_(validateToken_(p.token), p);
-    case 'recordUsed':
-      return recordUsed_(validateToken_(p.token), p);
+    case 'recordDisposal':
+      return recordDisposal_(validateToken_(p.token), p);
     case 'submitStocktake':
       return submitStocktake_(validateToken_(p.token), p);
     case 'getInventorySummary':
@@ -166,16 +166,16 @@ function lookupProductForClient_(session, p) {
 }
 
 /**
- * 新規商品登録。バーコードがある商品はそのコードで、ない商品は code を空にして
- * 呼ぶと自前QRコードを発行する。店舗・本社どちらのアカウントからも呼べるが、
- * 既存商品の上書きはできない(店舗+コードが重複していればエラーになる)。
- * 既存商品の修正は updateProduct_ (本社のみ)を使う。ブランドは新しい名前なら
- * その店舗のブランドマスタに自動登録される。
+ * 新規商品登録。本社アカウントのみ呼べる(商品マスタは本社が店舗を選んで管理する)。
+ * バーコードがある商品はそのコードで、ない商品は code を空にして呼ぶと自前QRコードを
+ * 発行する。既存商品の上書きはできない(店舗+コードが重複していればエラーになる)。
+ * 既存商品の修正は updateProduct_ を使う。ブランドは新しい名前ならその店舗の
+ * ブランドマスタに自動登録される。
  */
 function registerProduct_(session, p) {
+  requireRole_(session, ['hq']);
   if (!p.name) throw new Error('品名を入力してください');
-  var store = session.role === 'hq' ? p.store : session.store;
-  requireStoreAccess_(session, store);
+  var store = p.store;
   if (!store) throw new Error('店舗を指定してください');
 
   var code = p.code;
@@ -298,32 +298,37 @@ function addBrand_(session, p) {
   return { store: p.store, name: p.name };
 }
 
-// ---- 取引ログ(入荷・使用済・棚卸) ----
+// ---- 取引ログ(入荷・廃棄・棚卸) ----
+// 入荷登録・破棄登録はいずれも本社アカウントが店舗を選んで行う(本社が全店舗の納品・廃棄を
+// 一元管理する運用のため)。店舗アカウントは棚卸のみ自分で記録する。
 
 function appendLog_(store, staffName, product, type, quantity, memo) {
   var sheet = getSheet_(SHEET_LOG);
   sheet.appendRow([new Date(), store, staffName || '', product.code, product.name, product.brand, type, quantity, memo || '']);
 }
 
+/** 本社が店舗を選んで納品(入荷)を登録する。 */
 function recordIncoming_(session, p) {
-  var store = session.role === 'hq' ? p.store : session.store;
-  requireStoreAccess_(session, store);
-  var product = lookupProduct_(store, p.code);
-  if (!product) throw new Error('商品が見つかりません。先に新規商品登録をしてください');
+  requireRole_(session, ['hq']);
+  if (!p.store) throw new Error('店舗を指定してください');
+  var product = lookupProduct_(p.store, p.code);
+  if (!product) throw new Error('商品が見つかりません。先に商品マスタへ登録してください');
   var quantity = Number(p.quantity) || 1;
-  appendLog_(store, p.staffName, product, '入荷', quantity, p.memo);
+  appendLog_(p.store, session.username, product, '入荷', quantity, p.memo);
   refreshSummary_();
   return { product: product, quantity: quantity };
 }
 
-function recordUsed_(session, p) {
-  var store = session.role === 'hq' ? p.store : session.store;
-  requireStoreAccess_(session, store);
-  var product = lookupProduct_(store, p.code);
+/** 本社が店舗を選んで廃棄(劣化・不良などによる在庫減)を登録する。 */
+function recordDisposal_(session, p) {
+  requireRole_(session, ['hq']);
+  if (!p.store) throw new Error('店舗を指定してください');
+  var product = lookupProduct_(p.store, p.code);
   if (!product) throw new Error('商品が見つかりません');
-  appendLog_(store, p.staffName, product, '使用済', 1, p.memo);
+  var quantity = Number(p.quantity) || 1;
+  appendLog_(p.store, session.username, product, '廃棄', quantity, p.memo);
   refreshSummary_();
-  return { product: product };
+  return { product: product, quantity: quantity };
 }
 
 /** items: [{ code, count }, ...] 棚卸で連続スキャンした結果をまとめて送信する。 */
@@ -393,7 +398,7 @@ function getLogEntries_(session, storeParam, limit) {
 }
 
 // ---- 在庫集計 ----
-// 直近の棚卸カウントをその時点の実在庫として採用し、それ以降の入荷(+)・使用済(-)を
+// 直近の棚卸カウントをその時点の実在庫として採用し、それ以降の入荷(+)・廃棄(-)を
 // 加減算する。取引ログは appendRow のみで追加されるため常に時系列順であることを前提にしている。
 // cutoffDate を渡すと、その日時より前の取引ログだけで集計する(=過去のある時点の在庫を再現する)。
 
@@ -423,7 +428,7 @@ function computeAllSummaryAsOf_(cutoffDate) {
       entry.lastStocktakeCount = qty;
     } else if (type === '入荷') {
       entry.current += qty;
-    } else if (type === '使用済') {
+    } else if (type === '廃棄') {
       entry.current -= qty;
     }
   }
