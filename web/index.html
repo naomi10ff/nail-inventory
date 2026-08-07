@@ -153,7 +153,7 @@
   <h2>入荷登録</h2>
   <label for="hq-incoming-store-select">店舗</label>
   <select id="hq-incoming-store-select"></select>
-  <p class="hint">商品マスタに登録済みの商品のみ入荷を記録できます。未登録の商品は先に「商品マスタ」で登録してください。</p>
+  <p class="hint">商品マスタに登録済みの商品はそのまま入荷を記録できます。未登録の商品はスキャン後にその場で商品登録もできます。</p>
   <div id="reader-hq-incoming"></div>
   <label for="manual-code-hq-incoming">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
@@ -170,7 +170,28 @@
   </div>
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
-    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。</p>
+    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。下記を入力して登録すると、続けて入荷本数を登録できます。</p>
+    <label for="hq-incoming-new-photo">ラベルを撮影して品名・ブランドを自動入力(任意)</label>
+    <input type="file" accept="image/*" capture="environment" id="hq-incoming-new-photo">
+    <p class="status" id="hq-incoming-new-ocr-status"></p>
+    <div id="hq-incoming-new-ocr-raw-text" class="card" style="display:none;">
+      <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
+      <pre id="hq-incoming-new-ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
+    </div>
+    <label for="hq-incoming-new-brand">ブランド</label>
+    <input type="text" id="hq-incoming-new-brand" list="brand-datalist-hq-incoming" autocomplete="off">
+    <datalist id="brand-datalist-hq-incoming"></datalist>
+    <label for="hq-incoming-new-name">品名</label>
+    <input type="text" id="hq-incoming-new-name">
+    <label for="hq-incoming-new-color-no">カラーNO</label>
+    <input type="text" id="hq-incoming-new-color-no">
+    <label for="hq-incoming-new-category">カテゴリー</label>
+    <select id="hq-incoming-new-category">
+      <option value="ベース/トップ">ベース/トップ</option>
+      <option value="カラー">カラー</option>
+      <option value="その他">その他</option>
+    </select>
+    <button class="secondary" id="btn-register-new-from-incoming">この内容で商品を登録</button>
   </div>
 
   <p class="status" id="hq-incoming-status"></p>

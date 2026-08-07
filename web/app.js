@@ -631,6 +631,7 @@ document.getElementById('nav-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
   showScreen('screen-hq-incoming');
   rearmGate(hqIncomingGate);
+  loadHqIncomingBrandOptions().catch((e) => console.error(e));
   startScanner('reader-hq-incoming', onHqIncomingScan, hqIncomingGate).catch((e) => console.error(e));
 });
 document.getElementById('nav-hq-disposal').addEventListener('click', () => {
@@ -639,8 +640,24 @@ document.getElementById('nav-hq-disposal').addEventListener('click', () => {
   rearmGate(hqDisposalGate);
   startScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate).catch((e) => console.error(e));
 });
-document.getElementById('hq-incoming-store-select').addEventListener('change', resetHqIncomingScreen);
+document.getElementById('hq-incoming-store-select').addEventListener('change', () => {
+  resetHqIncomingScreen();
+  loadHqIncomingBrandOptions().catch((e) => console.error(e));
+});
 document.getElementById('hq-disposal-store-select').addEventListener('change', resetHqDisposalScreen);
+
+async function loadHqIncomingBrandOptions() {
+  const store = document.getElementById('hq-incoming-store-select').value;
+  if (!store) return;
+  const data = await apiCall('getBrandList', { store });
+  const datalist = document.getElementById('brand-datalist-hq-incoming');
+  datalist.innerHTML = '';
+  data.brands.forEach((brand) => {
+    const opt = document.createElement('option');
+    opt.value = brand;
+    datalist.appendChild(opt);
+  });
+}
 
 document.getElementById('btn-back-total-inventory').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-products').addEventListener('click', () => showScreen('screen-dashboard'));
@@ -663,6 +680,13 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-unknown').style.display = 'none';
   document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
   document.getElementById('hq-incoming-status').textContent = '';
+  document.getElementById('hq-incoming-new-ocr-status').textContent = '';
+  document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'none';
+  document.getElementById('hq-incoming-new-photo').value = '';
+  document.getElementById('hq-incoming-new-brand').value = '';
+  document.getElementById('hq-incoming-new-name').value = '';
+  document.getElementById('hq-incoming-new-color-no').value = '';
+  document.getElementById('hq-incoming-new-category').selectedIndex = 0;
 }
 
 let hqIncomingScannedCode = null;
@@ -697,6 +721,57 @@ document.getElementById('btn-manual-add-hq-incoming').addEventListener('click', 
 document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
   rearmGate(hqIncomingGate);
+});
+
+document.getElementById('hq-incoming-new-photo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('hq-incoming-new-ocr-status');
+  statusEl.textContent = '認識中です。少々お待ちください...';
+  try {
+    const imageBase64 = await fileToBase64(file);
+    const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
+    document.getElementById('hq-incoming-new-name').value = result.guessedName;
+    document.getElementById('hq-incoming-new-brand').value = result.guessedBrand;
+    if (result.rawText) {
+      document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'block';
+      document.getElementById('hq-incoming-new-ocr-raw-text-content').textContent = result.rawText;
+    }
+    statusEl.textContent = '認識しました。内容を確認し、違う場合は直接修正してください';
+  } catch (err) {
+    statusEl.textContent = '認識に失敗しました: ' + err.message;
+  } finally {
+    e.target.value = '';
+  }
+});
+
+document.getElementById('btn-register-new-from-incoming').addEventListener('click', async () => {
+  const store = document.getElementById('hq-incoming-store-select').value;
+  const name = document.getElementById('hq-incoming-new-name').value.trim();
+  if (!name) {
+    document.getElementById('hq-incoming-status').textContent = '品名を入力してください';
+    return;
+  }
+  const payload = {
+    store,
+    code: hqIncomingScannedCode,
+    brand: document.getElementById('hq-incoming-new-brand').value,
+    name,
+    colorNo: document.getElementById('hq-incoming-new-color-no').value.trim(),
+    category: document.getElementById('hq-incoming-new-category').value
+  };
+  try {
+    await apiCall('registerProduct', payload);
+    document.getElementById('hq-incoming-status').textContent = '商品を登録しました。続けて入荷本数を入力してください';
+    document.getElementById('hq-incoming-unknown').style.display = 'none';
+    document.getElementById('hq-incoming-known').style.display = 'block';
+    document.getElementById('hq-incoming-product-name').textContent = payload.name;
+    document.getElementById('hq-incoming-product-brand').textContent = payload.brand;
+    document.getElementById('hq-incoming-quantity').value = 1;
+    await loadHqIncomingBrandOptions();
+  } catch (e) {
+    document.getElementById('hq-incoming-status').textContent = e.message;
+  }
 });
 
 document.getElementById('btn-submit-hq-incoming').addEventListener('click', async () => {
