@@ -211,8 +211,8 @@ document.getElementById('btn-nav-stocktake').addEventListener('click', () => {
 });
 
 // ---- 棚卸: 未スキャン商品一覧 ----
-// 「確定」を押した時点で送信はせず、まず商品マスタの全件と今スキャン済みの一覧を
-// 突き合わせて未スキャン商品(欠品・スキャン漏れの可能性がある)を確認してもらい、
+// 「内容を確認する」を押した時点で送信はせず、まず商品マスタの全件と今スキャン済みの
+// 一覧を突き合わせて未スキャン商品(欠品・スキャン漏れの可能性がある)を確認してもらい、
 // 「本社へ送信する」を押した時点で初めてsubmitStocktakeを呼ぶ2段階にしている。
 let stocktakeAllProducts = [];
 
@@ -523,7 +523,7 @@ function updateTallySummary() {
     summaryEl.textContent = 'まだ何もスキャンしていません';
     confirmBtn.disabled = true;
   } else {
-    summaryEl.textContent = `${items.length}品目 / 合計${totalCount}本をスキャン済み。よろしければ確定してください`;
+    summaryEl.textContent = `${items.length}品目 / 合計${totalCount}本をスキャン済み。よろしければ内容を確認してください`;
     confirmBtn.disabled = false;
   }
 }
@@ -706,6 +706,7 @@ document.getElementById('nav-hq-review').addEventListener('click', () => {
   document.getElementById('hq-review-summary').innerHTML = '';
   document.getElementById('hq-review-table').innerHTML = '';
   document.getElementById('btn-approve-review').style.display = 'none';
+  document.getElementById('btn-export-hq-review').style.display = 'none';
 });
 
 document.getElementById('nav-hq-incoming').addEventListener('click', () => {
@@ -1405,9 +1406,22 @@ document.getElementById('btn-load-hq-review').addEventListener('click', async ()
     const approveBtn = document.getElementById('btn-approve-review');
     approveBtn.style.display = 'block';
     approveBtn.textContent = currentHqReviewData.approval.approved ? '再承認する' : '承認する';
+    document.getElementById('btn-export-hq-review').style.display = 'inline-block';
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
   }
+});
+
+document.getElementById('btn-export-hq-review').addEventListener('click', () => {
+  if (!currentHqReviewData) return;
+  const rows = [['ブランド', '品名', 'カラーNO', '先月末', '入荷', '廃棄', '今月末', '差異']];
+  currentHqReviewData.items.forEach((item) => {
+    rows.push([
+      item.brand || '', item.name, item.colorNo || '',
+      item.prevStock, item.incoming, item.disposal, item.currentStock, item.diff
+    ]);
+  });
+  downloadCsv(`棚卸承認_${currentHqReviewData.store}_${currentHqReviewData.month}.csv`, rows);
 });
 
 document.getElementById('btn-approve-review').addEventListener('click', async () => {

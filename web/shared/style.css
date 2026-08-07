@@ -77,13 +77,12 @@ button.link { background: none; color: var(--accent-dark); text-decoration: unde
 }
 
 .confirm-bar {
-  position: sticky;
-  bottom: 0;
   background: var(--bg);
   padding-top: 10px;
   padding-bottom: 6px;
   margin-top: 16px;
   border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .confirm-bar p.hint { text-align: center; margin: 0 0 6px; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }

@@ -63,12 +63,12 @@
     <input type="text" id="manual-code-1" style="flex:1;">
     <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-1">追加</button>
   </div>
-  <div id="tally-container"></div>
   <div class="confirm-bar">
     <p class="hint" id="tally-summary">まだ何もスキャンしていません</p>
-    <button class="primary" id="btn-confirm-stocktake" disabled>この内容で棚卸を確定する</button>
+    <button class="primary" id="btn-confirm-stocktake" disabled>内容を確認する</button>
   </div>
   <p class="status" id="stocktake-status"></p>
+  <div id="tally-container"></div>
 
   <div id="stocktake-review" style="display:none;">
     <h3>未スキャンの商品</h3>
@@ -372,7 +372,10 @@
   <button class="primary" id="btn-load-hq-review">確認する</button>
   <div id="hq-review-summary"></div>
   <div id="hq-review-table"></div>
-  <button class="primary" id="btn-approve-review" style="display:none;">承認する</button>
+  <div style="display:flex; gap:8px;">
+    <button class="secondary" style="width:auto; display:none;" id="btn-export-hq-review">CSVエクスポート</button>
+    <button class="primary" style="width:auto; display:none;" id="btn-approve-review">承認する</button>
+  </div>
 </section>
 
 <!-- 取り消せない操作(在庫リセット等)の確認モーダル。パスワード再入力+警告表示+
