@@ -195,7 +195,7 @@ function registerProduct_(session, p) {
   return { store: store, code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
 }
 
-/** 既存商品の品名・ブランド・カテゴリー・カラーNOの修正。本社アカウントのみ。 */
+/** 既存商品の品名・ブランド・カテゴリー・カラーNO・メモの修正。本社アカウントのみ。 */
 function updateProduct_(session, p) {
   requireRole_(session, ['hq']);
   if (!p.store || !p.code) throw new Error('店舗とコードを指定してください');
@@ -210,6 +210,7 @@ function updateProduct_(session, p) {
       sheet.getRange(row, 3).setValue(p.name || '');
       sheet.getRange(row, 4).setValue(p.brand || '');
       sheet.getRange(row, 5).setValue(p.category || '');
+      sheet.getRange(row, 8).setValue(p.memo || '');
       sheet.getRange(row, 10).setValue(p.colorNo || '');
       refreshSummary_(); // ブランド名等の変更をサマリ表示にも反映する
       return { store: p.store, code: p.code };
@@ -234,7 +235,7 @@ function listProducts_(session, storeParam) {
     list.push({
       code: data[i][1], name: data[i][2], brand: data[i][3],
       category: data[i][4], maker: data[i][5], unit: data[i][6],
-      colorNo: data[i][9]
+      memo: data[i][7], colorNo: data[i][9]
     });
   }
   return { products: list };
