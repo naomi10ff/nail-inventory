@@ -974,8 +974,9 @@ async function loadProducts() {
   data.products.forEach((p) => {
     const tr = document.createElement('tr');
     const editBtn = `<button class="link" data-edit-code="${p.code}">編集</button>`;
+    const qrBtn = `<button class="link" data-qr-code="${p.code}">QR表示</button>`;
     const delBtn = `<button class="link" data-code="${p.code}">削除</button>`;
-    tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${editBtn} ${delBtn}</td>`;
+    tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
@@ -993,7 +994,29 @@ async function loadProducts() {
       if (product) startEditProduct(product);
     });
   });
+  container.querySelectorAll('button[data-qr-code]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const product = data.products.find((p) => p.code === btn.dataset.qrCode);
+      if (product) showQrViewModal(product.code, product.name, product.brand);
+    });
+  });
 }
+
+/** 商品一覧から、既に登録済みの商品のQRコードをいつでも呼び出して印刷できるようにする。 */
+async function showQrViewModal(code, name, brand) {
+  const holder = document.getElementById('qr-view-canvas-holder');
+  holder.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  holder.appendChild(canvas);
+  await QRCode.toCanvas(canvas, code, { width: 220 });
+  document.getElementById('qr-view-label').textContent = code + ' / ' + (brand ? brand + ' ' : '') + name;
+  document.getElementById('qr-view-modal').style.display = 'flex';
+}
+
+document.getElementById('btn-print-qr-view').addEventListener('click', () => window.print());
+document.getElementById('btn-close-qr-view').addEventListener('click', () => {
+  document.getElementById('qr-view-modal').style.display = 'none';
+});
 
 function startEditProduct(product) {
   editingProductCode = product.code;
