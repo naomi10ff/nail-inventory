@@ -211,35 +211,22 @@ document.getElementById('btn-nav-stocktake').addEventListener('click', () => {
 });
 
 // ---- 棚卸: 未スキャン商品一覧 ----
-// 商品マスタの全件と、今スキャン済みの一覧を突き合わせて、まだスキャンしていない
-// 商品(欠品・スキャン漏れの可能性がある)を確認できるようにする。
+// 「確定」を押した時点で送信はせず、まず商品マスタの全件と今スキャン済みの一覧を
+// 突き合わせて未スキャン商品(欠品・スキャン漏れの可能性がある)を確認してもらい、
+// 「本社へ送信する」を押した時点で初めてsubmitStocktakeを呼ぶ2段階にしている。
 let stocktakeAllProducts = [];
-let stocktakeUnscannedVisible = false;
 
 async function loadStocktakeProductList() {
   stocktakeAllProducts = [];
-  stocktakeUnscannedVisible = false;
   document.getElementById('unscanned-container').innerHTML = '';
-  document.getElementById('btn-toggle-unscanned').style.display = 'none';
-  document.getElementById('btn-toggle-unscanned').textContent = '未スキャン商品を表示';
+  document.getElementById('stocktake-review').style.display = 'none';
   const data = await apiCall('listProducts', {});
   stocktakeAllProducts = data.products;
-  if (stocktakeAllProducts.length) {
-    document.getElementById('btn-toggle-unscanned').style.display = 'block';
-  }
 }
-
-document.getElementById('btn-toggle-unscanned').addEventListener('click', () => {
-  stocktakeUnscannedVisible = !stocktakeUnscannedVisible;
-  document.getElementById('btn-toggle-unscanned').textContent =
-    stocktakeUnscannedVisible ? '未スキャン商品を隠す' : '未スキャン商品を表示';
-  renderUnscanned();
-});
 
 function renderUnscanned() {
   const container = document.getElementById('unscanned-container');
   container.innerHTML = '';
-  if (!stocktakeUnscannedVisible) return;
 
   const unscanned = stocktakeAllProducts.filter((p) => !state.tally[p.code]);
   if (!unscanned.length) {
@@ -498,7 +485,6 @@ function renderTally() {
   });
 
   updateTallySummary();
-  renderUnscanned();
 }
 
 /** 個数を手動修正する。0にした場合はスキャン一覧から除く。 */
@@ -527,12 +513,23 @@ function updateTallySummary() {
   }
 }
 
-document.getElementById('btn-confirm-stocktake').addEventListener('click', async () => {
-  const items = Object.values(state.tally).map((t) => ({ code: t.code, count: t.count }));
+document.getElementById('btn-confirm-stocktake').addEventListener('click', () => {
+  const items = Object.values(state.tally);
   if (!items.length) {
     document.getElementById('stocktake-status').textContent = 'まだ何もスキャンしていません';
     return;
   }
+  document.getElementById('stocktake-status').textContent = '';
+  renderUnscanned();
+  document.getElementById('stocktake-review').style.display = 'block';
+});
+
+document.getElementById('btn-back-to-scan').addEventListener('click', () => {
+  document.getElementById('stocktake-review').style.display = 'none';
+});
+
+document.getElementById('btn-send-stocktake').addEventListener('click', async () => {
+  const items = Object.values(state.tally).map((t) => ({ code: t.code, count: t.count }));
   try {
     const data = await apiCall('submitStocktake', { staffName: state.staffName, items });
     document.getElementById('stocktake-status').textContent =
@@ -540,6 +537,7 @@ document.getElementById('btn-confirm-stocktake').addEventListener('click', async
       (data.unknownCodes.length ? ` 未登録コード: ${data.unknownCodes.join(', ')}` : '');
     state.tally = {};
     renderTally();
+    document.getElementById('stocktake-review').style.display = 'none';
   } catch (e) {
     document.getElementById('stocktake-status').textContent = e.message;
   }

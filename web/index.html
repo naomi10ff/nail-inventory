@@ -69,8 +69,15 @@
   </div>
   <p class="status" id="stocktake-status"></p>
 
-  <button class="secondary" id="btn-toggle-unscanned" style="display:none;">未スキャン商品を表示</button>
-  <div id="unscanned-container"></div>
+  <div id="stocktake-review" style="display:none;">
+    <h3>未スキャンの商品</h3>
+    <p class="hint">まだスキャンしていない登録済み商品です。スキャン漏れがないか確認してから送信してください。</p>
+    <div id="unscanned-container"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="secondary" style="width:auto;" id="btn-back-to-scan">戻ってスキャンを続ける</button>
+      <button class="primary" style="width:auto;" id="btn-send-stocktake">本社へ送信する</button>
+    </div>
+  </div>
 </section>
 
 <!-- 在庫情報画面 -->
