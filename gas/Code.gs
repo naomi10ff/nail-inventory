@@ -627,6 +627,7 @@ function getStocktakeReview_(session, storeParam, month) {
   return {
     store: store,
     month: month,
+    previousMonth: previousMonthString_(month),
     items: items,
     stocktakeEvents: stocktakeEvents,
     approval: getApprovalStatus_(store, month)

@@ -1354,6 +1354,12 @@ async function loadLogs() {
 // ---- 棚卸承認(本社・店舗共通の表示ロジック) ----
 // 「先月末在庫 + 今月の入荷 − 今月の廃棄」と「今月末在庫(棚卸後)」を商品ごとに突き合わせ、
 // 差異(0以外)がある行を強調表示する。承認は本社のみ行える(承認ボタンはHQ画面にしかない)。
+/** "2026-07" のような月文字列を「7月末」の表記にする(先月末・今月末の列見出し用)。 */
+function monthLabel(monthStr) {
+  const parts = (monthStr || '').split('-');
+  return parts[1] ? `${Number(parts[1])}月末` : '';
+}
+
 function renderReviewResult(data, summaryElId, tableElId) {
   const summaryEl = document.getElementById(summaryElId);
   let summaryHtml = '';
@@ -1381,7 +1387,8 @@ function renderReviewResult(data, summaryElId, tableElId) {
   const table = document.createElement('table');
   table.className = 'stock-table';
   table.innerHTML =
-    '<tr><th>ブランド</th><th>品名</th><th>カラーNO</th><th>先月末</th><th>入荷</th><th>廃棄</th><th>今月末</th><th>差異</th></tr>';
+    `<tr><th>ブランド</th><th>品名</th><th>カラーNO</th><th>${monthLabel(data.previousMonth)}</th>` +
+    `<th>入荷</th><th>廃棄</th><th>${monthLabel(data.month)}</th><th>差異</th></tr>`;
   data.items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.diff !== 0) tr.className = 'out-of-stock';
@@ -1414,7 +1421,11 @@ document.getElementById('btn-load-hq-review').addEventListener('click', async ()
 
 document.getElementById('btn-export-hq-review').addEventListener('click', () => {
   if (!currentHqReviewData) return;
-  const rows = [['ブランド', '品名', 'カラーNO', '先月末', '入荷', '廃棄', '今月末', '差異']];
+  const rows = [[
+    'ブランド', '品名', 'カラーNO',
+    monthLabel(currentHqReviewData.previousMonth), '入荷', '廃棄',
+    monthLabel(currentHqReviewData.month), '差異'
+  ]];
   currentHqReviewData.items.forEach((item) => {
     rows.push([
       item.brand || '', item.name, item.colorNo || '',
