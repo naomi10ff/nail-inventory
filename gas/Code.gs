@@ -86,6 +86,10 @@ function routeAction_(action, p) {
       return resetProductStock_(validateToken_(p.token), p);
     case 'resetStoreInventory':
       return resetStoreInventory_(validateToken_(p.token), p);
+    case 'getStocktakeReview':
+      return getStocktakeReview_(validateToken_(p.token), p.store, p.month);
+    case 'approveStocktake':
+      return approveStocktake_(validateToken_(p.token), p);
     default:
       throw new Error('不明なactionです: ' + action);
   }
@@ -535,6 +539,121 @@ function lookupCurrentStock_(session, p) {
     currentStock: currentStock,
     outOfStock: currentStock <= 0
   };
+}
+
+// ---- 棚卸履歴・承認 ----
+// 「先月末在庫 + 今月の入荷 − 今月の廃棄」と「今月末在庫(棚卸後)」を商品ごとに突き合わせ、
+// 棚卸で生じた差異を確認できるようにする。本社が内容を確認して承認すると、SHEET_APPROVALS
+// に店舗×年月の記録が残る(データの修正・削除自体は制限しない、確認済みの記録のみ)。
+// 本社・店舗どちらのアカウントからも閲覧できるが、承認できるのは本社のみ。
+
+/** "YYYY-MM" の前月を "YYYY-MM" で返す。 */
+function previousMonthString_(month) {
+  var parts = month.split('-');
+  var year = Number(parts[0]);
+  var m = Number(parts[1]) - 1;
+  if (m === 0) {
+    m = 12;
+    year -= 1;
+  }
+  return year + '-' + (m < 10 ? '0' + m : String(m));
+}
+
+function getApprovalStatus_(store, month) {
+  var sheet = getSheet_(SHEET_APPROVALS);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === store && data[i][1] === month) {
+      return { approved: true, approver: data[i][2], approvedAt: data[i][3] };
+    }
+  }
+  return { approved: false };
+}
+
+/** 指定した店舗・年月の、商品ごとの棚卸差異一覧と、その月の棚卸実施記録・承認状況をまとめて返す。 */
+function getStocktakeReview_(session, storeParam, month) {
+  var store = session.role === 'hq' ? storeParam : session.store;
+  if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
+    throw new Error('他店舗のデータにはアクセスできません');
+  }
+  if (!store) throw new Error('店舗を指定してください');
+  if (!month) throw new Error('対象月を指定してください');
+
+  var curCutoff = monthEndCutoff_(month);
+  var prevCutoff = monthEndCutoff_(previousMonthString_(month));
+
+  var prevMap = {};
+  computeAllSummaryAsOf_(prevCutoff).forEach(function (e) {
+    if (e.store === store) prevMap[e.code] = e.current;
+  });
+  var curMap = {};
+  computeAllSummaryAsOf_(curCutoff).forEach(function (e) {
+    if (e.store === store) curMap[e.code] = e.current;
+  });
+
+  var incomingMap = {}, disposalMap = {};
+  var stocktakeEvents = [];
+  var logSheet = getSheet_(SHEET_LOG);
+  var logData = logSheet.getDataRange().getValues();
+  for (var i = 1; i < logData.length; i++) {
+    var row = logData[i];
+    if (row[1] !== store) continue;
+    var ts = new Date(row[0]).getTime();
+    if (ts < prevCutoff.getTime() || ts >= curCutoff.getTime()) continue;
+    var code = row[3], type = row[6], qty = Number(row[7]) || 0;
+    if (type === '入荷') {
+      incomingMap[code] = (incomingMap[code] || 0) + qty;
+    } else if (type === '廃棄') {
+      disposalMap[code] = (disposalMap[code] || 0) + qty;
+    } else if (type === '棚卸') {
+      stocktakeEvents.push({ timestamp: row[0], staffName: row[2] });
+    }
+  }
+
+  var products = listProducts_(session, store).products;
+  var items = products.map(function (p) {
+    var prevStock = prevMap[p.code] || 0;
+    var incoming = incomingMap[p.code] || 0;
+    var disposal = disposalMap[p.code] || 0;
+    var currentStock = hasKey_(curMap, p.code) ? curMap[p.code] : prevStock + incoming - disposal;
+    var expected = prevStock + incoming - disposal;
+    return {
+      code: p.code, brand: p.brand, name: p.name, colorNo: p.colorNo,
+      prevStock: prevStock, incoming: incoming, disposal: disposal,
+      currentStock: currentStock, diff: currentStock - expected
+    };
+  });
+
+  return {
+    store: store,
+    month: month,
+    items: items,
+    stocktakeEvents: stocktakeEvents,
+    approval: getApprovalStatus_(store, month)
+  };
+}
+
+/** map[key]の存在確認(値が0だとfalsyになってしまうため、存在確認だけの用途に使う)。 */
+function hasKey_(map, key) {
+  return Object.prototype.hasOwnProperty.call(map, key);
+}
+
+/** 本社が、店舗×年月の棚卸内容を確認済みとして記録する。 */
+function approveStocktake_(session, p) {
+  requireRole_(session, ['hq']);
+  if (!p.store || !p.month) throw new Error('店舗と対象月を指定してください');
+
+  var sheet = getSheet_(SHEET_APPROVALS);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === p.store && data[i][1] === p.month) {
+      sheet.getRange(i + 1, 3).setValue(session.username);
+      sheet.getRange(i + 1, 4).setValue(new Date());
+      return { store: p.store, month: p.month, approver: session.username };
+    }
+  }
+  sheet.appendRow([p.store, p.month, session.username, new Date()]);
+  return { store: p.store, month: p.month, approver: session.username };
 }
 
 // ---- 在庫のリセット(本社限定・取り消し不可の操作) ----

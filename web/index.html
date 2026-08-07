@@ -48,6 +48,7 @@
     <button class="primary" id="btn-nav-stocktake">棚卸(バーコードスキャン)</button>
     <button class="secondary" id="btn-nav-inventory">在庫情報を見る</button>
     <button class="secondary" id="btn-nav-stock-lookup">在庫検索</button>
+    <button class="secondary" id="btn-nav-store-review">棚卸承認の確認</button>
   </div>
 </section>
 
@@ -114,6 +115,18 @@
   <p class="status" id="stock-lookup-status"></p>
 </section>
 
+<!-- 棚卸承認の確認画面(店舗側。閲覧のみで承認操作はできない) -->
+<section id="screen-store-review" class="screen">
+  <div class="topbar"><button class="link" id="btn-back-store-review">&lt; メニューへ戻る</button></div>
+  <h2>棚卸承認の確認</h2>
+  <p class="hint">本社が確認・承認した内容を店舗側からも確認できます。</p>
+  <label for="store-review-month">対象月</label>
+  <input type="month" id="store-review-month">
+  <button class="primary" id="btn-load-store-review">確認する</button>
+  <div id="store-review-summary"></div>
+  <div id="store-review-table"></div>
+</section>
+
 <!-- ==================== 本社用画面 ==================== -->
 
 <!-- ダッシュボード(サマリーのみ。詳細な一覧は screen-total-inventory に分離) -->
@@ -128,6 +141,7 @@
     <button class="secondary" id="nav-staff">スタッフ</button>
     <button class="secondary" id="nav-accounts">アカウント</button>
     <button class="secondary" id="nav-logs">取引ログ</button>
+    <button class="secondary" id="nav-hq-review">棚卸承認</button>
   </div>
 
   <div class="card">
@@ -345,6 +359,20 @@
   <label for="log-store-filter">店舗で絞り込み</label>
   <select id="log-store-filter"><option value="">全店舗</option></select>
   <div id="logs-table"></div>
+</section>
+
+<!-- 棚卸承認(本社が店舗ごとに、月次の在庫・入荷・廃棄の差異を確認して承認する) -->
+<section id="screen-hq-review" class="screen">
+  <div class="topbar"><button class="link" id="btn-back-hq-review">&lt; ダッシュボードへ</button></div>
+  <h2>棚卸承認</h2>
+  <label for="hq-review-store-select">店舗</label>
+  <select id="hq-review-store-select"></select>
+  <label for="hq-review-month">対象月</label>
+  <input type="month" id="hq-review-month">
+  <button class="primary" id="btn-load-hq-review">確認する</button>
+  <div id="hq-review-summary"></div>
+  <div id="hq-review-table"></div>
+  <button class="primary" id="btn-approve-review" style="display:none;">承認する</button>
 </section>
 
 <!-- 取り消せない操作(在庫リセット等)の確認モーダル。パスワード再入力+警告表示+

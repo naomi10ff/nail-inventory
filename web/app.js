@@ -663,6 +663,7 @@ async function enterDashboard() {
   fillStoreSelect('brand-store-select', false);
   fillStoreSelect('hq-incoming-store-select', false);
   fillStoreSelect('hq-disposal-store-select', false);
+  fillStoreSelect('hq-review-store-select', false);
   showScreen('screen-dashboard');
   await loadDashboard();
 }
@@ -699,6 +700,13 @@ document.getElementById('brand-store-select').addEventListener('change', loadBra
 document.getElementById('nav-staff').addEventListener('click', async () => { showScreen('hq-screen-staff'); await loadStaff(); });
 document.getElementById('nav-accounts').addEventListener('click', () => showScreen('screen-accounts'));
 document.getElementById('nav-logs').addEventListener('click', async () => { showScreen('screen-logs'); await loadLogs(); });
+document.getElementById('nav-hq-review').addEventListener('click', () => {
+  showScreen('screen-hq-review');
+  document.getElementById('hq-review-month').value = currentYearMonth();
+  document.getElementById('hq-review-summary').innerHTML = '';
+  document.getElementById('hq-review-table').innerHTML = '';
+  document.getElementById('btn-approve-review').style.display = 'none';
+});
 
 document.getElementById('nav-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
@@ -738,6 +746,7 @@ document.getElementById('btn-back-brands').addEventListener('click', () => showS
 document.getElementById('btn-back-staff').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-accounts').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-logs').addEventListener('click', () => showScreen('screen-dashboard'));
+document.getElementById('btn-back-hq-review').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-hq-incoming').addEventListener('click', async () => {
   await stopScanner(scannerHqIncoming);
   showScreen('screen-dashboard');
@@ -1340,6 +1349,102 @@ async function loadLogs() {
     });
   });
 }
+
+// ---- 棚卸承認(本社・店舗共通の表示ロジック) ----
+// 「先月末在庫 + 今月の入荷 − 今月の廃棄」と「今月末在庫(棚卸後)」を商品ごとに突き合わせ、
+// 差異(0以外)がある行を強調表示する。承認は本社のみ行える(承認ボタンはHQ画面にしかない)。
+function renderReviewResult(data, summaryElId, tableElId) {
+  const summaryEl = document.getElementById(summaryElId);
+  let summaryHtml = '';
+  if (!data.stocktakeEvents.length) {
+    summaryHtml += '<p class="hint">この月はまだ棚卸が実施されていません。</p>';
+  } else {
+    const lines = data.stocktakeEvents.map(
+      (e) => `${new Date(e.timestamp).toLocaleString('ja-JP')} / ${e.staffName || '(不明)'}`
+    );
+    summaryHtml += `<p class="hint">棚卸実施: ${lines.join('、')}</p>`;
+  }
+  if (data.approval.approved) {
+    summaryHtml += `<p class="status">承認済み(${data.approval.approver} / ${new Date(data.approval.approvedAt).toLocaleString('ja-JP')})</p>`;
+  } else {
+    summaryHtml += '<p class="hint">未承認</p>';
+  }
+  summaryEl.innerHTML = summaryHtml;
+
+  const container = document.getElementById(tableElId);
+  container.innerHTML = '';
+  if (!data.items.length) {
+    container.textContent = '商品が登録されていません';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'stock-table';
+  table.innerHTML =
+    '<tr><th>ブランド</th><th>品名</th><th>カラーNO</th><th>先月末</th><th>入荷</th><th>廃棄</th><th>今月末</th><th>差異</th></tr>';
+  data.items.forEach((item) => {
+    const tr = document.createElement('tr');
+    if (item.diff !== 0) tr.className = 'out-of-stock';
+    tr.innerHTML = `<td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td>` +
+      `<td>${item.prevStock}</td><td>${item.incoming}</td><td>${item.disposal}</td>` +
+      `<td>${item.currentStock}</td><td>${item.diff}</td>`;
+    table.appendChild(tr);
+  });
+  container.appendChild(table);
+}
+
+// ---- 棚卸承認(本社) ----
+let currentHqReviewData = null;
+
+document.getElementById('btn-load-hq-review').addEventListener('click', async () => {
+  const store = document.getElementById('hq-review-store-select').value;
+  const month = document.getElementById('hq-review-month').value;
+  if (!store || !month) return;
+  try {
+    currentHqReviewData = await apiCall('getStocktakeReview', { store, month });
+    renderReviewResult(currentHqReviewData, 'hq-review-summary', 'hq-review-table');
+    const approveBtn = document.getElementById('btn-approve-review');
+    approveBtn.style.display = 'block';
+    approveBtn.textContent = currentHqReviewData.approval.approved ? '再承認する' : '承認する';
+  } catch (e) {
+    document.getElementById('hq-review-summary').textContent = e.message;
+  }
+});
+
+document.getElementById('btn-approve-review').addEventListener('click', async () => {
+  if (!currentHqReviewData) return;
+  try {
+    await apiCall('approveStocktake', { store: currentHqReviewData.store, month: currentHqReviewData.month });
+    currentHqReviewData = await apiCall('getStocktakeReview', {
+      store: currentHqReviewData.store,
+      month: currentHqReviewData.month
+    });
+    renderReviewResult(currentHqReviewData, 'hq-review-summary', 'hq-review-table');
+    document.getElementById('btn-approve-review').textContent = '再承認する';
+  } catch (e) {
+    document.getElementById('hq-review-summary').textContent = e.message;
+  }
+});
+
+// ---- 棚卸承認の確認(店舗。閲覧のみ) ----
+document.getElementById('btn-nav-store-review').addEventListener('click', () => {
+  showScreen('screen-store-review');
+  document.getElementById('store-review-month').value = currentYearMonth();
+  document.getElementById('store-review-summary').innerHTML = '';
+  document.getElementById('store-review-table').innerHTML = '';
+});
+
+document.getElementById('btn-back-store-review').addEventListener('click', () => showScreen('screen-menu'));
+
+document.getElementById('btn-load-store-review').addEventListener('click', async () => {
+  const month = document.getElementById('store-review-month').value;
+  if (!month) return;
+  try {
+    const data = await apiCall('getStocktakeReview', { month });
+    renderReviewResult(data, 'store-review-summary', 'store-review-table');
+  } catch (e) {
+    document.getElementById('store-review-summary').textContent = e.message;
+  }
+});
 
 // ---- 初期化(ログイン済みなら保存されたroleに応じて自動的に振り分ける) ----
 (async function init() {

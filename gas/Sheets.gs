@@ -10,6 +10,7 @@ var SHEET_LOG = '取引ログ';
 var SHEET_SUMMARY = '現在庫サマリ';
 var SHEET_SESSIONS = 'セッション';
 var SHEET_BRANDS = 'ブランドマスタ';
+var SHEET_APPROVALS = '棚卸承認';
 
 var STORES = ['生駒店', '西大寺宝来店', '木津店'];
 
@@ -27,6 +28,7 @@ function setupSpreadsheet() {
   setupSheet_(ss, SHEET_SUMMARY, ['店舗', 'ブランド', '商品名', 'コード', '現在庫', '直近棚卸数', '欠品', '更新日時']);
   setupSheet_(ss, SHEET_SESSIONS, ['トークン', 'ユーザー名', '店舗', '権限', '発行日時']);
   setupSheet_(ss, SHEET_BRANDS, BRANDS_HEADERS);
+  setupSheet_(ss, SHEET_APPROVALS, ['店舗', '年月', '承認者', '承認日時']);
 
   seedAccounts_(ss);
 }
