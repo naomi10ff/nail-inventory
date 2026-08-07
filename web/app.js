@@ -1439,12 +1439,13 @@ document.getElementById('btn-approve-review').addEventListener('click', async ()
   if (!currentHqReviewData) return;
   try {
     await apiCall('approveStocktake', { store: currentHqReviewData.store, month: currentHqReviewData.month });
-    currentHqReviewData = await apiCall('getStocktakeReview', {
-      store: currentHqReviewData.store,
-      month: currentHqReviewData.month
-    });
-    renderReviewResult(currentHqReviewData, 'hq-review-summary', 'hq-review-table');
-    document.getElementById('btn-approve-review').textContent = '再承認する';
+    // 承認したら内容は表示したままにせず、ダッシュボードに戻る
+    currentHqReviewData = null;
+    document.getElementById('hq-review-summary').innerHTML = '';
+    document.getElementById('hq-review-table').innerHTML = '';
+    document.getElementById('btn-approve-review').style.display = 'none';
+    document.getElementById('btn-export-hq-review').style.display = 'none';
+    showScreen('screen-dashboard');
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
   }
