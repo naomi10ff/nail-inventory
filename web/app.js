@@ -333,17 +333,31 @@ document.getElementById('btn-back-2').addEventListener('click', () => showScreen
 // 検出できなかった=現物が画面から外れた」とみなし、そこで初めて次のスキャンを
 // 受け付ける。棚卸(rearmOnMiss:true)は現物を離せば自動で次を受け付け、
 // 入荷登録・破棄登録(rearmOnMiss:false)は登録操作が終わるまで自動では再開しない。
+//
+// 入荷登録・破棄登録で登録操作が完了した直後にrearmGate()で即座に再開してしまうと、
+// 登録した現物がまだカメラに映ったままの場合、間を置かずに同じバーコードを再検出して
+// しまい、次の商品にスキャンを移せなくなる(固まったように見える)。そのため、登録が
+// 完了した直後だけは「現物が画面から一旦外れるまで待ってから次を受け付ける」
+// rearmGateAfterMiss()を使う。手動の「読み直す」ボタンや通信エラー時のリトライは、
+// 今映っているものをすぐ読み直したいので rearmGate() のまま即座に再開する。
 function createGate(options) {
   return {
     armed: true,
     missCount: 0,
     rearmOnMiss: !!options.rearmOnMiss,
+    pendingRearm: false,
     requiredMisses: options.requiredMisses || 8
   };
 }
 
 function rearmGate(gate) {
   gate.armed = true;
+  gate.missCount = 0;
+  gate.pendingRearm = false;
+}
+
+function rearmGateAfterMiss(gate) {
+  gate.pendingRearm = true;
   gate.missCount = 0;
 }
 
@@ -395,10 +409,11 @@ async function startScanner(elementId, onSuccess, gate) {
       onSuccess(decodedText);
     },
     () => {
-      if (!gate.armed && gate.rearmOnMiss) {
+      if (!gate.armed && (gate.rearmOnMiss || gate.pendingRearm)) {
         gate.missCount += 1;
         if (gate.missCount >= gate.requiredMisses) {
           gate.armed = true;
+          gate.pendingRearm = false;
         }
       }
     }
@@ -839,7 +854,9 @@ document.getElementById('btn-submit-hq-incoming').addEventListener('click', asyn
     await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity });
     resetHqIncomingScreen();
     document.getElementById('hq-incoming-status').textContent = '入荷を登録しました';
-    rearmGate(hqIncomingGate); // 登録が完了したので次の商品のスキャンを受け付ける
+    // すぐに再開すると、登録した現物がまだカメラに映ったままの場合に同じ商品を
+    // 再検出してしまうため、一旦画面から外れてから次を受け付けるようにする
+    rearmGateAfterMiss(hqIncomingGate);
   } catch (e) {
     document.getElementById('hq-incoming-status').textContent = e.message;
   }
@@ -897,7 +914,8 @@ document.getElementById('btn-submit-hq-disposal').addEventListener('click', asyn
     await apiCall('recordDisposal', { store, code: hqDisposalScannedCode, quantity });
     resetHqDisposalScreen();
     document.getElementById('hq-disposal-status').textContent = '廃棄を登録しました';
-    rearmGate(hqDisposalGate); // 登録が完了したので次の商品のスキャンを受け付ける
+    // 入荷登録と同じ理由で、現物が画面から外れてから次を受け付けるようにする
+    rearmGateAfterMiss(hqDisposalGate);
   } catch (e) {
     document.getElementById('hq-disposal-status').textContent = e.message;
   }
