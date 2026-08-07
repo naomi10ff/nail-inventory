@@ -68,6 +68,9 @@
     <button class="primary" id="btn-confirm-stocktake" disabled>この内容で棚卸を確定する</button>
   </div>
   <p class="status" id="stocktake-status"></p>
+
+  <button class="secondary" id="btn-toggle-unscanned" style="display:none;">未スキャン商品を表示</button>
+  <div id="unscanned-container"></div>
 </section>
 
 <!-- 在庫情報画面 -->
@@ -257,6 +260,8 @@
       <option value="カラー">カラー</option>
       <option value="その他">その他</option>
     </select>
+    <label for="p-memo">メモ(例: 「チェリーブロッサムと同じ商品、旧バーコード」など)</label>
+    <input type="text" id="p-memo">
     <button class="primary" id="btn-add-product">登録</button>
     <button class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
     <p class="status" id="product-status"></p>

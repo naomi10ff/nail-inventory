@@ -203,11 +203,70 @@ document.getElementById('btn-goto-menu').addEventListener('click', () => {
 // ---- メニュー ----
 document.getElementById('btn-nav-stocktake').addEventListener('click', () => {
   state.tally = {};
+  loadStocktakeProductList().catch((e) => console.error(e));
   renderTally();
   showScreen('screen-stocktake');
   rearmGate(stocktakeGate);
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
 });
+
+// ---- 棚卸: 未スキャン商品一覧 ----
+// 商品マスタの全件と、今スキャン済みの一覧を突き合わせて、まだスキャンしていない
+// 商品(欠品・スキャン漏れの可能性がある)を確認できるようにする。
+let stocktakeAllProducts = [];
+let stocktakeUnscannedVisible = false;
+
+async function loadStocktakeProductList() {
+  stocktakeAllProducts = [];
+  stocktakeUnscannedVisible = false;
+  document.getElementById('unscanned-container').innerHTML = '';
+  document.getElementById('btn-toggle-unscanned').style.display = 'none';
+  document.getElementById('btn-toggle-unscanned').textContent = '未スキャン商品を表示';
+  const data = await apiCall('listProducts', {});
+  stocktakeAllProducts = data.products;
+  if (stocktakeAllProducts.length) {
+    document.getElementById('btn-toggle-unscanned').style.display = 'block';
+  }
+}
+
+document.getElementById('btn-toggle-unscanned').addEventListener('click', () => {
+  stocktakeUnscannedVisible = !stocktakeUnscannedVisible;
+  document.getElementById('btn-toggle-unscanned').textContent =
+    stocktakeUnscannedVisible ? '未スキャン商品を隠す' : '未スキャン商品を表示';
+  renderUnscanned();
+});
+
+function renderUnscanned() {
+  const container = document.getElementById('unscanned-container');
+  container.innerHTML = '';
+  if (!stocktakeUnscannedVisible) return;
+
+  const unscanned = stocktakeAllProducts.filter((p) => !state.tally[p.code]);
+  if (!unscanned.length) {
+    container.textContent = '全商品をスキャン済みです';
+    return;
+  }
+  const byBrand = {};
+  unscanned.forEach((p) => {
+    const brand = p.brand || '(ブランド未設定)';
+    if (!byBrand[brand]) byBrand[brand] = [];
+    byBrand[brand].push(p);
+  });
+  Object.keys(byBrand).sort().forEach((brand) => {
+    const group = document.createElement('div');
+    group.className = 'tally-group';
+    const h3 = document.createElement('h3');
+    h3.textContent = brand;
+    group.appendChild(h3);
+    byBrand[brand].forEach((p) => {
+      const row = document.createElement('div');
+      row.className = 'tally-row';
+      row.innerHTML = `<span class="tally-name">${p.name}${p.colorNo ? ' (' + p.colorNo + ')' : ''}</span>`;
+      group.appendChild(row);
+    });
+    container.appendChild(group);
+  });
+}
 
 document.getElementById('btn-nav-inventory').addEventListener('click', () => {
   document.getElementById('inventory-search').value = '';
@@ -439,6 +498,7 @@ function renderTally() {
   });
 
   updateTallySummary();
+  renderUnscanned();
 }
 
 /** 個数を手動修正する。0にした場合はスキャン一覧から除く。 */
@@ -970,13 +1030,13 @@ async function loadProducts() {
   container.innerHTML = '';
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th></th></tr>';
+  table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
   data.products.forEach((p) => {
     const tr = document.createElement('tr');
     const editBtn = `<button class="link" data-edit-code="${p.code}">編集</button>`;
     const qrBtn = `<button class="link" data-qr-code="${p.code}">QR表示</button>`;
     const delBtn = `<button class="link" data-code="${p.code}">削除</button>`;
-    tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
+    tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
@@ -1027,6 +1087,7 @@ function startEditProduct(product) {
   document.getElementById('p-name').value = product.name || '';
   document.getElementById('p-color-no').value = product.colorNo || '';
   document.getElementById('p-category').value = product.category || 'ベース/トップ';
+  document.getElementById('p-memo').value = product.memo || '';
   document.getElementById('btn-add-product').textContent = '更新する';
   document.getElementById('btn-cancel-edit-product').style.display = 'block';
   document.getElementById('p-qr-result').style.display = 'none';
@@ -1039,7 +1100,7 @@ function cancelEditProduct() {
   editingProductCode = null;
   document.getElementById('product-form-title').textContent = '新規登録';
   document.getElementById('p-code').disabled = false;
-  ['p-code', 'p-name', 'p-color-no'].forEach((id) => (document.getElementById(id).value = ''));
+  ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
   document.getElementById('p-brand').value = '';
   document.getElementById('p-category').selectedIndex = 0;
   document.getElementById('btn-add-product').textContent = '登録';
@@ -1087,7 +1148,8 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
     brand: document.getElementById('p-brand').value,
     name: document.getElementById('p-name').value.trim(),
     colorNo: document.getElementById('p-color-no').value.trim(),
-    category: document.getElementById('p-category').value
+    category: document.getElementById('p-category').value,
+    memo: document.getElementById('p-memo').value.trim()
   };
   try {
     if (editingProductCode) {
@@ -1098,7 +1160,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
       document.getElementById('p-qr-result').style.display = 'none';
       const result = await apiCall('registerProduct', Object.assign({ code: codeInput || undefined }, payload));
       statusEl.textContent = '登録しました';
-      ['p-code', 'p-name', 'p-color-no'].forEach((id) => (document.getElementById(id).value = ''));
+      ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
       document.getElementById('p-brand').value = '';
       document.getElementById('p-category').selectedIndex = 0;
       document.getElementById('p-ocr-status').textContent = '';
