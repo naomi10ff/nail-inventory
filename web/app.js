@@ -150,24 +150,24 @@ function logout() {
 // ==================== 店舗用 ====================
 
 // ---- スタッフ選択 ----
+// エラーを内部で握りつぶさず呼び出し元に投げる。ログインボタンのハンドラから
+// 呼ばれた場合はそのtry/catchでログイン画面にエラー表示され、init()(再読み込み時の
+// 自動ログイン)から呼ばれた場合はそのcatchでlogout()が呼ばれ、無効なセッションの
+// まま古い店舗名だけが表示され続ける状態を防ぐ。
 async function goToStaffSelect() {
   setText('staff-store-name', state.store);
   const errEl = document.getElementById('staff-error');
   errEl.textContent = '';
-  try {
-    const data = await apiCall('getStaffList', {});
-    const select = document.getElementById('staff-select');
-    select.innerHTML = '';
-    data.staff.forEach((s) => {
-      const opt = document.createElement('option');
-      opt.value = s.name;
-      opt.textContent = s.name;
-      select.appendChild(opt);
-    });
-    showScreen('screen-staff');
-  } catch (e) {
-    errEl.textContent = e.message;
-  }
+  const data = await apiCall('getStaffList', {});
+  const select = document.getElementById('staff-select');
+  select.innerHTML = '';
+  data.staff.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    select.appendChild(opt);
+  });
+  showScreen('screen-staff');
 }
 
 document.getElementById('btn-add-staff').addEventListener('click', () => {
