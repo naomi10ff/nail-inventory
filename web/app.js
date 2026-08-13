@@ -133,10 +133,14 @@ function openDangerModal(message, onConfirm) {
   cancelBtn.addEventListener('click', onCancelClick);
 }
 
-// ---- 在庫数の直接修正(入力ミス・登録ミスなどの訂正用) ----
-// パスワード再入力を必須にする点はdanger-modalと同じだが、新しい在庫数とメモも入力させる。
-function openAdjustModal(label, currentStock, onConfirm) {
+// ---- 総在庫一覧から、ブランド名・品名・カラーNO・在庫数をまとめて直せるようにする ----
+// パスワード再入力を必須にする点はdanger-modalと同じ。
+function openAdjustModal(item, onConfirm) {
   const overlay = document.getElementById('adjust-modal');
+  const codeInput = document.getElementById('adjust-modal-code');
+  const brandInput = document.getElementById('adjust-modal-brand');
+  const nameInput = document.getElementById('adjust-modal-name');
+  const colorInput = document.getElementById('adjust-modal-colorno');
   const newStockInput = document.getElementById('adjust-modal-newstock');
   const memoInput = document.getElementById('adjust-modal-memo');
   const passwordInput = document.getElementById('adjust-modal-password');
@@ -144,8 +148,12 @@ function openAdjustModal(label, currentStock, onConfirm) {
   const confirmBtn = document.getElementById('adjust-modal-confirm');
   const cancelBtn = document.getElementById('adjust-modal-cancel');
 
-  document.getElementById('adjust-modal-label').textContent = `${label}(現在庫: ${currentStock})`;
-  newStockInput.value = currentStock;
+  document.getElementById('adjust-modal-label').textContent = `${item.store} / コード: ${item.code}`;
+  codeInput.value = item.code;
+  brandInput.value = item.brand || '';
+  nameInput.value = item.name || '';
+  colorInput.value = item.colorNo || '';
+  newStockInput.value = item.currentStock;
   memoInput.value = '';
   passwordInput.value = '';
   errorEl.textContent = '';
@@ -157,8 +165,18 @@ function openAdjustModal(label, currentStock, onConfirm) {
     cancelBtn.removeEventListener('click', onCancelClick);
   }
   async function onConfirmClick() {
+    const newCode = codeInput.value.trim();
+    const name = nameInput.value.trim();
     const newStock = newStockInput.value.trim();
     const password = passwordInput.value;
+    if (!newCode) {
+      errorEl.textContent = '商品コードを入力してください';
+      return;
+    }
+    if (!name) {
+      errorEl.textContent = '品名を入力してください';
+      return;
+    }
     if (newStock === '' || Number(newStock) < 0) {
       errorEl.textContent = '正しい在庫数を入力してください';
       return;
@@ -169,53 +187,10 @@ function openAdjustModal(label, currentStock, onConfirm) {
     }
     confirmBtn.disabled = true;
     try {
-      await onConfirm(newStock, memoInput.value.trim(), password);
-      close();
-    } catch (e) {
-      errorEl.textContent = e.message;
-    } finally {
-      confirmBtn.disabled = false;
-    }
-  }
-  function onCancelClick() {
-    close();
-  }
-
-  confirmBtn.addEventListener('click', onConfirmClick);
-  cancelBtn.addEventListener('click', onCancelClick);
-}
-
-// ---- 総在庫一覧から、ブランド名・品名・カラーNOをすぐ直せるようにする ----
-function openProductEditModal(item, onConfirm) {
-  const overlay = document.getElementById('product-edit-modal');
-  const brandInput = document.getElementById('product-edit-modal-brand');
-  const nameInput = document.getElementById('product-edit-modal-name');
-  const colorInput = document.getElementById('product-edit-modal-colorno');
-  const errorEl = document.getElementById('product-edit-modal-error');
-  const confirmBtn = document.getElementById('product-edit-modal-confirm');
-  const cancelBtn = document.getElementById('product-edit-modal-cancel');
-
-  document.getElementById('product-edit-modal-label').textContent = `${item.store} / コード: ${item.code}`;
-  brandInput.value = item.brand || '';
-  nameInput.value = item.name || '';
-  colorInput.value = item.colorNo || '';
-  errorEl.textContent = '';
-  overlay.style.display = 'flex';
-
-  function close() {
-    overlay.style.display = 'none';
-    confirmBtn.removeEventListener('click', onConfirmClick);
-    cancelBtn.removeEventListener('click', onCancelClick);
-  }
-  async function onConfirmClick() {
-    const name = nameInput.value.trim();
-    if (!name) {
-      errorEl.textContent = '品名を入力してください';
-      return;
-    }
-    confirmBtn.disabled = true;
-    try {
-      await onConfirm({ brand: brandInput.value.trim(), name, colorNo: colorInput.value.trim() });
+      await onConfirm({
+        newCode, brand: brandInput.value.trim(), name, colorNo: colorInput.value.trim(),
+        newStock, memo: memoInput.value.trim(), password
+      });
       close();
     } catch (e) {
       errorEl.textContent = e.message;
@@ -1161,7 +1136,7 @@ async function renderInventoryTable(store) {
   }
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>店舗</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>現在庫</th><th colspan="3"></th></tr>';
+  table.innerHTML = '<tr><th>店舗</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>現在庫</th><th colspan="2"></th></tr>';
   data.items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.outOfStock) tr.className = 'out-of-stock';
@@ -1169,33 +1144,23 @@ async function renderInventoryTable(store) {
 
     const label = `${item.store}の「${item.brand || ''} ${item.name}」`;
 
-    const editTd = document.createElement('td');
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'link';
-    editBtn.textContent = '編集';
-    editBtn.addEventListener('click', () => {
-      openProductEditModal(item, async ({ brand, name, colorNo }) => {
-        const productsData = await apiCall('listProducts', { store: item.store });
-        const product = productsData.products.find((p) => String(p.code) === String(item.code));
-        await apiCall('updateProduct', {
-          store: item.store, code: item.code, brand, name, colorNo,
-          category: product ? product.category : '', memo: product ? product.memo : ''
-        });
-        await loadTotalInventoryScreen();
-      });
-    });
-    editTd.appendChild(editBtn);
-    tr.appendChild(editTd);
-
     const adjustTd = document.createElement('td');
     const adjustBtn = document.createElement('button');
     adjustBtn.type = 'button';
     adjustBtn.className = 'link';
     adjustBtn.textContent = '修正';
     adjustBtn.addEventListener('click', () => {
-      openAdjustModal(label, item.currentStock, async (newStock, memo, password) => {
-        await apiCall('adjustProductStock', { store: item.store, code: item.code, newStock, memo, password });
+      openAdjustModal(item, async ({ newCode, brand, name, colorNo, newStock, memo, password }) => {
+        const productsData = await apiCall('listProducts', { store: item.store });
+        const product = productsData.products.find((p) => String(p.code) === String(item.code));
+        await apiCall('updateProduct', {
+          store: item.store, code: item.code, newCode, brand, name, colorNo,
+          category: product ? product.category : '', memo: product ? product.memo : ''
+        });
+        const finalCode = newCode && newCode !== String(item.code) ? newCode : item.code;
+        if (Number(newStock) !== item.currentStock) {
+          await apiCall('adjustProductStock', { store: item.store, code: finalCode, newStock, memo, password });
+        }
         await loadTotalInventoryScreen();
       });
     });
