@@ -124,6 +124,58 @@ function openDangerModal(message, onConfirm) {
   cancelBtn.addEventListener('click', onCancelClick);
 }
 
+// ---- 在庫数の直接修正(入力ミス・登録ミスなどの訂正用) ----
+// パスワード再入力を必須にする点はdanger-modalと同じだが、新しい在庫数とメモも入力させる。
+function openAdjustModal(label, currentStock, onConfirm) {
+  const overlay = document.getElementById('adjust-modal');
+  const newStockInput = document.getElementById('adjust-modal-newstock');
+  const memoInput = document.getElementById('adjust-modal-memo');
+  const passwordInput = document.getElementById('adjust-modal-password');
+  const errorEl = document.getElementById('adjust-modal-error');
+  const confirmBtn = document.getElementById('adjust-modal-confirm');
+  const cancelBtn = document.getElementById('adjust-modal-cancel');
+
+  document.getElementById('adjust-modal-label').textContent = `${label}(現在庫: ${currentStock})`;
+  newStockInput.value = currentStock;
+  memoInput.value = '';
+  passwordInput.value = '';
+  errorEl.textContent = '';
+  overlay.style.display = 'flex';
+
+  function close() {
+    overlay.style.display = 'none';
+    confirmBtn.removeEventListener('click', onConfirmClick);
+    cancelBtn.removeEventListener('click', onCancelClick);
+  }
+  async function onConfirmClick() {
+    const newStock = newStockInput.value.trim();
+    const password = passwordInput.value;
+    if (newStock === '' || Number(newStock) < 0) {
+      errorEl.textContent = '正しい在庫数を入力してください';
+      return;
+    }
+    if (!password) {
+      errorEl.textContent = 'パスワードを入力してください';
+      return;
+    }
+    confirmBtn.disabled = true;
+    try {
+      await onConfirm(newStock, memoInput.value.trim(), password);
+      close();
+    } catch (e) {
+      errorEl.textContent = e.message;
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  }
+  function onCancelClick() {
+    close();
+  }
+
+  confirmBtn.addEventListener('click', onConfirmClick);
+  cancelBtn.addEventListener('click', onCancelClick);
+}
+
 // ---- ログイン(店舗・本社共通、roleで振り分け) ----
 document.getElementById('btn-login').addEventListener('click', async () => {
   const username = document.getElementById('login-username').value.trim();
@@ -1003,12 +1055,25 @@ async function renderInventoryTable(store) {
   data.items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.outOfStock) tr.className = 'out-of-stock';
+    const adjustBtn = `<button type="button" class="link" data-adjust-store="${item.store}" data-adjust-code="${item.code}">修正</button>`;
     const resetBtn = `<button type="button" class="link" data-reset-store="${item.store}" data-reset-code="${item.code}">リセット</button>`;
-    tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td><td>${resetBtn}</td>`;
+    tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td><td>${adjustBtn} ${resetBtn}</td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
 
+  container.querySelectorAll('button[data-adjust-code]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetStore = btn.dataset.adjustStore;
+      const targetCode = btn.dataset.adjustCode;
+      const row = data.items.find((i) => i.store === targetStore && i.code === targetCode);
+      const label = row ? `${targetStore}の「${row.brand || ''} ${row.name}」` : `${targetStore}の対象商品`;
+      openAdjustModal(label, row ? row.currentStock : 0, async (newStock, memo, password) => {
+        await apiCall('adjustProductStock', { store: targetStore, code: targetCode, newStock, memo, password });
+        await loadTotalInventoryScreen();
+      });
+    });
+  });
   container.querySelectorAll('button[data-reset-code]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetStore = btn.dataset.resetStore;

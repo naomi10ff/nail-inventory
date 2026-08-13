@@ -84,6 +84,8 @@ function routeAction_(action, p) {
       return addBrand_(validateToken_(p.token), p);
     case 'resetProductStock':
       return resetProductStock_(validateToken_(p.token), p);
+    case 'adjustProductStock':
+      return adjustProductStock_(validateToken_(p.token), p);
     case 'resetStoreInventory':
       return resetStoreInventory_(validateToken_(p.token), p);
     case 'getStocktakeReview':
@@ -510,6 +512,8 @@ function computeAllSummaryAsOf_(cutoffDate) {
       entry.current += qty;
     } else if (type === '廃棄') {
       entry.current -= qty;
+    } else if (type === '調整') {
+      entry.current = qty;
     }
   }
 
@@ -748,6 +752,27 @@ function approveStocktake_(session, p) {
 // ---- 在庫のリセット(本社限定・取り消し不可の操作) ----
 // どちらもパスワードの再検証(verifyOwnPassword_)を必須にしている。
 // 実体としては、対象の店舗×商品に対して数量0の「棚卸」を記録することで在庫を0に戻す。
+
+/**
+ * 入力ミスやシステムの不具合などで実際と違う数になった在庫を、正しい数に直接書き換える。
+ * 種別「調整」として記録するため、棚卸承認画面の棚卸実施回数には数えられない。
+ */
+function adjustProductStock_(session, p) {
+  requireRole_(session, ['hq']);
+  verifyOwnPassword_(session, p.password);
+  if (!p.store || !p.code) throw new Error('店舗と商品コードを指定してください');
+  var newStock = Number(p.newStock);
+  if (p.newStock === undefined || p.newStock === '' || isNaN(newStock) || newStock < 0) {
+    throw new Error('正しい在庫数を指定してください');
+  }
+
+  var product = lookupProduct_(p.store, p.code);
+  if (!product) throw new Error('商品が見つかりません');
+
+  appendLog_(p.store, session.username, product, '調整', newStock, p.memo || '本社による在庫調整');
+  refreshSummary_();
+  return { store: p.store, code: p.code, newStock: newStock };
+}
 
 /** カラージェルの劣化などで、特定商品1点だけの在庫を0にリセットする。 */
 function resetProductStock_(session, p) {
