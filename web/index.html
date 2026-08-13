@@ -206,12 +206,13 @@
     <input type="text" id="hq-incoming-new-name">
     <label for="hq-incoming-new-color-no">カラーNO</label>
     <input type="text" id="hq-incoming-new-color-no">
-    <label for="hq-incoming-new-category">カテゴリー</label>
-    <select id="hq-incoming-new-category">
-      <option value="ベース/トップ">ベース/トップ</option>
-      <option value="カラー">カラー</option>
-      <option value="その他">その他</option>
-    </select>
+    <label for="hq-incoming-new-category-select">カテゴリー</label>
+    <select id="hq-incoming-new-category-select"></select>
+    <button class="link" type="button" id="btn-new-category-toggle-incoming">リストにないカテゴリーはこちら</button>
+    <div id="hq-incoming-new-category-new-form" style="display:none;">
+      <label for="hq-incoming-new-category-new">新しいカテゴリー名</label>
+      <input type="text" id="hq-incoming-new-category-new">
+    </div>
     <button type="button" class="secondary" id="btn-register-new-from-incoming">この内容で商品を登録</button>
   </div>
 
@@ -271,12 +272,13 @@
     <input type="text" id="p-name">
     <label for="p-color-no">カラーNO</label>
     <input type="text" id="p-color-no">
-    <label for="p-category">カテゴリー</label>
-    <select id="p-category">
-      <option value="ベース/トップ">ベース/トップ</option>
-      <option value="カラー">カラー</option>
-      <option value="その他">その他</option>
-    </select>
+    <label for="p-category-select">カテゴリー</label>
+    <select id="p-category-select"></select>
+    <button class="link" type="button" id="btn-new-category-toggle">リストにないカテゴリーはこちら</button>
+    <div id="p-category-new-form" style="display:none;">
+      <label for="p-category-new">新しいカテゴリー名</label>
+      <input type="text" id="p-category-new">
+    </div>
     <label for="p-memo">メモ(例: 「チェリーブロッサムと同じ商品、旧バーコード」など)</label>
     <input type="text" id="p-memo">
     <button type="button" class="primary" id="btn-add-product">登録</button>

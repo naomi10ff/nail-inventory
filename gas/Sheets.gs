@@ -11,12 +11,16 @@ var SHEET_SUMMARY = '現在庫サマリ';
 var SHEET_SESSIONS = 'セッション';
 var SHEET_BRANDS = 'ブランドマスタ';
 var SHEET_APPROVALS = '棚卸承認';
+var SHEET_CATEGORIES = 'カテゴリマスタ';
 
 var STORES = ['生駒店', '西大寺宝来店', '木津店'];
 
 // 商品マスタ・ブランドマスタの列定義(店舗ごとに独立管理するため「店舗」列を先頭に持つ)
 var PRODUCTS_HEADERS = ['店舗', 'コード', '商品名', 'ブランド', 'カテゴリ', 'メーカー', '単位', '備考', '登録日', 'カラーNO'];
 var BRANDS_HEADERS = ['店舗', 'ブランド名'];
+var CATEGORIES_HEADERS = ['カテゴリー名'];
+// カテゴリーはブランドと違い店舗ごとではなく全店舗共通の分類なので、店舗列を持たない。
+var DEFAULT_CATEGORIES = ['ベース/トップ', 'カラー', 'その他', '物販'];
 
 function setupSpreadsheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -29,8 +33,18 @@ function setupSpreadsheet() {
   setupSheet_(ss, SHEET_SESSIONS, ['トークン', 'ユーザー名', '店舗', '権限', '発行日時']);
   setupSheet_(ss, SHEET_BRANDS, BRANDS_HEADERS);
   setupSheet_(ss, SHEET_APPROVALS, ['店舗', '年月', '承認者', '承認日時']);
+  setupSheet_(ss, SHEET_CATEGORIES, CATEGORIES_HEADERS);
+  seedCategories_(ss);
 
   seedAccounts_(ss);
+}
+
+/** カテゴリマスタが空(新規シート)なら、既定のカテゴリーを入れておく。 */
+function seedCategories_(ss) {
+  var sheet = ss.getSheetByName(SHEET_CATEGORIES);
+  if (sheet.getLastRow() > 1) return;
+  var rows = DEFAULT_CATEGORIES.map(function (name) { return [name]; });
+  sheet.getRange(2, 1, rows.length, 1).setValues(rows);
 }
 
 function setupSheet_(ss, name, headers) {

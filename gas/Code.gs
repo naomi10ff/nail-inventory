@@ -82,6 +82,8 @@ function routeAction_(action, p) {
       return getBrandList_(validateToken_(p.token), p.store);
     case 'addBrand':
       return addBrand_(validateToken_(p.token), p);
+    case 'getCategoryList':
+      return getCategoryList_(validateToken_(p.token));
     case 'resetProductStock':
       return resetProductStock_(validateToken_(p.token), p);
     case 'adjustProductStock':
@@ -192,6 +194,7 @@ function registerProduct_(session, p) {
   }
 
   ensureBrandExists_(store, p.brand);
+  ensureCategoryExists_(p.category);
 
   var sheet = getSheet_(SHEET_PRODUCTS);
   sheet.appendRow([
@@ -214,6 +217,7 @@ function updateProduct_(session, p) {
   if (!p.store || !p.code) throw new Error('店舗とコードを指定してください');
 
   ensureBrandExists_(p.store, p.brand);
+  ensureCategoryExists_(p.category);
 
   var sheet = getSheet_(SHEET_PRODUCTS);
   var data = sheet.getDataRange().getValues();
@@ -319,6 +323,31 @@ function addBrand_(session, p) {
   }
   getSheet_(SHEET_BRANDS).appendRow([p.store, p.name]);
   return { store: p.store, name: p.name };
+}
+
+// ---- カテゴリマスタ ----
+// ブランドと違い、全店舗共通の1つの分類リスト。商品登録・編集時に新しいカテゴリー名が
+// 入力されると自動でカテゴリマスタに追加され、以後は全店舗の入力候補として表示される。
+
+function getCategoryNames_() {
+  var sheet = getSheet_(SHEET_CATEGORIES);
+  var data = sheet.getDataRange().getValues();
+  var categories = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0]) categories.push(data[i][0]);
+  }
+  return categories;
+}
+
+function getCategoryList_(session) {
+  return { categories: getCategoryNames_() };
+}
+
+/** 新しいカテゴリー名なら自動でカテゴリマスタに追加する(登録・編集の裏側で使う)。 */
+function ensureCategoryExists_(name) {
+  if (!name) return;
+  if (getCategoryNames_().indexOf(name) !== -1) return;
+  getSheet_(SHEET_CATEGORIES).appendRow([name]);
 }
 
 // ---- 取引ログ(入荷・廃棄・棚卸) ----
