@@ -176,6 +176,52 @@ function openAdjustModal(label, currentStock, onConfirm) {
   cancelBtn.addEventListener('click', onCancelClick);
 }
 
+// ---- 総在庫一覧から、ブランド名・品名・カラーNOをすぐ直せるようにする ----
+function openProductEditModal(item, onConfirm) {
+  const overlay = document.getElementById('product-edit-modal');
+  const brandInput = document.getElementById('product-edit-modal-brand');
+  const nameInput = document.getElementById('product-edit-modal-name');
+  const colorInput = document.getElementById('product-edit-modal-colorno');
+  const errorEl = document.getElementById('product-edit-modal-error');
+  const confirmBtn = document.getElementById('product-edit-modal-confirm');
+  const cancelBtn = document.getElementById('product-edit-modal-cancel');
+
+  document.getElementById('product-edit-modal-label').textContent = `${item.store} / コード: ${item.code}`;
+  brandInput.value = item.brand || '';
+  nameInput.value = item.name || '';
+  colorInput.value = item.colorNo || '';
+  errorEl.textContent = '';
+  overlay.style.display = 'flex';
+
+  function close() {
+    overlay.style.display = 'none';
+    confirmBtn.removeEventListener('click', onConfirmClick);
+    cancelBtn.removeEventListener('click', onCancelClick);
+  }
+  async function onConfirmClick() {
+    const name = nameInput.value.trim();
+    if (!name) {
+      errorEl.textContent = '品名を入力してください';
+      return;
+    }
+    confirmBtn.disabled = true;
+    try {
+      await onConfirm({ brand: brandInput.value.trim(), name, colorNo: colorInput.value.trim() });
+      close();
+    } catch (e) {
+      errorEl.textContent = e.message;
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  }
+  function onCancelClick() {
+    close();
+  }
+
+  confirmBtn.addEventListener('click', onConfirmClick);
+  cancelBtn.addEventListener('click', onCancelClick);
+}
+
 // ---- ログイン(店舗・本社共通、roleで振り分け) ----
 document.getElementById('btn-login').addEventListener('click', async () => {
   const username = document.getElementById('login-username').value.trim();
@@ -1051,44 +1097,67 @@ async function renderInventoryTable(store) {
   }
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>店舗</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>現在庫</th><th></th></tr>';
+  table.innerHTML = '<tr><th>店舗</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>現在庫</th><th colspan="3"></th></tr>';
   data.items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.outOfStock) tr.className = 'out-of-stock';
-    const adjustBtn = `<button type="button" class="link" data-adjust-store="${item.store}" data-adjust-code="${item.code}">修正</button>`;
-    const resetBtn = `<button type="button" class="link" data-reset-store="${item.store}" data-reset-code="${item.code}">リセット</button>`;
-    tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td><td>${adjustBtn} ${resetBtn}</td>`;
-    table.appendChild(tr);
-  });
-  container.appendChild(table);
+    tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td>`;
 
-  container.querySelectorAll('button[data-adjust-code]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetStore = btn.dataset.adjustStore;
-      const targetCode = btn.dataset.adjustCode;
-      const row = data.items.find((i) => i.store === targetStore && i.code === targetCode);
-      const label = row ? `${targetStore}の「${row.brand || ''} ${row.name}」` : `${targetStore}の対象商品`;
-      openAdjustModal(label, row ? row.currentStock : 0, async (newStock, memo, password) => {
-        await apiCall('adjustProductStock', { store: targetStore, code: targetCode, newStock, memo, password });
+    const label = `${item.store}の「${item.brand || ''} ${item.name}」`;
+
+    const editTd = document.createElement('td');
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'link';
+    editBtn.textContent = '編集';
+    editBtn.addEventListener('click', () => {
+      openProductEditModal(item, async ({ brand, name, colorNo }) => {
+        const productsData = await apiCall('listProducts', { store: item.store });
+        const product = productsData.products.find((p) => String(p.code) === String(item.code));
+        await apiCall('updateProduct', {
+          store: item.store, code: item.code, brand, name, colorNo,
+          category: product ? product.category : '', memo: product ? product.memo : ''
+        });
         await loadTotalInventoryScreen();
       });
     });
-  });
-  container.querySelectorAll('button[data-reset-code]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetStore = btn.dataset.resetStore;
-      const targetCode = btn.dataset.resetCode;
-      const row = data.items.find((i) => i.store === targetStore && i.code === targetCode);
-      const label = row ? `${targetStore}の「${row.brand || ''} ${row.name}」` : `${targetStore}の対象商品`;
+    editTd.appendChild(editBtn);
+    tr.appendChild(editTd);
+
+    const adjustTd = document.createElement('td');
+    const adjustBtn = document.createElement('button');
+    adjustBtn.type = 'button';
+    adjustBtn.className = 'link';
+    adjustBtn.textContent = '修正';
+    adjustBtn.addEventListener('click', () => {
+      openAdjustModal(label, item.currentStock, async (newStock, memo, password) => {
+        await apiCall('adjustProductStock', { store: item.store, code: item.code, newStock, memo, password });
+        await loadTotalInventoryScreen();
+      });
+    });
+    adjustTd.appendChild(adjustBtn);
+    tr.appendChild(adjustTd);
+
+    const resetTd = document.createElement('td');
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'link';
+    resetBtn.textContent = 'リセット';
+    resetBtn.addEventListener('click', () => {
       openDangerModal(
         `${label}の在庫を0にリセットします。カラージェルの劣化などで在庫から外す場合に使ってください。この操作は取り消せません。`,
         async (password) => {
-          await apiCall('resetProductStock', { store: targetStore, code: targetCode, password });
+          await apiCall('resetProductStock', { store: item.store, code: item.code, password });
           await loadTotalInventoryScreen();
         }
       );
     });
+    resetTd.appendChild(resetBtn);
+    tr.appendChild(resetTd);
+
+    table.appendChild(tr);
   });
+  container.appendChild(table);
 }
 
 document.getElementById('btn-export-hq-inventory').addEventListener('click', () => {

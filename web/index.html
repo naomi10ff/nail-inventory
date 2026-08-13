@@ -392,6 +392,23 @@
   </div>
 </div>
 
+<!-- 総在庫一覧から、ブランド名・品名・カラーNOの間違いをすぐ直せるようにするモーダル -->
+<div id="product-edit-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>商品情報を編集</h3>
+    <p class="hint" id="product-edit-modal-label"></p>
+    <label for="product-edit-modal-brand">ブランド名</label>
+    <input type="text" id="product-edit-modal-brand">
+    <label for="product-edit-modal-name">品名</label>
+    <input type="text" id="product-edit-modal-name">
+    <label for="product-edit-modal-colorno">カラーNO</label>
+    <input type="text" id="product-edit-modal-colorno">
+    <p class="error" id="product-edit-modal-error"></p>
+    <button type="button" class="primary" id="product-edit-modal-confirm">保存する</button>
+    <button type="button" class="secondary" id="product-edit-modal-cancel">キャンセル</button>
+  </div>
+</div>
+
 <!-- 商品一覧から、登録済み商品のQRコードをいつでも呼び出して印刷するためのモーダル -->
 <div id="qr-view-modal" class="modal-overlay" style="display:none;">
   <div class="modal-box">
