@@ -943,6 +943,7 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
   document.getElementById('hq-incoming-new-name').value = '';
   document.getElementById('hq-incoming-new-color-no').value = '';
+  document.getElementById('hq-incoming-new-item-number').value = '';
   resetHqIncomingCategoryNewForm();
   document.getElementById('hq-incoming-new-category-select').selectedIndex = 0;
 }
@@ -994,6 +995,7 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     brand: currentHqIncomingBrandValue(),
     name,
     colorNo: document.getElementById('hq-incoming-new-color-no').value.trim(),
+    itemNumber: document.getElementById('hq-incoming-new-item-number').value.trim(),
     category: currentHqIncomingCategoryValue()
   };
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
@@ -1338,7 +1340,7 @@ function renderProductsTable(query) {
   const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
   const filtered = currentProductList.filter((p) => {
     if (!keywords.length) return true;
-    const haystack = normalizeSearchText([p.code, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
+    const haystack = normalizeSearchText([p.code, p.itemNumber, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
     return keywords.every((kw) => haystack.includes(kw));
   });
   productsFilteredForExport = filtered;
@@ -1351,13 +1353,13 @@ function renderProductsTable(query) {
   container.innerHTML = '';
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
+  table.innerHTML = '<tr><th>コード</th><th>品番</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
   filtered.forEach((p) => {
     const tr = document.createElement('tr');
     const editBtn = `<button type="button" class="link" data-edit-code="${p.code}">編集</button>`;
     const qrBtn = `<button type="button" class="link" data-qr-code="${p.code}">QR表示</button>`;
     const delBtn = `<button type="button" class="link" data-code="${p.code}">削除</button>`;
-    tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
+    tr.innerHTML = `<td>${p.code}</td><td>${p.itemNumber || ''}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
@@ -1390,9 +1392,9 @@ document.getElementById('product-search').addEventListener('input', () => {
 document.getElementById('btn-export-products').addEventListener('click', () => {
   if (!productsFilteredForExport.length) return;
   const store = document.getElementById('product-store-select').value;
-  const rows = [['ブランド', '品名', 'カラーNO', '商品コード']];
+  const rows = [['ブランド', '品名', 'カラーNO', '品番(商品コード)', 'バーコード']];
   productsFilteredForExport.forEach((p) => {
-    rows.push([p.brand || '', p.name, p.colorNo || '', p.code]);
+    rows.push([p.brand || '', p.name, p.colorNo || '', p.itemNumber || '', p.code]);
   });
   downloadCsv(`商品マスタ_${store}.csv`, rows);
 });
@@ -1420,6 +1422,7 @@ function startEditProduct(product) {
   setPBrandValue(product.brand || '');
   document.getElementById('p-name').value = product.name || '';
   document.getElementById('p-color-no').value = product.colorNo || '';
+  document.getElementById('p-item-number').value = product.itemNumber || '';
   setPCategoryValue(product.category || '');
   document.getElementById('p-memo').value = product.memo || '';
   document.getElementById('btn-add-product').textContent = '更新する';
@@ -1430,7 +1433,7 @@ function startEditProduct(product) {
 function cancelEditProduct() {
   editingProductCode = null;
   document.getElementById('product-form-title').textContent = '新規登録';
-  ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
+  ['p-code', 'p-name', 'p-color-no', 'p-item-number', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
   resetPBrandNewForm();
   document.getElementById('p-brand-select').selectedIndex = 0;
   resetPCategoryNewForm();
@@ -1455,6 +1458,7 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
     brand: currentPBrandValue(),
     name: document.getElementById('p-name').value.trim(),
     colorNo: document.getElementById('p-color-no').value.trim(),
+    itemNumber: document.getElementById('p-item-number').value.trim(),
     category: currentPCategoryValue(),
     memo: document.getElementById('p-memo').value.trim()
   };
@@ -1468,7 +1472,7 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
       document.getElementById('p-qr-result').style.display = 'none';
       const result = await apiCall('registerProduct', Object.assign({ code: codeInput || undefined }, payload));
       statusEl.textContent = '登録しました';
-      ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
+      ['p-code', 'p-name', 'p-color-no', 'p-item-number', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
       resetPBrandNewForm();
       resetPCategoryNewForm();
       document.getElementById('p-category-select').selectedIndex = 0;

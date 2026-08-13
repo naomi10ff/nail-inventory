@@ -206,6 +206,8 @@
     <input type="text" id="hq-incoming-new-name">
     <label for="hq-incoming-new-color-no">カラーNO</label>
     <input type="text" id="hq-incoming-new-color-no">
+    <label for="hq-incoming-new-item-number">品番(バーコードとは別。発注時にメーカー/問屋に伝える商品コード)</label>
+    <input type="text" id="hq-incoming-new-item-number">
     <label for="hq-incoming-new-category-select">カテゴリー</label>
     <select id="hq-incoming-new-category-select"></select>
     <button class="link" type="button" id="btn-new-category-toggle-incoming">リストにないカテゴリーはこちら</button>
@@ -272,6 +274,8 @@
     <input type="text" id="p-name">
     <label for="p-color-no">カラーNO</label>
     <input type="text" id="p-color-no">
+    <label for="p-item-number">品番(バーコードとは別。発注時にメーカー/問屋に伝える商品コード)</label>
+    <input type="text" id="p-item-number">
     <label for="p-category-select">カテゴリー</label>
     <select id="p-category-select"></select>
     <button class="link" type="button" id="btn-new-category-toggle">リストにないカテゴリーはこちら</button>
@@ -291,7 +295,7 @@
     </div>
   </div>
   <h2 style="margin-top:28px;">商品一覧</h2>
-  <label for="product-search">検索(コード・バーコード・ブランド・品名)</label>
+  <label for="product-search">検索(コード・バーコード・品番・ブランド・品名)</label>
   <input type="text" id="product-search" placeholder="例: メルティ 05 または バーコード番号">
   <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
   <div id="products-table"></div>

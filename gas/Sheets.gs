@@ -16,7 +16,10 @@ var SHEET_CATEGORIES = 'カテゴリマスタ';
 var STORES = ['生駒店', '西大寺宝来店', '木津店'];
 
 // 商品マスタ・ブランドマスタの列定義(店舗ごとに独立管理するため「店舗」列を先頭に持つ)
-var PRODUCTS_HEADERS = ['店舗', 'コード', '商品名', 'ブランド', 'カテゴリ', 'メーカー', '単位', '備考', '登録日', 'カラーNO'];
+// 「コード」はスキャン用のバーコード(または自動発行QR)、「品番」は発注時にメーカー/
+// 問屋に伝える商品コードで、両者は別物(同じ商品でもバーコードが読めない・付いていない
+// ことがあるが、品番は仕入れ先のカタログ上で常に存在する)。
+var PRODUCTS_HEADERS = ['店舗', 'コード', '商品名', 'ブランド', 'カテゴリ', 'メーカー', '単位', '備考', '登録日', 'カラーNO', '品番'];
 var BRANDS_HEADERS = ['店舗', 'ブランド名'];
 var CATEGORIES_HEADERS = ['カテゴリー名'];
 // カテゴリーはブランドと違い店舗ごとではなく全店舗共通の分類なので、店舗列を持たない。
@@ -35,8 +38,22 @@ function setupSpreadsheet() {
   setupSheet_(ss, SHEET_APPROVALS, ['店舗', '年月', '承認者', '承認日時']);
   setupSheet_(ss, SHEET_CATEGORIES, CATEGORIES_HEADERS);
   seedCategories_(ss);
+  addItemNumberColumn_(ss);
 
   seedAccounts_(ss);
+}
+
+/**
+ * 既に運用中の商品マスタ(「品番」列が無い状態)に、非破壊で列を追加する。
+ * 既存データは一切変更せず、ヘッダーに「品番」が無ければ最後尾に列を追加するだけ。
+ */
+function addItemNumberColumn_(ss) {
+  var sheet = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!sheet || sheet.getLastRow() === 0) return;
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf('品番') !== -1) return;
+  var col = sheet.getLastColumn() + 1;
+  sheet.getRange(1, col).setValue('品番').setFontWeight('bold');
 }
 
 /** カテゴリマスタが空(新規シート)なら、既定のカテゴリーを入れておく。 */

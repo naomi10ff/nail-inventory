@@ -160,7 +160,8 @@ function lookupProduct_(store, code) {
         category: data[i][4],
         maker: data[i][5],
         unit: data[i][6],
-        colorNo: data[i][9]
+        colorNo: data[i][9],
+        itemNumber: data[i][10]
       };
     }
   }
@@ -199,13 +200,13 @@ function registerProduct_(session, p) {
   var sheet = getSheet_(SHEET_PRODUCTS);
   sheet.appendRow([
     store, code, p.name, p.brand || '', p.category || '', p.maker || '',
-    p.unit || '本', p.memo || '', new Date(), p.colorNo || ''
+    p.unit || '本', p.memo || '', new Date(), p.colorNo || '', p.itemNumber || ''
   ]);
   return { store: store, code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
 }
 
 /**
- * 既存商品の品名・ブランド・カテゴリー・カラーNO・メモの修正。本社アカウントのみ。
+ * 既存商品の品名・ブランド・カテゴリー・カラーNO・品番・メモの修正。本社アカウントのみ。
  * p.newCode を指定すると、コード自体も変更できる(バーコードなしで自動発行した
  * プレースホルダーのコードを、後から見つかった実物のバーコードに差し替える用途)。
  * 注意: コードを変更すると、それ以前にそのコードで記録された取引ログ(棚卸・入荷・廃棄)
@@ -236,6 +237,7 @@ function updateProduct_(session, p) {
       sheet.getRange(row, 5).setValue(p.category || '');
       sheet.getRange(row, 8).setValue(p.memo || '');
       sheet.getRange(row, 10).setValue(p.colorNo || '');
+      sheet.getRange(row, 11).setValue(p.itemNumber || '');
       refreshSummary_(); // ブランド名等の変更をサマリ表示にも反映する
       return { store: p.store, code: newCode || p.code };
     }
@@ -259,7 +261,7 @@ function listProducts_(session, storeParam) {
     list.push({
       code: data[i][1], name: data[i][2], brand: data[i][3],
       category: data[i][4], maker: data[i][5], unit: data[i][6],
-      memo: data[i][7], colorNo: data[i][9]
+      memo: data[i][7], colorNo: data[i][9], itemNumber: data[i][10]
     });
   }
   return { products: list };
