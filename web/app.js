@@ -1345,6 +1345,7 @@ function setPCategoryValue(category) {
 
 let editingProductCode = null;
 let currentProductList = [];
+let productsFilteredForExport = [];
 
 async function loadProducts() {
   const store = document.getElementById('product-store-select').value;
@@ -1364,6 +1365,7 @@ function renderProductsTable(query) {
   const container = document.getElementById('products-table');
   if (!currentProductList.length) {
     container.textContent = '商品がまだ登録されていません';
+    productsFilteredForExport = [];
     return;
   }
 
@@ -1374,6 +1376,7 @@ function renderProductsTable(query) {
     const haystack = normalizeSearchText([p.code, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
     return keywords.every((kw) => haystack.includes(kw));
   });
+  productsFilteredForExport = filtered;
 
   if (!filtered.length) {
     container.textContent = '該当する商品が見つかりません';
@@ -1417,6 +1420,16 @@ function renderProductsTable(query) {
 
 document.getElementById('product-search').addEventListener('input', () => {
   renderProductsTable(document.getElementById('product-search').value);
+});
+
+document.getElementById('btn-export-products').addEventListener('click', () => {
+  if (!productsFilteredForExport.length) return;
+  const store = document.getElementById('product-store-select').value;
+  const rows = [['ブランド', '品名', 'カラーNO', '商品コード']];
+  productsFilteredForExport.forEach((p) => {
+    rows.push([p.brand || '', p.name, p.colorNo || '', p.code]);
+  });
+  downloadCsv(`商品マスタ_${store}.csv`, rows);
 });
 
 /** 商品一覧から、既に登録済みの商品のQRコードをいつでも呼び出して印刷できるようにする。 */
