@@ -76,8 +76,6 @@ function routeAction_(action, p) {
       return createAccount_(validateToken_(p.token), p);
     case 'resetPassword':
       return resetPassword_(validateToken_(p.token), p);
-    case 'ocrProductLabel':
-      return ocrProductLabel_(validateToken_(p.token), p);
     case 'updateProduct':
       return updateProduct_(validateToken_(p.token), p);
     case 'getBrandList':

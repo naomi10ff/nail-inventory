@@ -642,15 +642,6 @@ document.getElementById('btn-export-inventory').addEventListener('click', () => 
   downloadCsv(`在庫情報_${state.store}_${currentInventoryMonth}.csv`, rows);
 });
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
-    reader.readAsDataURL(file);
-  });
-}
-
 // ==================== 本社用 ====================
 
 async function enterDashboard() {
@@ -660,7 +651,6 @@ async function enterDashboard() {
   fillStoreSelect('staff-store-select', false);
   fillStoreSelect('log-store-filter', true);
   fillStoreSelect('product-store-select', false);
-  fillStoreSelect('brand-store-select', false);
   fillStoreSelect('hq-incoming-store-select', false);
   fillStoreSelect('hq-disposal-store-select', false);
   fillStoreSelect('hq-review-store-select', false);
@@ -688,15 +678,15 @@ document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
   await loadHqBrandOptions();
   await loadProducts();
+  await loadBrands();
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
   await loadHqBrandOptions();
   await loadProducts();
+  await loadBrands();
 });
 
-document.getElementById('nav-brands').addEventListener('click', async () => { showScreen('screen-brands'); await loadBrands(); });
-document.getElementById('brand-store-select').addEventListener('change', loadBrands);
 document.getElementById('nav-staff').addEventListener('click', async () => { showScreen('hq-screen-staff'); await loadStaff(); });
 document.getElementById('nav-accounts').addEventListener('click', () => showScreen('screen-accounts'));
 document.getElementById('nav-logs').addEventListener('click', async () => { showScreen('screen-logs'); await loadLogs(); });
@@ -733,7 +723,7 @@ async function loadHqIncomingBrandOptions() {
   if (!store) return;
   const data = await apiCall('getBrandList', { store });
   const select = document.getElementById('hq-incoming-new-brand-select');
-  select.innerHTML = '';
+  select.innerHTML = '<option value="">(未選択)</option>';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
@@ -777,7 +767,6 @@ function setHqIncomingBrandValue(brand) {
 
 document.getElementById('btn-back-total-inventory').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-products').addEventListener('click', () => showScreen('screen-dashboard'));
-document.getElementById('btn-back-brands').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-staff').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-accounts').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-logs').addEventListener('click', () => showScreen('screen-dashboard'));
@@ -797,9 +786,6 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-unknown').style.display = 'none';
   document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
   document.getElementById('hq-incoming-status').textContent = '';
-  document.getElementById('hq-incoming-new-ocr-status').textContent = '';
-  document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'none';
-  document.getElementById('hq-incoming-new-photo').value = '';
   resetHqIncomingBrandNewForm();
   document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
   document.getElementById('hq-incoming-new-name').value = '';
@@ -839,28 +825,6 @@ document.getElementById('btn-manual-add-hq-incoming').addEventListener('click', 
 document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
   rearmGate(hqIncomingGate);
-});
-
-document.getElementById('hq-incoming-new-photo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('hq-incoming-new-ocr-status');
-  statusEl.textContent = '認識中です。少々お待ちください...';
-  try {
-    const imageBase64 = await fileToBase64(file);
-    const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
-    document.getElementById('hq-incoming-new-name').value = result.guessedName;
-    if (result.guessedBrand) setHqIncomingBrandValue(result.guessedBrand);
-    if (result.rawText) {
-      document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'block';
-      document.getElementById('hq-incoming-new-ocr-raw-text-content').textContent = result.rawText;
-    }
-    statusEl.textContent = '認識しました。内容を確認し、違う場合は直接修正してください';
-  } catch (err) {
-    statusEl.textContent = '認識に失敗しました: ' + err.message;
-  } finally {
-    e.target.value = '';
-  }
 });
 
 document.getElementById('btn-register-new-from-incoming').addEventListener('click', async () => {
@@ -1070,7 +1034,7 @@ async function loadHqBrandOptions() {
   if (!store) return;
   const data = await apiCall('getBrandList', { store });
   const select = document.getElementById('p-brand-select');
-  select.innerHTML = '';
+  select.innerHTML = '<option value="">(未選択)</option>';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
@@ -1186,9 +1150,6 @@ function startEditProduct(product) {
   document.getElementById('btn-add-product').textContent = '更新する';
   document.getElementById('btn-cancel-edit-product').style.display = 'block';
   document.getElementById('p-qr-result').style.display = 'none';
-  document.getElementById('p-ocr-status').textContent = '';
-  document.getElementById('p-ocr-raw-text').style.display = 'none';
-  document.getElementById('p-photo').value = '';
 }
 
 function cancelEditProduct() {
@@ -1201,34 +1162,9 @@ function cancelEditProduct() {
   document.getElementById('btn-add-product').textContent = '登録';
   document.getElementById('btn-cancel-edit-product').style.display = 'none';
   document.getElementById('p-qr-result').style.display = 'none';
-  document.getElementById('p-ocr-status').textContent = '';
-  document.getElementById('p-ocr-raw-text').style.display = 'none';
-  document.getElementById('p-photo').value = '';
 }
 
 document.getElementById('btn-cancel-edit-product').addEventListener('click', cancelEditProduct);
-
-document.getElementById('p-photo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('p-ocr-status');
-  statusEl.textContent = '認識中です。少々お待ちください...';
-  try {
-    const imageBase64 = await fileToBase64(file);
-    const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
-    document.getElementById('p-name').value = result.guessedName;
-    if (result.guessedBrand) setPBrandValue(result.guessedBrand);
-    if (result.rawText) {
-      document.getElementById('p-ocr-raw-text').style.display = 'block';
-      document.getElementById('p-ocr-raw-text-content').textContent = result.rawText;
-    }
-    statusEl.textContent = '認識しました。内容を確認し、違う場合は直接修正してください';
-  } catch (err) {
-    statusEl.textContent = '認識に失敗しました: ' + err.message;
-  } finally {
-    e.target.value = '';
-  }
-});
 
 document.getElementById('btn-add-product').addEventListener('click', async () => {
   const statusEl = document.getElementById('product-status');
@@ -1258,9 +1194,6 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
       ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
       resetPBrandNewForm();
       document.getElementById('p-category').selectedIndex = 0;
-      document.getElementById('p-ocr-status').textContent = '';
-      document.getElementById('p-ocr-raw-text').style.display = 'none';
-      document.getElementById('p-photo').value = '';
       await loadHqBrandOptions();
 
       if (!codeInput) {
@@ -1283,9 +1216,9 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
 
 document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
 
-// ---- ブランド管理 ----
+// ---- ブランド管理(商品マスタと同じ店舗選択を使う) ----
 async function loadBrands() {
-  const store = document.getElementById('brand-store-select').value;
+  const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('brands-table');
   if (!store) {
     container.textContent = '店舗を選択してください';
@@ -1310,7 +1243,7 @@ async function loadBrands() {
 
 document.getElementById('btn-add-brand').addEventListener('click', async () => {
   const statusEl = document.getElementById('brand-status');
-  const store = document.getElementById('brand-store-select').value;
+  const store = document.getElementById('product-store-select').value;
   const name = document.getElementById('new-brand-name').value.trim();
   if (!store) {
     statusEl.textContent = '店舗を選択してください';
@@ -1322,6 +1255,7 @@ document.getElementById('btn-add-brand').addEventListener('click', async () => {
     document.getElementById('new-brand-name').value = '';
     statusEl.textContent = '追加しました';
     await loadBrands();
+    await loadHqBrandOptions();
   } catch (e) {
     statusEl.textContent = e.message;
   }

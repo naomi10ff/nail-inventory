@@ -134,10 +134,9 @@
   <div class="topbar"><span class="store-name">本社ダッシュボード</span><button class="link" id="hq-btn-logout">ログアウト</button></div>
   <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
     <button class="secondary" id="nav-total-inventory">総在庫</button>
-    <button class="secondary" id="nav-products">商品マスタ</button>
+    <button class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
     <button class="secondary" id="nav-hq-incoming">入荷登録</button>
     <button class="secondary" id="nav-hq-disposal">破棄登録</button>
-    <button class="secondary" id="nav-brands">ブランド管理</button>
     <button class="secondary" id="nav-staff">スタッフ</button>
     <button class="secondary" id="nav-accounts">アカウント</button>
     <button class="secondary" id="nav-logs">取引ログ</button>
@@ -195,13 +194,6 @@
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
     <p class="hint">このコードは選択した店舗の商品マスタに未登録です。下記を入力して登録すると、続けて入荷本数を登録できます。</p>
-    <label for="hq-incoming-new-photo">ラベルを撮影して品名・ブランドを自動入力(任意)</label>
-    <input type="file" accept="image/*" capture="environment" id="hq-incoming-new-photo">
-    <p class="status" id="hq-incoming-new-ocr-status"></p>
-    <div id="hq-incoming-new-ocr-raw-text" class="card" style="display:none;">
-      <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
-      <pre id="hq-incoming-new-ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
-    </div>
     <label for="hq-incoming-new-brand-select">ブランド</label>
     <select id="hq-incoming-new-brand-select"></select>
     <button class="link" type="button" id="btn-new-brand-toggle-incoming">リストにないブランドはこちら</button>
@@ -258,18 +250,11 @@
 <!-- 商品マスタ管理(店舗ごとに独立管理) -->
 <section id="screen-products" class="screen">
   <div class="topbar"><button class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
-  <h2>商品マスタ</h2>
+  <h2>商品管理</h2>
   <label for="product-store-select">店舗</label>
   <select id="product-store-select"></select>
   <div class="card">
     <h3 style="margin-top:0;" id="product-form-title">新規登録</h3>
-    <label for="p-photo">ラベルを撮影して品名・ブランドを自動入力</label>
-    <input type="file" accept="image/*" capture="environment" id="p-photo">
-    <p class="status" id="p-ocr-status"></p>
-    <div id="p-ocr-raw-text" class="card" style="display:none;">
-      <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
-      <pre id="p-ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
-    </div>
     <label for="p-code">コード(空欄で自動発行してQRラベルを出力。編集時に書き換えると、見つかった
       バーコードに差し替えられます。すでに取引履歴がある商品のコードは変更しないでください)</label>
     <input type="text" id="p-code">
@@ -302,14 +287,9 @@
     </div>
   </div>
   <div id="products-table"></div>
-</section>
 
-<section id="screen-brands" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-brands">&lt; ダッシュボードへ</button></div>
-  <h2>ブランド管理</h2>
-  <p class="hint">選んだ店舗のブランド一覧です。商品登録時に新しい名前を入力すると自動でも追加されます。</p>
-  <label for="brand-store-select">店舗</label>
-  <select id="brand-store-select"></select>
+  <h2 style="margin-top:28px;">ブランド管理</h2>
+  <p class="hint">上で選んだ店舗のブランド一覧です。商品登録時に新しい名前を入力すると自動でも追加されます。</p>
   <div class="card">
     <label for="new-brand-name">新しいブランド名</label>
     <input type="text" id="new-brand-name">
