@@ -18,7 +18,7 @@
   <input type="text" id="login-username" autocomplete="username">
   <label for="login-password">パスワード</label>
   <input type="password" id="login-password" autocomplete="current-password">
-  <button class="primary" id="btn-login">ログイン</button>
+  <button type="button" class="primary" id="btn-login">ログイン</button>
   <p class="error" id="login-error"></p>
 </section>
 
@@ -26,46 +26,46 @@
 
 <!-- スタッフ選択画面 -->
 <section id="screen-staff" class="screen">
-  <div class="topbar"><span class="store-name" id="staff-store-name"></span><button class="link" id="btn-logout-1">ログアウト</button></div>
+  <div class="topbar"><span class="store-name" id="staff-store-name"></span><button type="button" class="link" id="btn-logout-1">ログアウト</button></div>
   <h2>棚卸実施者を選択</h2>
   <label for="staff-select">スタッフ名</label>
   <select id="staff-select"></select>
-  <button class="secondary" id="btn-add-staff">名前が一覧にない場合はこちら</button>
+  <button type="button" class="secondary" id="btn-add-staff">名前が一覧にない場合はこちら</button>
   <div id="add-staff-form" style="display:none;">
     <label for="new-staff-name">新しいスタッフ名</label>
     <input type="text" id="new-staff-name">
-    <button class="secondary" id="btn-save-staff">スタッフを追加</button>
+    <button type="button" class="secondary" id="btn-save-staff">スタッフを追加</button>
   </div>
-  <button class="primary" id="btn-goto-menu">この名前で開始</button>
+  <button type="button" class="primary" id="btn-goto-menu">この名前で開始</button>
   <p class="error" id="staff-error"></p>
 </section>
 
 <!-- メニュー画面 -->
 <section id="screen-menu" class="screen">
-  <div class="topbar"><span class="store-name" id="menu-store-name"></span><button class="link" id="btn-logout-2">ログアウト</button></div>
+  <div class="topbar"><span class="store-name" id="menu-store-name"></span><button type="button" class="link" id="btn-logout-2">ログアウト</button></div>
   <p class="hint" id="menu-staff-label"></p>
   <div class="menu-grid">
-    <button class="primary" id="btn-nav-stocktake">棚卸(バーコードスキャン)</button>
-    <button class="secondary" id="btn-nav-inventory">在庫情報を見る</button>
-    <button class="secondary" id="btn-nav-stock-lookup">在庫検索</button>
-    <button class="secondary" id="btn-nav-store-review">棚卸承認の確認</button>
+    <button type="button" class="primary" id="btn-nav-stocktake">棚卸(バーコードスキャン)</button>
+    <button type="button" class="secondary" id="btn-nav-inventory">在庫情報を見る</button>
+    <button type="button" class="secondary" id="btn-nav-stock-lookup">在庫検索</button>
+    <button type="button" class="secondary" id="btn-nav-store-review">棚卸承認の確認</button>
   </div>
 </section>
 
 <!-- 棚卸画面 -->
 <section id="screen-stocktake" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-1">&lt; メニューへ戻る</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-1">&lt; メニューへ戻る</button></div>
   <h2>棚卸スキャン</h2>
   <p class="hint">1本ずつスキャンしてください。同じ商品は自動でカウントされます。個数が違う場合は下の一覧で+/-や数字入力で直接修正できます。</p>
   <div id="reader"></div>
   <label for="manual-code-1">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-1" style="flex:1;">
-    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-1">追加</button>
+    <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-1">追加</button>
   </div>
   <div class="confirm-bar">
     <p class="hint" id="tally-summary">まだ何もスキャンしていません</p>
-    <button class="primary" id="btn-confirm-stocktake" disabled>内容を確認する</button>
+    <button type="button" class="primary" id="btn-confirm-stocktake" disabled>内容を確認する</button>
   </div>
   <p class="status" id="stocktake-status"></p>
   <div id="tally-container"></div>
@@ -75,38 +75,38 @@
     <p class="hint">まだスキャンしていない登録済み商品です。スキャン漏れがないか確認してから送信してください。</p>
     <div id="unscanned-container"></div>
     <div style="display:flex; gap:8px;">
-      <button class="secondary" style="width:auto;" id="btn-back-to-scan">戻ってスキャンを続ける</button>
-      <button class="primary" style="width:auto;" id="btn-send-stocktake">本社へ送信する</button>
+      <button type="button" class="secondary" style="width:auto;" id="btn-back-to-scan">戻ってスキャンを続ける</button>
+      <button type="button" class="primary" style="width:auto;" id="btn-send-stocktake">本社へ送信する</button>
     </div>
   </div>
 </section>
 
 <!-- 在庫情報画面 -->
 <section id="screen-inventory" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-2">&lt; メニューへ戻る</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-2">&lt; メニューへ戻る</button></div>
   <h2>自店の在庫情報</h2>
   <label for="inventory-month">閲覧したい月を選択</label>
   <input type="month" id="inventory-month">
-  <button class="primary" id="btn-confirm-inventory-month">確定</button>
+  <button type="button" class="primary" id="btn-confirm-inventory-month">確定</button>
 
   <div id="inventory-result" style="display:none;">
     <label for="inventory-search">検索(ブランド・品名・カラーNO。スペース区切りでAND検索)</label>
     <input type="text" id="inventory-search" placeholder="例: イシコッパ 06">
-    <button class="secondary" id="btn-export-inventory">CSVエクスポート</button>
+    <button type="button" class="secondary" id="btn-export-inventory">CSVエクスポート</button>
     <div id="inventory-container"></div>
   </div>
 </section>
 
 <!-- 在庫検索画面(バーコードスキャンで自店の最新在庫を確認する) -->
 <section id="screen-stock-lookup" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-4">&lt; メニューへ戻る</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-4">&lt; メニューへ戻る</button></div>
   <h2>在庫検索</h2>
   <p class="hint">バーコードをスキャンすると、その商品の自店での最新在庫を確認できます。</p>
   <div id="reader-4"></div>
   <label for="manual-code-3">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-3" style="flex:1;">
-    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-3">検索</button>
+    <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-3">検索</button>
   </div>
   <div id="stock-lookup-result" class="card" style="display:none;">
     <p><strong id="stock-lookup-name"></strong>(<span id="stock-lookup-brand"></span> <span id="stock-lookup-colorno"></span>)</p>
@@ -117,12 +117,12 @@
 
 <!-- 棚卸承認の確認画面(店舗側。閲覧のみで承認操作はできない) -->
 <section id="screen-store-review" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-store-review">&lt; メニューへ戻る</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-store-review">&lt; メニューへ戻る</button></div>
   <h2>棚卸承認の確認</h2>
   <p class="hint">本社が確認・承認した内容を店舗側からも確認できます。</p>
   <label for="store-review-month">対象月</label>
   <input type="month" id="store-review-month">
-  <button class="primary" id="btn-load-store-review">確認する</button>
+  <button type="button" class="primary" id="btn-load-store-review">確認する</button>
   <div id="store-review-summary"></div>
   <div id="store-review-table"></div>
 </section>
@@ -131,16 +131,16 @@
 
 <!-- ダッシュボード(サマリーのみ。詳細な一覧は screen-total-inventory に分離) -->
 <section id="screen-dashboard" class="screen">
-  <div class="topbar"><span class="store-name">本社ダッシュボード</span><button class="link" id="hq-btn-logout">ログアウト</button></div>
+  <div class="topbar"><span class="store-name">本社ダッシュボード</span><button type="button" class="link" id="hq-btn-logout">ログアウト</button></div>
   <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
-    <button class="secondary" id="nav-total-inventory">総在庫</button>
-    <button class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
-    <button class="secondary" id="nav-hq-incoming">入荷登録</button>
-    <button class="secondary" id="nav-hq-disposal">破棄登録</button>
-    <button class="secondary" id="nav-staff">スタッフ</button>
-    <button class="secondary" id="nav-accounts">アカウント</button>
-    <button class="secondary" id="nav-logs">取引ログ</button>
-    <button class="secondary" id="nav-hq-review">棚卸承認</button>
+    <button type="button" class="secondary" id="nav-total-inventory">総在庫</button>
+    <button type="button" class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
+    <button type="button" class="secondary" id="nav-hq-incoming">入荷登録</button>
+    <button type="button" class="secondary" id="nav-hq-disposal">破棄登録</button>
+    <button type="button" class="secondary" id="nav-staff">スタッフ</button>
+    <button type="button" class="secondary" id="nav-accounts">アカウント</button>
+    <button type="button" class="secondary" id="nav-logs">取引ログ</button>
+    <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
   </div>
 
   <div class="card">
@@ -157,22 +157,22 @@
 
 <!-- 総在庫(店舗別在庫一覧・検索・CSVエクスポート・個別/一括リセット) -->
 <section id="screen-total-inventory" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-total-inventory">&lt; ダッシュボードへ戻る</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-total-inventory">&lt; ダッシュボードへ戻る</button></div>
   <h2>店舗別在庫一覧</h2>
   <label for="store-filter">店舗で絞り込み</label>
   <select id="store-filter">
     <option value="">全店舗</option>
   </select>
   <div style="display:flex; gap:8px;">
-    <button class="secondary" style="width:auto; margin-top:14px;" id="btn-export-hq-inventory">CSVエクスポート</button>
-    <button class="danger" style="width:auto; margin-top:14px;" id="btn-bulk-reset">選択中の範囲を一括リセット</button>
+    <button type="button" class="secondary" style="width:auto; margin-top:14px;" id="btn-export-hq-inventory">CSVエクスポート</button>
+    <button type="button" class="danger" style="width:auto; margin-top:14px;" id="btn-bulk-reset">選択中の範囲を一括リセット</button>
   </div>
   <div id="hq-inventory-container"></div>
 </section>
 
 <!-- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) -->
 <section id="screen-hq-incoming" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-hq-incoming">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-hq-incoming">&lt; ダッシュボードへ</button></div>
   <h2>入荷登録</h2>
   <label for="hq-incoming-store-select">店舗</label>
   <select id="hq-incoming-store-select"></select>
@@ -181,15 +181,15 @@
   <label for="manual-code-hq-incoming">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-hq-incoming" style="flex:1;">
-    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-incoming">検索</button>
+    <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-incoming">検索</button>
   </div>
-  <button class="secondary" id="btn-rescan-hq-incoming" style="display:none;">別の商品を読み直す</button>
+  <button type="button" class="secondary" id="btn-rescan-hq-incoming" style="display:none;">別の商品を読み直す</button>
 
   <div id="hq-incoming-known" class="card" style="display:none;">
     <p><strong id="hq-incoming-product-name"></strong>(<span id="hq-incoming-product-brand"></span>)</p>
     <label for="hq-incoming-quantity">入荷本数</label>
     <input type="number" id="hq-incoming-quantity" value="1" min="1">
-    <button class="primary" id="btn-submit-hq-incoming">入荷を登録</button>
+    <button type="button" class="primary" id="btn-submit-hq-incoming">入荷を登録</button>
   </div>
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
@@ -211,7 +211,7 @@
       <option value="カラー">カラー</option>
       <option value="その他">その他</option>
     </select>
-    <button class="secondary" id="btn-register-new-from-incoming">この内容で商品を登録</button>
+    <button type="button" class="secondary" id="btn-register-new-from-incoming">この内容で商品を登録</button>
   </div>
 
   <p class="status" id="hq-incoming-status"></p>
@@ -219,7 +219,7 @@
 
 <!-- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) -->
 <section id="screen-hq-disposal" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-hq-disposal">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-hq-disposal">&lt; ダッシュボードへ</button></div>
   <h2>破棄登録</h2>
   <label for="hq-disposal-store-select">店舗</label>
   <select id="hq-disposal-store-select"></select>
@@ -228,16 +228,16 @@
   <label for="manual-code-hq-disposal">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-hq-disposal" style="flex:1;">
-    <button class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-disposal">検索</button>
+    <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-disposal">検索</button>
   </div>
-  <button class="secondary" id="btn-rescan-hq-disposal" style="display:none;">別の商品を読み直す</button>
+  <button type="button" class="secondary" id="btn-rescan-hq-disposal" style="display:none;">別の商品を読み直す</button>
 
   <div id="hq-disposal-known" class="card" style="display:none;">
     <p><strong id="hq-disposal-product-name"></strong>(<span id="hq-disposal-product-brand"></span> <span id="hq-disposal-product-colorno"></span>)</p>
     <p>現在庫: <strong id="hq-disposal-current-stock"></strong></p>
     <label for="hq-disposal-quantity">廃棄本数</label>
     <input type="number" id="hq-disposal-quantity" value="1" min="1">
-    <button class="danger" id="btn-submit-hq-disposal">廃棄を登録</button>
+    <button type="button" class="danger" id="btn-submit-hq-disposal">廃棄を登録</button>
   </div>
 
   <div id="hq-disposal-unknown" class="card" style="display:none;">
@@ -249,7 +249,7 @@
 
 <!-- 商品マスタ管理(店舗ごとに独立管理) -->
 <section id="screen-products" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
   <h2>商品管理</h2>
   <label for="product-store-select">店舗</label>
   <select id="product-store-select"></select>
@@ -277,45 +277,48 @@
     </select>
     <label for="p-memo">メモ(例: 「チェリーブロッサムと同じ商品、旧バーコード」など)</label>
     <input type="text" id="p-memo">
-    <button class="primary" id="btn-add-product">登録</button>
-    <button class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
+    <button type="button" class="primary" id="btn-add-product">登録</button>
+    <button type="button" class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
     <p class="status" id="product-status"></p>
     <div id="p-qr-result" style="display:none;">
       <p>発行したQRコードを印刷して商品/棚に貼ってください</p>
       <div id="p-qr-canvas-holder"></div>
-      <button class="secondary" id="btn-print-p-qr">印刷する</button>
+      <button type="button" class="secondary" id="btn-print-p-qr">印刷する</button>
     </div>
   </div>
-  <div id="products-table"></div>
-
   <h2 style="margin-top:28px;">ブランド管理</h2>
   <p class="hint">上で選んだ店舗のブランド一覧です。商品登録時に新しい名前を入力すると自動でも追加されます。</p>
   <div class="card">
     <label for="new-brand-name">新しいブランド名</label>
     <input type="text" id="new-brand-name">
-    <button class="primary" id="btn-add-brand">追加</button>
+    <button type="button" class="primary" id="btn-add-brand">追加</button>
     <p class="status" id="brand-status"></p>
   </div>
   <div id="brands-table"></div>
+
+  <h2 style="margin-top:28px;">商品一覧</h2>
+  <label for="product-search">検索(コード・バーコード・ブランド・品名)</label>
+  <input type="text" id="product-search" placeholder="例: メルティ 05 または バーコード番号">
+  <div id="products-table"></div>
 </section>
 
 <!-- スタッフ管理(本社用) -->
 <section id="hq-screen-staff" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-staff">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-staff">&lt; ダッシュボードへ</button></div>
   <h2>スタッフ管理</h2>
   <label for="staff-store-select">店舗</label>
   <select id="staff-store-select"></select>
   <div class="card">
     <label for="hq-new-staff-name">新しいスタッフ名を追加</label>
     <input type="text" id="hq-new-staff-name">
-    <button class="secondary" id="hq-btn-add-staff">追加</button>
+    <button type="button" class="secondary" id="hq-btn-add-staff">追加</button>
   </div>
   <div id="staff-table"></div>
 </section>
 
 <!-- アカウント管理 -->
 <section id="screen-accounts" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-accounts">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-accounts">&lt; ダッシュボードへ</button></div>
   <h2>アカウント管理</h2>
   <div class="card">
     <h3 style="margin-top:0;">新規アカウント作成</h3>
@@ -327,7 +330,7 @@
     <input type="text" id="a-password">
     <label for="a-role">権限</label>
     <select id="a-role"><option value="store">店舗</option><option value="hq">本社</option></select>
-    <button class="primary" id="btn-create-account">作成</button>
+    <button type="button" class="primary" id="btn-create-account">作成</button>
     <p class="status" id="account-status"></p>
   </div>
   <div class="card">
@@ -336,33 +339,33 @@
     <input type="text" id="r-username">
     <label for="r-password">新しいパスワード</label>
     <input type="text" id="r-password">
-    <button class="secondary" id="btn-reset-password">リセット</button>
+    <button type="button" class="secondary" id="btn-reset-password">リセット</button>
     <p class="status" id="reset-status"></p>
   </div>
 </section>
 
 <!-- 取引ログ -->
 <section id="screen-logs" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-logs">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-logs">&lt; ダッシュボードへ</button></div>
   <h2>取引ログ</h2>
   <label for="log-store-filter">店舗で絞り込み</label>
   <select id="log-store-filter"><option value="">全店舗</option></select>
-  <button class="danger" style="width:auto; margin-top:8px;" id="btn-clear-store-log">選択中の店舗のログを全部削除</button>
+  <button type="button" class="danger" style="width:auto; margin-top:8px;" id="btn-clear-store-log">選択中の店舗のログを全部削除</button>
   <div id="logs-table"></div>
 </section>
 
 <!-- 棚卸承認(本社が店舗ごとに、月次の在庫・入荷・廃棄の差異を確認して承認する) -->
 <section id="screen-hq-review" class="screen">
-  <div class="topbar"><button class="link" id="btn-back-hq-review">&lt; ダッシュボードへ</button></div>
+  <div class="topbar"><button type="button" class="link" id="btn-back-hq-review">&lt; ダッシュボードへ</button></div>
   <h2>棚卸承認</h2>
   <label for="hq-review-store-select">店舗</label>
   <select id="hq-review-store-select"></select>
   <label for="hq-review-month">対象月</label>
   <input type="month" id="hq-review-month">
-  <button class="primary" id="btn-load-hq-review">確認する</button>
+  <button type="button" class="primary" id="btn-load-hq-review">確認する</button>
   <div style="display:flex; gap:8px;">
-    <button class="secondary" style="width:auto; display:none;" id="btn-export-hq-review">CSVエクスポート</button>
-    <button class="primary" style="width:auto; display:none;" id="btn-approve-review">承認する</button>
+    <button type="button" class="secondary" style="width:auto; display:none;" id="btn-export-hq-review">CSVエクスポート</button>
+    <button type="button" class="primary" style="width:auto; display:none;" id="btn-approve-review">承認する</button>
   </div>
   <div id="hq-review-summary"></div>
   <div id="hq-review-table"></div>
@@ -377,8 +380,8 @@
     <label for="danger-modal-password">本社パスワードを再入力してください</label>
     <input type="password" id="danger-modal-password">
     <p class="error" id="danger-modal-error"></p>
-    <button class="danger" id="danger-modal-confirm">実行する</button>
-    <button class="secondary" id="danger-modal-cancel">キャンセル</button>
+    <button type="button" class="danger" id="danger-modal-confirm">実行する</button>
+    <button type="button" class="secondary" id="danger-modal-cancel">キャンセル</button>
   </div>
 </div>
 
@@ -388,8 +391,8 @@
     <h3>QRコード</h3>
     <div id="qr-view-canvas-holder" style="text-align:center;"></div>
     <p id="qr-view-label" style="text-align:center;"></p>
-    <button class="secondary" id="btn-print-qr-view">印刷する</button>
-    <button class="secondary" id="btn-close-qr-view">閉じる</button>
+    <button type="button" class="secondary" id="btn-print-qr-view">印刷する</button>
+    <button type="button" class="secondary" id="btn-close-qr-view">閉じる</button>
   </div>
 </div>
 

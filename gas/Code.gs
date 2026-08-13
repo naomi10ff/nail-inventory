@@ -286,6 +286,8 @@ function getBrandNamesForStore_(store) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === store && data[i][1]) brands.push(data[i][1]);
   }
+  // 選択肢を辞書順にしておくと、プルダウンで頭文字を入力したときの候補ジャンプが機能しやすい
+  brands.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
   return brands;
 }
 

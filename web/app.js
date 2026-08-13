@@ -43,6 +43,23 @@ function setText(id, text) {
   document.getElementById(id).textContent = text;
 }
 
+/**
+ * 通信中はボタンを無効化して押せなくする。GASのWeb Appは1回の呼び出しに数秒
+ * かかることがあり、無効化しないと「反応が無い」と思って連打され、二重送信に
+ * つながることがある。押したときのラベルに変え、完了後は元のラベルに戻す。
+ */
+async function withButtonBusy(button, busyLabel, fn) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = busyLabel;
+  try {
+    return await fn();
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
 // ---- CSVエクスポート ----
 function csvEscape(value) {
   const str = String(value == null ? '' : value);
@@ -676,12 +693,14 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
 });
 document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
+  document.getElementById('product-search').value = '';
   await loadHqBrandOptions();
   await loadProducts();
   await loadBrands();
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
+  document.getElementById('product-search').value = '';
   await loadHqBrandOptions();
   await loadProducts();
   await loadBrands();
@@ -827,7 +846,7 @@ document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () =
   rearmGate(hqIncomingGate);
 });
 
-document.getElementById('btn-register-new-from-incoming').addEventListener('click', async () => {
+document.getElementById('btn-register-new-from-incoming').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-incoming-store-select').value;
   const name = document.getElementById('hq-incoming-new-name').value.trim();
   if (!name) {
@@ -842,6 +861,7 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     colorNo: document.getElementById('hq-incoming-new-color-no').value.trim(),
     category: document.getElementById('hq-incoming-new-category').value
   };
+  await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     await apiCall('registerProduct', payload);
     document.getElementById('hq-incoming-status').textContent = '商品を登録しました。続けて入荷本数を入力してください';
@@ -854,11 +874,13 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
   } catch (e) {
     document.getElementById('hq-incoming-status').textContent = e.message;
   }
+  });
 });
 
-document.getElementById('btn-submit-hq-incoming').addEventListener('click', async () => {
+document.getElementById('btn-submit-hq-incoming').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-incoming-store-select').value;
   const quantity = Number(document.getElementById('hq-incoming-quantity').value) || 1;
+  await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity });
     resetHqIncomingScreen();
@@ -869,6 +891,7 @@ document.getElementById('btn-submit-hq-incoming').addEventListener('click', asyn
   } catch (e) {
     document.getElementById('hq-incoming-status').textContent = e.message;
   }
+  });
 });
 
 // ---- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) ----
@@ -916,9 +939,10 @@ document.getElementById('btn-rescan-hq-disposal').addEventListener('click', () =
   rearmGate(hqDisposalGate);
 });
 
-document.getElementById('btn-submit-hq-disposal').addEventListener('click', async () => {
+document.getElementById('btn-submit-hq-disposal').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-disposal-store-select').value;
   const quantity = Number(document.getElementById('hq-disposal-quantity').value) || 1;
+  await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     await apiCall('recordDisposal', { store, code: hqDisposalScannedCode, quantity });
     resetHqDisposalScreen();
@@ -928,6 +952,7 @@ document.getElementById('btn-submit-hq-disposal').addEventListener('click', asyn
   } catch (e) {
     document.getElementById('hq-disposal-status').textContent = e.message;
   }
+  });
 });
 
 // ---- 本社ダッシュボード(サマリーのみ) ----
@@ -980,7 +1005,7 @@ async function renderInventoryTable(store) {
   data.items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.outOfStock) tr.className = 'out-of-stock';
-    const resetBtn = `<button class="link" data-reset-store="${item.store}" data-reset-code="${item.code}">リセット</button>`;
+    const resetBtn = `<button type="button" class="link" data-reset-store="${item.store}" data-reset-code="${item.code}">リセット</button>`;
     tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td><td>${resetBtn}</td>`;
     table.appendChild(tr);
   });
@@ -1078,24 +1103,51 @@ function setPBrandValue(brand) {
 }
 
 let editingProductCode = null;
+let currentProductList = [];
 
 async function loadProducts() {
   const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('products-table');
   if (!store) {
+    currentProductList = [];
     container.textContent = '店舗を選択してください';
     return;
   }
   const data = await apiCall('listProducts', { store });
+  currentProductList = data.products;
+  renderProductsTable(document.getElementById('product-search').value);
+}
+
+function renderProductsTable(query) {
+  const store = document.getElementById('product-store-select').value;
+  const container = document.getElementById('products-table');
+  if (!currentProductList.length) {
+    container.textContent = '商品がまだ登録されていません';
+    return;
+  }
+
+  // スペース区切りの複数キーワードはすべて満たす(AND検索)商品だけに絞り込む
+  const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  const filtered = currentProductList.filter((p) => {
+    if (!keywords.length) return true;
+    const haystack = normalizeSearchText([p.code, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
+    return keywords.every((kw) => haystack.includes(kw));
+  });
+
+  if (!filtered.length) {
+    container.textContent = '該当する商品が見つかりません';
+    return;
+  }
+
   container.innerHTML = '';
   const table = document.createElement('table');
   table.className = 'stock-table';
   table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
-  data.products.forEach((p) => {
+  filtered.forEach((p) => {
     const tr = document.createElement('tr');
-    const editBtn = `<button class="link" data-edit-code="${p.code}">編集</button>`;
-    const qrBtn = `<button class="link" data-qr-code="${p.code}">QR表示</button>`;
-    const delBtn = `<button class="link" data-code="${p.code}">削除</button>`;
+    const editBtn = `<button type="button" class="link" data-edit-code="${p.code}">編集</button>`;
+    const qrBtn = `<button type="button" class="link" data-qr-code="${p.code}">QR表示</button>`;
+    const delBtn = `<button type="button" class="link" data-code="${p.code}">削除</button>`;
     tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
     table.appendChild(tr);
   });
@@ -1110,17 +1162,21 @@ async function loadProducts() {
   });
   container.querySelectorAll('button[data-edit-code]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const product = data.products.find((p) => p.code === btn.dataset.editCode);
+      const product = currentProductList.find((p) => p.code === btn.dataset.editCode);
       if (product) startEditProduct(product);
     });
   });
   container.querySelectorAll('button[data-qr-code]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const product = data.products.find((p) => p.code === btn.dataset.qrCode);
+      const product = currentProductList.find((p) => p.code === btn.dataset.qrCode);
       if (product) showQrViewModal(product.code, product.name, product.brand);
     });
   });
 }
+
+document.getElementById('product-search').addEventListener('input', () => {
+  renderProductsTable(document.getElementById('product-search').value);
+});
 
 /** 商品一覧から、既に登録済みの商品のQRコードをいつでも呼び出して印刷できるようにする。 */
 async function showQrViewModal(code, name, brand) {
@@ -1166,7 +1222,7 @@ function cancelEditProduct() {
 
 document.getElementById('btn-cancel-edit-product').addEventListener('click', cancelEditProduct);
 
-document.getElementById('btn-add-product').addEventListener('click', async () => {
+document.getElementById('btn-add-product').addEventListener('click', async (e) => {
   const statusEl = document.getElementById('product-status');
   const store = document.getElementById('product-store-select').value;
   if (!store) {
@@ -1182,6 +1238,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
     category: document.getElementById('p-category').value,
     memo: document.getElementById('p-memo').value.trim()
   };
+  await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     if (editingProductCode) {
       await apiCall('updateProduct', Object.assign({ code: editingProductCode, newCode: codeInput }, payload));
@@ -1212,6 +1269,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   } catch (e) {
     statusEl.textContent = e.message;
   }
+  });
 });
 
 document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
@@ -1275,7 +1333,7 @@ async function loadStaff() {
   table.innerHTML = '<tr><th>スタッフ名</th><th></th></tr>';
   data.staff.forEach((s) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${s.name}</td><td><button class="link" data-name="${s.name}">無効化</button></td>`;
+    tr.innerHTML = `<td>${s.name}</td><td><button type="button" class="link" data-name="${s.name}">無効化</button></td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
@@ -1355,7 +1413,7 @@ async function loadLogs() {
   table.innerHTML = '<tr><th>日時</th><th>店舗</th><th>スタッフ</th><th>商品</th><th>種別</th><th>数量</th><th></th></tr>';
   data.logs.forEach((log) => {
     const tr = document.createElement('tr');
-    const delBtn = `<button class="link" data-row="${log.rowIndex}">削除</button>`;
+    const delBtn = `<button type="button" class="link" data-row="${log.rowIndex}">削除</button>`;
     tr.innerHTML = `<td>${new Date(log.timestamp).toLocaleString('ja-JP')}</td><td>${log.store}</td><td>${log.staffName}</td><td>${log.name}</td><td>${log.type}</td><td>${log.quantity}</td><td>${delBtn}</td>`;
     table.appendChild(tr);
   });
