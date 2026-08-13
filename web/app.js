@@ -1108,7 +1108,6 @@ function startEditProduct(product) {
   editingProductCode = product.code;
   document.getElementById('product-form-title').textContent = '商品を編集';
   document.getElementById('p-code').value = product.code;
-  document.getElementById('p-code').disabled = true;
   document.getElementById('p-brand').value = product.brand || '';
   document.getElementById('p-name').value = product.name || '';
   document.getElementById('p-color-no').value = product.colorNo || '';
@@ -1125,7 +1124,6 @@ function startEditProduct(product) {
 function cancelEditProduct() {
   editingProductCode = null;
   document.getElementById('product-form-title').textContent = '新規登録';
-  document.getElementById('p-code').disabled = false;
   ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
   document.getElementById('p-brand').value = '';
   document.getElementById('p-category').selectedIndex = 0;
@@ -1179,7 +1177,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   };
   try {
     if (editingProductCode) {
-      await apiCall('updateProduct', Object.assign({ code: editingProductCode }, payload));
+      await apiCall('updateProduct', Object.assign({ code: editingProductCode, newCode: codeInput }, payload));
       statusEl.textContent = '更新しました';
       cancelEditProduct();
     } else {

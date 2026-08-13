@@ -199,7 +199,14 @@ function registerProduct_(session, p) {
   return { store: store, code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
 }
 
-/** 既存商品の品名・ブランド・カテゴリー・カラーNO・メモの修正。本社アカウントのみ。 */
+/**
+ * 既存商品の品名・ブランド・カテゴリー・カラーNO・メモの修正。本社アカウントのみ。
+ * p.newCode を指定すると、コード自体も変更できる(バーコードなしで自動発行した
+ * プレースホルダーのコードを、後から見つかった実物のバーコードに差し替える用途)。
+ * 注意: コードを変更すると、それ以前にそのコードで記録された取引ログ(棚卸・入荷・廃棄)
+ * は新しいコードには紐づかず、現在庫の計算上は新しいコードの履歴がない状態から
+ * 始まる。まだ取引ログが無い(登録直後の)商品のコード変更を想定している。
+ */
 function updateProduct_(session, p) {
   requireRole_(session, ['hq']);
   if (!p.store || !p.code) throw new Error('店舗とコードを指定してください');
@@ -211,13 +218,20 @@ function updateProduct_(session, p) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === p.store && String(data[i][1]) === String(p.code)) {
       var row = i + 1;
+      var newCode = p.newCode ? String(p.newCode).trim() : '';
+      if (newCode && newCode !== String(p.code)) {
+        if (lookupProduct_(p.store, newCode)) {
+          throw new Error('このコードは既に登録されています');
+        }
+        sheet.getRange(row, 2).setValue(newCode);
+      }
       sheet.getRange(row, 3).setValue(p.name || '');
       sheet.getRange(row, 4).setValue(p.brand || '');
       sheet.getRange(row, 5).setValue(p.category || '');
       sheet.getRange(row, 8).setValue(p.memo || '');
       sheet.getRange(row, 10).setValue(p.colorNo || '');
       refreshSummary_(); // ブランド名等の変更をサマリ表示にも反映する
-      return { store: p.store, code: p.code };
+      return { store: p.store, code: newCode || p.code };
     }
   }
   throw new Error('商品が見つかりません');
