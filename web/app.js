@@ -732,13 +732,47 @@ async function loadHqIncomingBrandOptions() {
   const store = document.getElementById('hq-incoming-store-select').value;
   if (!store) return;
   const data = await apiCall('getBrandList', { store });
-  const datalist = document.getElementById('brand-datalist-hq-incoming');
-  datalist.innerHTML = '';
+  const select = document.getElementById('hq-incoming-new-brand-select');
+  select.innerHTML = '';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
-    datalist.appendChild(opt);
+    opt.textContent = brand;
+    select.appendChild(opt);
   });
+}
+
+document.getElementById('btn-new-brand-toggle-incoming').addEventListener('click', () => {
+  document.getElementById('hq-incoming-new-brand-new-form').style.display = 'block';
+});
+
+function currentHqIncomingBrandValue() {
+  const newForm = document.getElementById('hq-incoming-new-brand-new-form');
+  const newValue = document.getElementById('hq-incoming-new-brand-new').value.trim();
+  if (newForm.style.display !== 'none' && newValue) return newValue;
+  return document.getElementById('hq-incoming-new-brand-select').value;
+}
+
+function resetHqIncomingBrandNewForm() {
+  document.getElementById('hq-incoming-new-brand-new-form').style.display = 'none';
+  document.getElementById('hq-incoming-new-brand-new').value = '';
+}
+
+/** OCR自動入力などで、プルダウンに無いブランド名が来た場合は新規入力欄に入れる。 */
+function setHqIncomingBrandValue(brand) {
+  resetHqIncomingBrandNewForm();
+  const select = document.getElementById('hq-incoming-new-brand-select');
+  if (!brand) {
+    select.value = '';
+    return;
+  }
+  const hasOption = Array.from(select.options).some((o) => o.value === brand);
+  if (hasOption) {
+    select.value = brand;
+  } else {
+    document.getElementById('hq-incoming-new-brand-new-form').style.display = 'block';
+    document.getElementById('hq-incoming-new-brand-new').value = brand;
+  }
 }
 
 document.getElementById('btn-back-total-inventory').addEventListener('click', () => showScreen('screen-dashboard'));
@@ -766,7 +800,8 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-new-ocr-status').textContent = '';
   document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'none';
   document.getElementById('hq-incoming-new-photo').value = '';
-  document.getElementById('hq-incoming-new-brand').value = '';
+  resetHqIncomingBrandNewForm();
+  document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
   document.getElementById('hq-incoming-new-name').value = '';
   document.getElementById('hq-incoming-new-color-no').value = '';
   document.getElementById('hq-incoming-new-category').selectedIndex = 0;
@@ -815,7 +850,7 @@ document.getElementById('hq-incoming-new-photo').addEventListener('change', asyn
     const imageBase64 = await fileToBase64(file);
     const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
     document.getElementById('hq-incoming-new-name').value = result.guessedName;
-    document.getElementById('hq-incoming-new-brand').value = result.guessedBrand;
+    if (result.guessedBrand) setHqIncomingBrandValue(result.guessedBrand);
     if (result.rawText) {
       document.getElementById('hq-incoming-new-ocr-raw-text').style.display = 'block';
       document.getElementById('hq-incoming-new-ocr-raw-text-content').textContent = result.rawText;
@@ -838,7 +873,7 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
   const payload = {
     store,
     code: hqIncomingScannedCode,
-    brand: document.getElementById('hq-incoming-new-brand').value,
+    brand: currentHqIncomingBrandValue(),
     name,
     colorNo: document.getElementById('hq-incoming-new-color-no').value.trim(),
     category: document.getElementById('hq-incoming-new-category').value
@@ -1034,13 +1069,48 @@ async function loadHqBrandOptions() {
   const store = document.getElementById('product-store-select').value;
   if (!store) return;
   const data = await apiCall('getBrandList', { store });
-  const datalist = document.getElementById('brand-datalist-hq');
-  datalist.innerHTML = '';
+  const select = document.getElementById('p-brand-select');
+  select.innerHTML = '';
   data.brands.forEach((brand) => {
     const opt = document.createElement('option');
     opt.value = brand;
-    datalist.appendChild(opt);
+    opt.textContent = brand;
+    select.appendChild(opt);
   });
+}
+
+document.getElementById('btn-new-brand-toggle').addEventListener('click', () => {
+  document.getElementById('p-brand-new-form').style.display = 'block';
+});
+
+/** プルダウンで選んだブランドと、「リストにない」場合の新規入力のどちらかを返す。 */
+function currentPBrandValue() {
+  const newForm = document.getElementById('p-brand-new-form');
+  const newValue = document.getElementById('p-brand-new').value.trim();
+  if (newForm.style.display !== 'none' && newValue) return newValue;
+  return document.getElementById('p-brand-select').value;
+}
+
+function resetPBrandNewForm() {
+  document.getElementById('p-brand-new-form').style.display = 'none';
+  document.getElementById('p-brand-new').value = '';
+}
+
+/** 編集時に既存商品のブランドを反映する。プルダウンに無い名前なら新規入力欄に入れる。 */
+function setPBrandValue(brand) {
+  resetPBrandNewForm();
+  const select = document.getElementById('p-brand-select');
+  if (!brand) {
+    select.value = '';
+    return;
+  }
+  const hasOption = Array.from(select.options).some((o) => o.value === brand);
+  if (hasOption) {
+    select.value = brand;
+  } else {
+    document.getElementById('p-brand-new-form').style.display = 'block';
+    document.getElementById('p-brand-new').value = brand;
+  }
 }
 
 let editingProductCode = null;
@@ -1108,7 +1178,7 @@ function startEditProduct(product) {
   editingProductCode = product.code;
   document.getElementById('product-form-title').textContent = '商品を編集';
   document.getElementById('p-code').value = product.code;
-  document.getElementById('p-brand').value = product.brand || '';
+  setPBrandValue(product.brand || '');
   document.getElementById('p-name').value = product.name || '';
   document.getElementById('p-color-no').value = product.colorNo || '';
   document.getElementById('p-category').value = product.category || 'ベース/トップ';
@@ -1125,7 +1195,8 @@ function cancelEditProduct() {
   editingProductCode = null;
   document.getElementById('product-form-title').textContent = '新規登録';
   ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
-  document.getElementById('p-brand').value = '';
+  resetPBrandNewForm();
+  document.getElementById('p-brand-select').selectedIndex = 0;
   document.getElementById('p-category').selectedIndex = 0;
   document.getElementById('btn-add-product').textContent = '登録';
   document.getElementById('btn-cancel-edit-product').style.display = 'none';
@@ -1146,7 +1217,7 @@ document.getElementById('p-photo').addEventListener('change', async (e) => {
     const imageBase64 = await fileToBase64(file);
     const result = await apiCall('ocrProductLabel', { imageBase64, mimeType: file.type || 'image/jpeg' });
     document.getElementById('p-name').value = result.guessedName;
-    document.getElementById('p-brand').value = result.guessedBrand;
+    if (result.guessedBrand) setPBrandValue(result.guessedBrand);
     if (result.rawText) {
       document.getElementById('p-ocr-raw-text').style.display = 'block';
       document.getElementById('p-ocr-raw-text-content').textContent = result.rawText;
@@ -1169,7 +1240,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const codeInput = document.getElementById('p-code').value.trim();
   const payload = {
     store,
-    brand: document.getElementById('p-brand').value,
+    brand: currentPBrandValue(),
     name: document.getElementById('p-name').value.trim(),
     colorNo: document.getElementById('p-color-no').value.trim(),
     category: document.getElementById('p-category').value,
@@ -1185,7 +1256,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
       const result = await apiCall('registerProduct', Object.assign({ code: codeInput || undefined }, payload));
       statusEl.textContent = '登録しました';
       ['p-code', 'p-name', 'p-color-no', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
-      document.getElementById('p-brand').value = '';
+      resetPBrandNewForm();
       document.getElementById('p-category').selectedIndex = 0;
       document.getElementById('p-ocr-status').textContent = '';
       document.getElementById('p-ocr-raw-text').style.display = 'none';

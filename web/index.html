@@ -202,9 +202,13 @@
       <p class="hint">認識結果(全文)。自動入力が違う場合は下の欄を直接修正してください</p>
       <pre id="hq-incoming-new-ocr-raw-text-content" style="white-space:pre-wrap; font-size:0.85rem; margin:0;"></pre>
     </div>
-    <label for="hq-incoming-new-brand">ブランド</label>
-    <input type="text" id="hq-incoming-new-brand" list="brand-datalist-hq-incoming" autocomplete="off">
-    <datalist id="brand-datalist-hq-incoming"></datalist>
+    <label for="hq-incoming-new-brand-select">ブランド</label>
+    <select id="hq-incoming-new-brand-select"></select>
+    <button class="link" type="button" id="btn-new-brand-toggle-incoming">リストにないブランドはこちら</button>
+    <div id="hq-incoming-new-brand-new-form" style="display:none;">
+      <label for="hq-incoming-new-brand-new">新しいブランド名</label>
+      <input type="text" id="hq-incoming-new-brand-new">
+    </div>
     <label for="hq-incoming-new-name">品名</label>
     <input type="text" id="hq-incoming-new-name">
     <label for="hq-incoming-new-color-no">カラーNO</label>
@@ -269,9 +273,13 @@
     <label for="p-code">コード(空欄で自動発行してQRラベルを出力。編集時に書き換えると、見つかった
       バーコードに差し替えられます。すでに取引履歴がある商品のコードは変更しないでください)</label>
     <input type="text" id="p-code">
-    <label for="p-brand">ブランド(一度登録した名前は候補に出ます)</label>
-    <input type="text" id="p-brand" list="brand-datalist-hq" autocomplete="off">
-    <datalist id="brand-datalist-hq"></datalist>
+    <label for="p-brand-select">ブランド</label>
+    <select id="p-brand-select"></select>
+    <button class="link" type="button" id="btn-new-brand-toggle">リストにないブランドはこちら</button>
+    <div id="p-brand-new-form" style="display:none;">
+      <label for="p-brand-new">新しいブランド名</label>
+      <input type="text" id="p-brand-new">
+    </div>
     <label for="p-name">品名</label>
     <input type="text" id="p-name">
     <label for="p-color-no">カラーNO</label>
