@@ -696,14 +696,12 @@ document.getElementById('nav-products').addEventListener('click', async () => {
   document.getElementById('product-search').value = '';
   await loadHqBrandOptions();
   await loadProducts();
-  await loadBrands();
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
   document.getElementById('product-search').value = '';
   await loadHqBrandOptions();
   await loadProducts();
-  await loadBrands();
 });
 
 document.getElementById('nav-staff').addEventListener('click', async () => { showScreen('hq-screen-staff'); await loadStaff(); });
@@ -1273,51 +1271,6 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
 });
 
 document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
-
-// ---- ブランド管理(商品マスタと同じ店舗選択を使う) ----
-async function loadBrands() {
-  const store = document.getElementById('product-store-select').value;
-  const container = document.getElementById('brands-table');
-  if (!store) {
-    container.textContent = '店舗を選択してください';
-    return;
-  }
-  const data = await apiCall('getBrandList', { store });
-  if (!data.brands.length) {
-    container.textContent = 'まだブランドが登録されていません';
-    return;
-  }
-  const table = document.createElement('table');
-  table.className = 'stock-table';
-  table.innerHTML = '<tr><th>ブランド名</th></tr>';
-  data.brands.forEach((brand) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${brand}</td>`;
-    table.appendChild(tr);
-  });
-  container.innerHTML = '';
-  container.appendChild(table);
-}
-
-document.getElementById('btn-add-brand').addEventListener('click', async () => {
-  const statusEl = document.getElementById('brand-status');
-  const store = document.getElementById('product-store-select').value;
-  const name = document.getElementById('new-brand-name').value.trim();
-  if (!store) {
-    statusEl.textContent = '店舗を選択してください';
-    return;
-  }
-  if (!name) return;
-  try {
-    await apiCall('addBrand', { store, name });
-    document.getElementById('new-brand-name').value = '';
-    statusEl.textContent = '追加しました';
-    await loadBrands();
-    await loadHqBrandOptions();
-  } catch (e) {
-    statusEl.textContent = e.message;
-  }
-});
 
 // ---- スタッフ管理(本社) ----
 document.getElementById('staff-store-select').addEventListener('change', loadStaff);
