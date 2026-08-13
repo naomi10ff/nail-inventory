@@ -62,6 +62,8 @@ function routeAction_(action, p) {
       return getOutOfStock_(validateToken_(p.token), p.store);
     case 'deleteLogEntry':
       return deleteLogEntry_(validateToken_(p.token), p.rowIndex);
+    case 'clearStoreLog':
+      return clearStoreLog_(validateToken_(p.token), p);
     case 'listStores':
       return { stores: STORES };
     case 'listProducts':
@@ -321,9 +323,33 @@ function addBrand_(session, p) {
 // 入荷登録・破棄登録はいずれも本社アカウントが店舗を選んで行う(本社が全店舗の納品・廃棄を
 // 一元管理する運用のため)。店舗アカウントは棚卸のみ自分で記録する。
 
-function appendLog_(store, staffName, product, type, quantity, memo) {
+/**
+ * timestampを省略すると現在時刻を使う。棚卸のように1回の送信で複数商品を記録する
+ * 場合は、呼び出し側で1つのDateを作って全商品分に同じ値を渡すことで、「どの記録が
+ * 同じ送信に属するか」を後から突き合わせられるようにしている。
+ */
+function appendLog_(store, staffName, product, type, quantity, memo, timestamp) {
   var sheet = getSheet_(SHEET_LOG);
-  sheet.appendRow([new Date(), store, staffName || '', product.code, product.name, product.brand, type, quantity, memo || '']);
+  var ts = timestamp || new Date();
+  sheet.appendRow([ts, store, staffName || '', product.code, product.name, product.brand, type, quantity, memo || '']);
+  revokeApprovalIfStale_(store, ts);
+}
+
+/**
+ * その店舗・その月がすでに本社承認済みの場合、新しい取引ログ(棚卸・入荷・廃棄)が
+ * 入った時点で承認を取り消し、未承認に戻す。承認後にデータが変わったのに承認済みの
+ * 表示が残ってしまうのを防ぐため。送信自体は制限しない(承認有無に関わらず記録できる)。
+ */
+function revokeApprovalIfStale_(store, timestamp) {
+  var month = Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM');
+  var sheet = getSheet_(SHEET_APPROVALS);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === store && data[i][1] === month) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
 }
 
 /** 本社が店舗を選んで納品(入荷)を登録する。 */
@@ -356,6 +382,7 @@ function submitStocktake_(session, p) {
   requireStoreAccess_(session, store);
 
   var items = p.items || [];
+  var timestamp = new Date(); // 送信内の全商品に同じ時刻を持たせ、1回の送信として後から突き合わせられるようにする
   var recorded = [];
   var unknownCodes = [];
   items.forEach(function (item) {
@@ -364,7 +391,7 @@ function submitStocktake_(session, p) {
       unknownCodes.push(item.code);
       return;
     }
-    appendLog_(store, p.staffName, product, '棚卸', item.count, '');
+    appendLog_(store, p.staffName, product, '棚卸', item.count, '', timestamp);
     recorded.push({ code: item.code, name: product.name, brand: product.brand, count: item.count });
   });
   refreshSummary_();
@@ -386,6 +413,40 @@ function deleteLogEntry_(session, rowIndex) {
   sheet.deleteRow(rowIndex);
   refreshSummary_();
   return { deleted: rowIndex };
+}
+
+/**
+ * 指定した店舗の取引ログを全部削除する(取り消し不可)。テスト運用で入った
+ * データを、本番運用の前にまとめて消すためのもの。全店舗を対象にした一括削除は
+ * 事故防止のためできない(店舗を1つ指定する必要がある)。取引ログを消すと、その
+ * 店舗のデータを根拠にした「承認済み」表示も意味を持たなくなるため、承認記録も
+ * 合わせて削除する。
+ */
+function clearStoreLog_(session, p) {
+  requireRole_(session, ['hq']);
+  verifyOwnPassword_(session, p.password);
+  if (!p.store) throw new Error('店舗を指定してください');
+
+  var sheet = getSheet_(SHEET_LOG);
+  var data = sheet.getDataRange().getValues();
+  var deletedCount = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][1] === p.store) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+
+  var approvalSheet = getSheet_(SHEET_APPROVALS);
+  var approvalData = approvalSheet.getDataRange().getValues();
+  for (var j = approvalData.length - 1; j >= 1; j--) {
+    if (approvalData[j][0] === p.store) {
+      approvalSheet.deleteRow(j + 1);
+    }
+  }
+
+  refreshSummary_();
+  return { store: p.store, deletedCount: deletedCount };
 }
 
 function getLogEntries_(session, storeParam, limit) {
@@ -606,7 +667,9 @@ function getStocktakeReview_(session, storeParam, month) {
   });
 
   var incomingMap = {}, disposalMap = {};
-  var stocktakeEvents = [];
+  // 棚卸は1回の送信で複数商品を記録するが、appendLog_で送信内の全行に同じ時刻を
+  // 持たせているため、時刻をキーにまとめれば「1回の送信」単位のイベントに戻せる。
+  var stocktakeEventMap = {};
   var logSheet = getSheet_(SHEET_LOG);
   var logData = logSheet.getDataRange().getValues();
   for (var i = 1; i < logData.length; i++) {
@@ -620,8 +683,19 @@ function getStocktakeReview_(session, storeParam, month) {
     } else if (type === '廃棄') {
       disposalMap[code] = (disposalMap[code] || 0) + qty;
     } else if (type === '棚卸') {
-      stocktakeEvents.push({ timestamp: row[0], staffName: row[2] });
+      var eventKey = String(ts) + '||' + row[2];
+      if (!stocktakeEventMap[eventKey]) {
+        stocktakeEventMap[eventKey] = { timestamp: row[0], staffName: row[2], itemCount: 0 };
+      }
+      stocktakeEventMap[eventKey].itemCount++;
     }
+  }
+
+  var stocktakeEvents = Object.keys(stocktakeEventMap)
+    .map(function (k) { return stocktakeEventMap[k]; })
+    .sort(function (a, b) { return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(); });
+  if (stocktakeEvents.length) {
+    stocktakeEvents[stocktakeEvents.length - 1].isLatest = true;
   }
 
   var products = listProducts_(session, store).products;

@@ -1325,6 +1325,21 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 // ---- 取引ログ ----
 document.getElementById('log-store-filter').addEventListener('change', loadLogs);
 
+document.getElementById('btn-clear-store-log').addEventListener('click', () => {
+  const store = document.getElementById('log-store-filter').value;
+  if (!store) {
+    alert('店舗を選択してください(全店舗のログを一括削除することはできません)');
+    return;
+  }
+  openDangerModal(
+    `${store}の取引ログを全て削除します。この操作は取り消せません。テストデータの整理などに使ってください。`,
+    async (password) => {
+      await apiCall('clearStoreLog', { store, password });
+      await loadLogs();
+    }
+  );
+});
+
 async function loadLogs() {
   const store = document.getElementById('log-store-filter').value;
   const data = await apiCall('getLogEntries', { store: store || undefined, limit: 200 });
@@ -1364,10 +1379,11 @@ function renderReviewResult(data, summaryElId, tableElId) {
   if (!data.stocktakeEvents.length) {
     summaryHtml += '<p class="hint">この月はまだ棚卸が実施されていません。</p>';
   } else {
-    const lines = data.stocktakeEvents.map(
-      (e) => `${new Date(e.timestamp).toLocaleString('ja-JP')} / ${e.staffName || '(不明)'}`
-    );
-    summaryHtml += `<p class="hint">棚卸実施: ${lines.join('、')}</p>`;
+    const lines = data.stocktakeEvents.map((e) => {
+      const label = `${new Date(e.timestamp).toLocaleString('ja-JP')} / ${e.staffName || '(不明)'} / ${e.itemCount}品目`;
+      return e.isLatest ? `<strong>${label}(最新)</strong>` : label;
+    });
+    summaryHtml += `<p class="hint">棚卸実施(1回の送信ごとに1行、古い順): ${lines.join('、')}</p>`;
   }
   if (data.approval.approved) {
     summaryHtml += `<p class="status">承認済み(${data.approval.approver} / ${new Date(data.approval.approvedAt).toLocaleString('ja-JP')})</p>`;
