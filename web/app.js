@@ -19,6 +19,15 @@ let scannerStocktake = null;
 let scannerHqIncoming = null;
 let scannerHqDisposal = null;
 
+// スマホの画面ロックやアプリ切り替えでカメラが止まった(固まって見える)まま戻ってくる
+// ことがあるため、画面に復帰したタイミングで今使っているスキャナーを自動的に再起動する。
+let activeScannerCtx = null;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && activeScannerCtx) {
+    restartScanner(activeScannerCtx.elementId, activeScannerCtx.onSuccess, activeScannerCtx.gate);
+  }
+});
+
 // ---- API通信 ----
 // GAS Web AppはCORSのpreflightに対応していないため、
 // Content-Type を text/plain にして単純リクエストとして送る。
@@ -533,9 +542,11 @@ async function startScanner(elementId, onSuccess, gate) {
       }
     }
   );
+  activeScannerCtx = { elementId, onSuccess, gate };
 }
 
 async function stopScanner(scanner) {
+  activeScannerCtx = null;
   if (scanner) {
     try {
       await scanner.stop();
@@ -544,6 +555,21 @@ async function stopScanner(scanner) {
       /* 既に停止している場合は無視 */
     }
   }
+}
+
+function scannerForElement_(elementId) {
+  if (elementId === 'reader') return scannerStocktake;
+  if (elementId === 'reader-4') return scannerStockLookup;
+  if (elementId === 'reader-hq-incoming') return scannerHqIncoming;
+  if (elementId === 'reader-hq-disposal') return scannerHqDisposal;
+  return null;
+}
+
+/** カメラが固まって見えるとき用に、スキャナーを止めてから起動し直す。 */
+async function restartScanner(elementId, onSuccess, gate) {
+  await stopScanner(scannerForElement_(elementId));
+  rearmGate(gate);
+  await startScanner(elementId, onSuccess, gate).catch((e) => console.error(e));
 }
 
 // ---- 棚卸 ----
@@ -826,6 +852,12 @@ document.getElementById('nav-hq-disposal').addEventListener('click', () => {
   showScreen('screen-hq-disposal');
   rearmGate(hqDisposalGate);
   startScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate).catch((e) => console.error(e));
+});
+document.getElementById('btn-restart-camera-hq-incoming').addEventListener('click', () => {
+  restartScanner('reader-hq-incoming', onHqIncomingScan, hqIncomingGate);
+});
+document.getElementById('btn-restart-camera-hq-disposal').addEventListener('click', () => {
+  restartScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate);
 });
 document.getElementById('hq-incoming-store-select').addEventListener('change', () => {
   resetHqIncomingScreen();

@@ -178,6 +178,7 @@
   <select id="hq-incoming-store-select"></select>
   <p class="hint">商品マスタに登録済みの商品はそのまま入荷を記録できます。未登録の商品はスキャン後にその場で商品登録もできます。</p>
   <div id="reader-hq-incoming"></div>
+  <button type="button" class="secondary" id="btn-restart-camera-hq-incoming">カメラが固まったら押してください(再起動)</button>
   <label for="manual-code-hq-incoming">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-hq-incoming" style="flex:1;">
@@ -225,6 +226,7 @@
   <select id="hq-disposal-store-select"></select>
   <p class="hint">廃棄する商品のバーコードをスキャンし、現在庫を確認してから廃棄本数を入力してください。この操作は取消せません(取引ログから該当行を削除すれば戻せます)。</p>
   <div id="reader-hq-disposal"></div>
+  <button type="button" class="secondary" id="btn-restart-camera-hq-disposal">カメラが固まったら押してください(再起動)</button>
   <label for="manual-code-hq-disposal">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-hq-disposal" style="flex:1;">
