@@ -302,7 +302,7 @@
     <button type="button" class="primary" id="btn-add-product">登録</button>
     <button type="button" class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
     <p class="status" id="product-status"></p>
-    <div id="p-qr-result" style="display:none;">
+    <div id="p-qr-result" class="print-target" style="display:none;">
       <p>発行したQRコードを印刷して商品/棚に貼ってください</p>
       <div id="p-qr-canvas-holder"></div>
       <button type="button" class="secondary" id="btn-print-p-qr">印刷する</button>
@@ -314,6 +314,7 @@
     <option value="">全ブランド</option>
   </select>
   <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
+  <button type="button" class="primary" id="btn-print-selected-qr">選択した商品のQRコードをまとめて発行・印刷</button>
   <div id="products-table"></div>
 </section>
 
@@ -439,12 +440,22 @@
 
 <!-- 商品一覧から、登録済み商品のQRコードをいつでも呼び出して印刷するためのモーダル -->
 <div id="qr-view-modal" class="modal-overlay" style="display:none;">
-  <div class="modal-box">
+  <div class="modal-box print-target">
     <h3>QRコード</h3>
     <div id="qr-view-canvas-holder" style="text-align:center;"></div>
     <p id="qr-view-label" style="text-align:center;"></p>
     <button type="button" class="secondary" id="btn-print-qr-view">印刷する</button>
     <button type="button" class="secondary" id="btn-close-qr-view">閉じる</button>
+  </div>
+</div>
+
+<!-- 商品一覧でチェックした複数商品のQRコードを、まとめて発行・印刷するためのモーダル -->
+<div id="qr-bulk-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-box print-target" style="max-width:600px;">
+    <h3>選択した商品のQRコード</h3>
+    <div id="qr-bulk-grid" class="qr-bulk-grid"></div>
+    <button type="button" class="primary" id="btn-print-qr-bulk">印刷する</button>
+    <button type="button" class="secondary" id="btn-close-qr-bulk">閉じる</button>
   </div>
 </div>
 

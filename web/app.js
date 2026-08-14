@@ -1565,6 +1565,7 @@ function setPCategoryValue(category) {
 let editingProductCode = null;
 let currentProductList = [];
 let productsFilteredForExport = [];
+let selectedQrProducts = new Set();
 
 async function loadProducts() {
   const store = document.getElementById('product-store-select').value;
@@ -1619,15 +1620,48 @@ function renderProductsTable() {
   }
 
   container.innerHTML = '';
+  selectedQrProducts.clear();
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>コード</th><th>品番</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
+  table.innerHTML = '<tr><th></th><th>コード</th><th>品名</th><th></th></tr>';
   // data-*属性経由でコードを突き合わせると、数字だけのバーコードがGoogleスプレッドシート
   // 側で数値型として返ってきた場合に文字列(属性値)と型が合わず一致しない不具合が過去に
   // あったため、ボタンにその場でpをクロージャとして持たせて直接参照する。
   filtered.forEach((p) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${p.code}</td><td>${p.itemNumber || ''}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td>`;
+
+    const checkTd = document.createElement('td');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedQrProducts.add(p);
+      else selectedQrProducts.delete(p);
+    });
+    checkTd.appendChild(checkbox);
+    tr.appendChild(checkTd);
+
+    const codeTd = document.createElement('td');
+    codeTd.textContent = p.code;
+    tr.appendChild(codeTd);
+
+    // 横に何列も並べると狭い画面では横スクロールが必要になるため、品名の下に
+    // ブランド・品番・カラーNO・メモをまとめて小さく表示する。
+    const nameTd = document.createElement('td');
+    const nameLine = document.createElement('div');
+    nameLine.textContent = p.name;
+    nameTd.appendChild(nameLine);
+    const subParts = [];
+    if (p.brand) subParts.push(p.brand);
+    if (p.itemNumber) subParts.push('品番: ' + p.itemNumber);
+    if (p.colorNo) subParts.push('カラーNO: ' + p.colorNo);
+    if (p.memo) subParts.push('メモ: ' + p.memo);
+    if (subParts.length) {
+      const subLine = document.createElement('div');
+      subLine.className = 'sub-info';
+      subLine.textContent = subParts.join(' / ');
+      nameTd.appendChild(subLine);
+    }
+    tr.appendChild(nameTd);
 
     const actionsTd = document.createElement('td');
 
@@ -1672,6 +1706,18 @@ document.getElementById('btn-export-products').addEventListener('click', () => {
   downloadCsv(`商品マスタ_${store}.csv`, rows);
 });
 
+/**
+ * QRコードのモーダルを印刷するとき、ダッシュボードの背景まで印刷されてしまわないよう
+ * bodyに目印のクラスを付ける(印刷用CSSがこのクラスを見て、モーダルの中身だけを表示する)。
+ */
+function printCurrentModal() {
+  document.body.classList.add('printing-qr');
+  window.print();
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-qr');
+});
+
 /** 商品一覧から、既に登録済みの商品のQRコードをいつでも呼び出して印刷できるようにする。 */
 async function showQrViewModal(code, name, brand) {
   const holder = document.getElementById('qr-view-canvas-holder');
@@ -1688,9 +1734,41 @@ async function showQrViewModal(code, name, brand) {
   document.getElementById('qr-view-modal').style.display = 'flex';
 }
 
-document.getElementById('btn-print-qr-view').addEventListener('click', () => window.print());
+document.getElementById('btn-print-qr-view').addEventListener('click', printCurrentModal);
 document.getElementById('btn-close-qr-view').addEventListener('click', () => {
   document.getElementById('qr-view-modal').style.display = 'none';
+});
+
+/** 商品一覧でチェックした商品のQRコードを、まとめて発行して印刷用に並べる。 */
+document.getElementById('btn-print-selected-qr').addEventListener('click', async () => {
+  if (!selectedQrProducts.size) {
+    alert('QRコードを発行したい商品にチェックを入れてください');
+    return;
+  }
+  const grid = document.getElementById('qr-bulk-grid');
+  grid.innerHTML = '';
+  for (const p of selectedQrProducts) {
+    const item = document.createElement('div');
+    item.className = 'qr-bulk-item';
+    const canvas = document.createElement('canvas');
+    item.appendChild(canvas);
+    try {
+      await QRCode.toCanvas(canvas, String(p.code), { width: 160 });
+    } catch (e) {
+      alert('QRコードの作成に失敗しました: ' + e.message);
+      return;
+    }
+    const label = document.createElement('p');
+    label.textContent = (p.brand ? p.brand + ' ' : '') + p.name;
+    item.appendChild(label);
+    grid.appendChild(item);
+  }
+  document.getElementById('qr-bulk-modal').style.display = 'flex';
+});
+
+document.getElementById('btn-print-qr-bulk').addEventListener('click', printCurrentModal);
+document.getElementById('btn-close-qr-bulk').addEventListener('click', () => {
+  document.getElementById('qr-bulk-modal').style.display = 'none';
 });
 
 function startEditProduct(product) {
