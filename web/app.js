@@ -19,14 +19,11 @@ let scannerStocktake = null;
 let scannerHqIncoming = null;
 let scannerHqDisposal = null;
 
-// スマホの画面ロックやアプリ切り替えでカメラが止まった(固まって見える)まま戻ってくる
-// ことがあるため、画面に復帰したタイミングで今使っているスキャナーを自動的に再起動する。
+// 以前はタブ復帰(visibilitychange)で自動的にスキャナーを再起動していたが、
+// 新規商品登録フォームへの入力中にも発火してカメラが壊れる不具合が出たため廃止。
+// カメラが固まったときは、各スキャン画面の手動「再起動」ボタンを使う。
 let activeScannerCtx = null;
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && activeScannerCtx) {
-    restartScanner(activeScannerCtx.elementId, activeScannerCtx.onSuccess, activeScannerCtx.gate);
-  }
-});
+let scannerRestarting = false;
 
 // ---- API通信 ----
 // GAS Web AppはCORSのpreflightに対応していないため、
@@ -540,11 +537,17 @@ function scannerForElement_(elementId) {
   return null;
 }
 
-/** カメラが固まって見えるとき用に、スキャナーを止めてから起動し直す。 */
+/** カメラが固まって見えるとき用に、スキャナーを止めてから起動し直す。連打による多重実行は無視する。 */
 async function restartScanner(elementId, onSuccess, gate) {
-  await stopScanner(scannerForElement_(elementId));
-  rearmGate(gate);
-  await startScanner(elementId, onSuccess, gate).catch((e) => console.error(e));
+  if (scannerRestarting) return;
+  scannerRestarting = true;
+  try {
+    await stopScanner(scannerForElement_(elementId));
+    rearmGate(gate);
+    await startScanner(elementId, onSuccess, gate).catch((e) => console.error(e));
+  } finally {
+    scannerRestarting = false;
+  }
 }
 
 // ---- 棚卸 ----
