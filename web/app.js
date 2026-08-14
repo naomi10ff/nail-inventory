@@ -1323,7 +1323,14 @@ let hqInventoryAllItems = [];
 let hqInventoryForExport = [];
 
 async function renderInventoryTable(store) {
-  const data = await apiCall('getInventorySummary', { store: store || undefined });
+  const container = document.getElementById('hq-inventory-container');
+  let data;
+  try {
+    data = await apiCall('getInventorySummary', { store: store || undefined });
+  } catch (e) {
+    container.textContent = e.message;
+    return;
+  }
   hqInventoryAllItems = data.items;
   updateHqInventoryBrandFilterOptions();
   renderHqInventoryRows(document.getElementById('hq-inventory-search').value);
