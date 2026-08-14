@@ -976,25 +976,26 @@ document.getElementById('hq-incoming-existing-name-select').addEventListener('ch
   const code = document.getElementById('hq-incoming-existing-name-select').value;
   const product = hqIncomingProductList.find((p) => String(p.code) === String(code));
   if (!product) return;
+  // プルダウンで既存商品を選んだので、新規入力欄に残っていた文字は消して優先順位を明確にする
+  document.getElementById('hq-incoming-new-name').value = '';
   document.getElementById('hq-incoming-new-color-no').value = product.colorNo || '';
   document.getElementById('hq-incoming-new-item-number').value = product.itemNumber || '';
   setHqIncomingCategoryValue(product.category || '');
 });
 
-document.getElementById('btn-new-name-toggle-incoming').addEventListener('click', () => {
-  document.getElementById('hq-incoming-new-name-form').style.display = 'block';
+document.getElementById('hq-incoming-new-name').addEventListener('input', () => {
+  // 新規品名を入力し始めたら、プルダウンの選択は解除する(どちらが優先か紛らわしくならないように)
+  document.getElementById('hq-incoming-existing-name-select').value = '';
 });
 
 function resetHqIncomingNameNewForm() {
-  document.getElementById('hq-incoming-new-name-form').style.display = 'none';
   document.getElementById('hq-incoming-new-name').value = '';
 }
 
 /** 選択中の品名が、既存商品(バーコードを紐づけるだけ)か新規入力かを返す。 */
 function currentHqIncomingNameSelection() {
-  const newForm = document.getElementById('hq-incoming-new-name-form');
   const newValue = document.getElementById('hq-incoming-new-name').value.trim();
-  if (newForm.style.display !== 'none' && newValue) {
+  if (newValue) {
     return { isNew: true, name: newValue };
   }
   const code = document.getElementById('hq-incoming-existing-name-select').value;
