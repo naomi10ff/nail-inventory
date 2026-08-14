@@ -6,7 +6,13 @@
 <title>ネイルサロン在庫管理</title>
 <link rel="stylesheet" href="shared/style.css">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+  // 上のCDNがネットワーク側でブロックされている場合に備えて、別のCDNから再読み込みする
+  if (typeof QRCode === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></scr' + 'ipt>');
+  }
+</script>
 </head>
 <body>
 
