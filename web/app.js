@@ -1725,7 +1725,7 @@ async function showQrViewModal(code, name, brand) {
   const canvas = document.createElement('canvas');
   holder.appendChild(canvas);
   try {
-    await QRCode.toCanvas(canvas, String(code), { width: 220 });
+    await QRCode.toCanvas(canvas, String(code), { width: 120, errorCorrectionLevel: 'H' });
   } catch (e) {
     alert('QRコードの作成に失敗しました: ' + e.message);
     return;
@@ -1753,7 +1753,7 @@ document.getElementById('btn-print-selected-qr').addEventListener('click', async
     const canvas = document.createElement('canvas');
     item.appendChild(canvas);
     try {
-      await QRCode.toCanvas(canvas, String(p.code), { width: 160 });
+      await QRCode.toCanvas(canvas, String(p.code), { width: 100, errorCorrectionLevel: 'H' });
     } catch (e) {
       alert('QRコードの作成に失敗しました: ' + e.message);
       return;
@@ -1842,7 +1842,7 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
         holder.innerHTML = '';
         const canvas = document.createElement('canvas');
         holder.appendChild(canvas);
-        await QRCode.toCanvas(canvas, result.code, { width: 220 });
+        await QRCode.toCanvas(canvas, result.code, { width: 120, errorCorrectionLevel: 'H' });
         const label = document.createElement('p');
         label.textContent = result.code + ' / ' + result.name;
         holder.appendChild(label);
