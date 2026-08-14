@@ -885,7 +885,6 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
 });
 document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
-  document.getElementById('product-search').value = '';
   document.getElementById('product-brand-filter').value = '';
   await loadHqBrandOptions();
   await loadHqCategoryOptions();
@@ -893,7 +892,6 @@ document.getElementById('nav-products').addEventListener('click', async () => {
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
-  document.getElementById('product-search').value = '';
   document.getElementById('product-brand-filter').value = '';
   await loadHqBrandOptions();
   await loadHqCategoryOptions();
@@ -1579,7 +1577,7 @@ async function loadProducts() {
   const data = await apiCall('listProducts', { store });
   currentProductList = data.products;
   updateProductBrandFilterOptions();
-  renderProductsTable(document.getElementById('product-search').value);
+  renderProductsTable();
 }
 
 /** ブランドの絞り込みプルダウンを、いま選んでいる店舗に実在するブランドだけで作り直す。 */
@@ -1599,10 +1597,10 @@ function updateProductBrandFilterOptions() {
 }
 
 document.getElementById('product-brand-filter').addEventListener('change', () => {
-  renderProductsTable(document.getElementById('product-search').value);
+  renderProductsTable();
 });
 
-function renderProductsTable(query) {
+function renderProductsTable() {
   const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('products-table');
   if (!currentProductList.length) {
@@ -1612,14 +1610,7 @@ function renderProductsTable(query) {
   }
 
   const brandFilter = document.getElementById('product-brand-filter').value;
-  // スペース区切りの複数キーワードはすべて満たす(AND検索)商品だけに絞り込む
-  const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
-  const filtered = currentProductList.filter((p) => {
-    if (brandFilter && p.brand !== brandFilter) return false;
-    if (!keywords.length) return true;
-    const haystack = normalizeSearchText([p.code, p.itemNumber, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
-    return keywords.every((kw) => haystack.includes(kw));
-  });
+  const filtered = brandFilter ? currentProductList.filter((p) => p.brand === brandFilter) : currentProductList;
   productsFilteredForExport = filtered;
 
   if (!filtered.length) {
@@ -1631,40 +1622,45 @@ function renderProductsTable(query) {
   const table = document.createElement('table');
   table.className = 'stock-table';
   table.innerHTML = '<tr><th>コード</th><th>品番</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>メモ</th><th></th></tr>';
+  // data-*属性経由でコードを突き合わせると、数字だけのバーコードがGoogleスプレッドシート
+  // 側で数値型として返ってきた場合に文字列(属性値)と型が合わず一致しない不具合が過去に
+  // あったため、ボタンにその場でpをクロージャとして持たせて直接参照する。
   filtered.forEach((p) => {
     const tr = document.createElement('tr');
-    const editBtn = `<button type="button" class="link" data-edit-code="${p.code}">編集</button>`;
-    const qrBtn = `<button type="button" class="link" data-qr-code="${p.code}">QR表示</button>`;
-    const delBtn = `<button type="button" class="link" data-code="${p.code}">削除</button>`;
-    tr.innerHTML = `<td>${p.code}</td><td>${p.itemNumber || ''}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td><td>${editBtn} ${qrBtn} ${delBtn}</td>`;
+    tr.innerHTML = `<td>${p.code}</td><td>${p.itemNumber || ''}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td><td>${p.memo || ''}</td>`;
+
+    const actionsTd = document.createElement('td');
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'link';
+    editBtn.textContent = '編集';
+    editBtn.addEventListener('click', () => startEditProduct(p));
+    actionsTd.appendChild(editBtn);
+
+    const qrBtn = document.createElement('button');
+    qrBtn.type = 'button';
+    qrBtn.className = 'link';
+    qrBtn.textContent = 'QR表示';
+    qrBtn.addEventListener('click', () => showQrViewModal(p.code, p.name, p.brand));
+    actionsTd.appendChild(qrBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'link';
+    delBtn.textContent = '削除';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('削除しますか?')) return;
+      await apiCall('deleteProduct', { store, code: p.code });
+      await loadProducts();
+    });
+    actionsTd.appendChild(delBtn);
+
+    tr.appendChild(actionsTd);
     table.appendChild(tr);
   });
   container.appendChild(table);
-
-  container.querySelectorAll('button[data-code]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('削除しますか?')) return;
-      await apiCall('deleteProduct', { store, code: btn.dataset.code });
-      await loadProducts();
-    });
-  });
-  container.querySelectorAll('button[data-edit-code]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const product = currentProductList.find((p) => p.code === btn.dataset.editCode);
-      if (product) startEditProduct(product);
-    });
-  });
-  container.querySelectorAll('button[data-qr-code]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const product = currentProductList.find((p) => p.code === btn.dataset.qrCode);
-      if (product) showQrViewModal(product.code, product.name, product.brand);
-    });
-  });
 }
-
-document.getElementById('product-search').addEventListener('input', () => {
-  renderProductsTable(document.getElementById('product-search').value);
-});
 
 document.getElementById('btn-export-products').addEventListener('click', () => {
   if (!productsFilteredForExport.length) return;
@@ -1682,7 +1678,12 @@ async function showQrViewModal(code, name, brand) {
   holder.innerHTML = '';
   const canvas = document.createElement('canvas');
   holder.appendChild(canvas);
-  await QRCode.toCanvas(canvas, code, { width: 220 });
+  try {
+    await QRCode.toCanvas(canvas, String(code), { width: 220 });
+  } catch (e) {
+    alert('QRコードの作成に失敗しました: ' + e.message);
+    return;
+  }
   document.getElementById('qr-view-label').textContent = code + ' / ' + (brand ? brand + ' ' : '') + name;
   document.getElementById('qr-view-modal').style.display = 'flex';
 }
