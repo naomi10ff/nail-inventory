@@ -1392,19 +1392,30 @@ function renderHqInventoryRows(query) {
     adjustBtn.type = 'button';
     adjustBtn.className = 'link';
     adjustBtn.textContent = '修正';
-    adjustBtn.addEventListener('click', async () => {
-      const productsData = await apiCall('listProducts', { store: item.store });
-      const product = productsData.products.find((p) => String(p.code) === String(item.code));
-      openAdjustModal({ ...item, category: product ? product.category : '' }, async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
-        await apiCall('updateProduct', {
-          store: item.store, code: item.code, newCode, brand, name, colorNo, category,
-          itemNumber: product ? product.itemNumber : '', memo: product ? product.memo : ''
-        });
-        const finalCode = newCode && newCode !== String(item.code) ? newCode : item.code;
-        if (Number(newStock) !== item.currentStock) {
-          await apiCall('adjustProductStock', { store: item.store, code: finalCode, newStock, memo, password });
+    adjustBtn.addEventListener('click', async (e) => {
+      await withButtonBusy(e.currentTarget, '読み込み中...', async () => {
+        let product;
+        try {
+          const productsData = await apiCall('listProducts', { store: item.store });
+          product = productsData.products.find((p) => String(p.code) === String(item.code));
+        } catch (err) {
+          alert(err.message);
+          return;
         }
-        await loadTotalInventoryScreen();
+        await openAdjustModal(
+          { ...item, category: product ? product.category : '' },
+          async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
+            await apiCall('updateProduct', {
+              store: item.store, code: item.code, newCode, brand, name, colorNo, category,
+              itemNumber: product ? product.itemNumber : '', memo: product ? product.memo : ''
+            });
+            const finalCode = newCode && newCode !== String(item.code) ? newCode : item.code;
+            if (Number(newStock) !== item.currentStock) {
+              await apiCall('adjustProductStock', { store: item.store, code: finalCode, newStock, memo, password });
+            }
+            await loadTotalInventoryScreen();
+          }
+        );
       });
     });
     adjustTd.appendChild(adjustBtn);
