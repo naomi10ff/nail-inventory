@@ -835,11 +835,15 @@ document.getElementById('nav-hq-disposal').addEventListener('click', () => {
   rearmGate(hqDisposalGate);
   startScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate).catch((e) => console.error(e));
 });
+// スマホでカメラが完全に固まった場合、ページ内でのスキャナー再起動(stop→start)では
+// 直らないことがあり、実際にはタブを閉じて開き直す(=ブラウザによる完全な再取得)しか
+// 効かないケースが確認された。ページの再読み込みも同じくブラウザにカメラを完全に
+// 手放させる操作なので、こちらの方が確実。
 document.getElementById('btn-restart-camera-hq-incoming').addEventListener('click', () => {
-  restartScanner('reader-hq-incoming', onHqIncomingScan, hqIncomingGate);
+  location.reload();
 });
 document.getElementById('btn-restart-camera-hq-disposal').addEventListener('click', () => {
-  restartScanner('reader-hq-disposal', onHqDisposalScan, hqDisposalGate);
+  location.reload();
 });
 document.getElementById('hq-incoming-store-select').addEventListener('change', () => {
   resetHqIncomingScreen();
