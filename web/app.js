@@ -826,6 +826,7 @@ document.getElementById('nav-hq-incoming').addEventListener('click', () => {
   rearmGate(hqIncomingGate);
   loadHqIncomingBrandOptions().catch((e) => console.error(e));
   loadHqIncomingCategoryOptions().catch((e) => console.error(e));
+  loadHqIncomingProductList().catch((e) => console.error(e));
   startScanner('reader-hq-incoming', onHqIncomingScan, hqIncomingGate).catch((e) => console.error(e));
 });
 document.getElementById('nav-hq-disposal').addEventListener('click', () => {
@@ -843,6 +844,7 @@ document.getElementById('btn-restart-camera-hq-disposal').addEventListener('clic
 document.getElementById('hq-incoming-store-select').addEventListener('change', () => {
   resetHqIncomingScreen();
   loadHqIncomingBrandOptions().catch((e) => console.error(e));
+  loadHqIncomingProductList().catch((e) => console.error(e));
 });
 document.getElementById('hq-disposal-store-select').addEventListener('change', resetHqDisposalScreen);
 
@@ -921,6 +923,82 @@ function resetHqIncomingCategoryNewForm() {
   document.getElementById('hq-incoming-new-category-new').value = '';
 }
 
+function setHqIncomingCategoryValue(category) {
+  resetHqIncomingCategoryNewForm();
+  const select = document.getElementById('hq-incoming-new-category-select');
+  if (!category) {
+    select.value = '';
+    return;
+  }
+  const hasOption = Array.from(select.options).some((o) => o.value === category);
+  if (hasOption) {
+    select.value = category;
+  } else {
+    document.getElementById('hq-incoming-new-category-new-form').style.display = 'block';
+    document.getElementById('hq-incoming-new-category-new').value = category;
+  }
+}
+
+// ---- 入荷登録(未登録バーコード): ブランドを選ぶと、事前登録済みのその商品名一覧を
+// プルダウンで出す。既存商品を選べば入力し直さずバーコードだけ紐づけられる。 ----
+let hqIncomingProductList = [];
+
+async function loadHqIncomingProductList() {
+  const store = document.getElementById('hq-incoming-store-select').value;
+  if (!store) return;
+  const data = await apiCall('listProducts', { store });
+  hqIncomingProductList = data.products;
+}
+
+function updateHqIncomingExistingNameOptions() {
+  const brand = currentHqIncomingBrandValue();
+  const select = document.getElementById('hq-incoming-existing-name-select');
+  select.innerHTML = '<option value="">(未選択)</option>';
+  if (!brand) return;
+  hqIncomingProductList
+    .filter((p) => (p.brand || '') === brand)
+    .forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.code;
+      opt.textContent = p.name + (p.colorNo ? ` (${p.colorNo})` : '');
+      select.appendChild(opt);
+    });
+}
+
+document.getElementById('hq-incoming-new-brand-select').addEventListener('change', updateHqIncomingExistingNameOptions);
+document.getElementById('hq-incoming-new-brand-new').addEventListener('input', updateHqIncomingExistingNameOptions);
+
+document.getElementById('hq-incoming-existing-name-select').addEventListener('change', () => {
+  const code = document.getElementById('hq-incoming-existing-name-select').value;
+  const product = hqIncomingProductList.find((p) => String(p.code) === String(code));
+  if (!product) return;
+  document.getElementById('hq-incoming-new-color-no').value = product.colorNo || '';
+  document.getElementById('hq-incoming-new-item-number').value = product.itemNumber || '';
+  setHqIncomingCategoryValue(product.category || '');
+});
+
+document.getElementById('btn-new-name-toggle-incoming').addEventListener('click', () => {
+  document.getElementById('hq-incoming-new-name-form').style.display = 'block';
+});
+
+function resetHqIncomingNameNewForm() {
+  document.getElementById('hq-incoming-new-name-form').style.display = 'none';
+  document.getElementById('hq-incoming-new-name').value = '';
+}
+
+/** 選択中の品名が、既存商品(バーコードを紐づけるだけ)か新規入力かを返す。 */
+function currentHqIncomingNameSelection() {
+  const newForm = document.getElementById('hq-incoming-new-name-form');
+  const newValue = document.getElementById('hq-incoming-new-name').value.trim();
+  if (newForm.style.display !== 'none' && newValue) {
+    return { isNew: true, name: newValue };
+  }
+  const code = document.getElementById('hq-incoming-existing-name-select').value;
+  if (!code) return { isNew: true, name: '' };
+  const product = hqIncomingProductList.find((p) => String(p.code) === String(code));
+  return { isNew: false, code, product };
+}
+
 document.getElementById('btn-back-total-inventory').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-products').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-staff').addEventListener('click', () => showScreen('screen-dashboard'));
@@ -944,7 +1022,8 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-status').textContent = '';
   resetHqIncomingBrandNewForm();
   document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
-  document.getElementById('hq-incoming-new-name').value = '';
+  resetHqIncomingNameNewForm();
+  document.getElementById('hq-incoming-existing-name-select').innerHTML = '';
   document.getElementById('hq-incoming-new-color-no').value = '';
   document.getElementById('hq-incoming-new-item-number').value = '';
   resetHqIncomingCategoryNewForm();
@@ -987,30 +1066,43 @@ document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () =
 
 document.getElementById('btn-register-new-from-incoming').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-incoming-store-select').value;
-  const name = document.getElementById('hq-incoming-new-name').value.trim();
-  if (!name) {
-    document.getElementById('hq-incoming-status').textContent = '品名を入力してください';
+  const brand = currentHqIncomingBrandValue();
+  const selection = currentHqIncomingNameSelection();
+  const colorNo = document.getElementById('hq-incoming-new-color-no').value.trim();
+  const itemNumber = document.getElementById('hq-incoming-new-item-number').value.trim();
+  const category = currentHqIncomingCategoryValue();
+
+  if (selection.isNew && !selection.name) {
+    document.getElementById('hq-incoming-status').textContent = '品名を選択するか、新しい品名を入力してください';
     return;
   }
-  const payload = {
-    store,
-    code: hqIncomingScannedCode,
-    brand: currentHqIncomingBrandValue(),
-    name,
-    colorNo: document.getElementById('hq-incoming-new-color-no').value.trim(),
-    itemNumber: document.getElementById('hq-incoming-new-item-number').value.trim(),
-    category: currentHqIncomingCategoryValue()
-  };
+
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
-    await apiCall('registerProduct', payload);
-    document.getElementById('hq-incoming-status').textContent = '商品を登録しました。続けて入荷本数を入力してください';
+    let name;
+    if (selection.isNew) {
+      // 新規商品として登録(このバーコードで新しいコードが割り当てられる)
+      name = selection.name;
+      await apiCall('registerProduct', {
+        store, code: hqIncomingScannedCode, brand, name, colorNo, itemNumber, category
+      });
+    } else {
+      // 事前登録済みの商品に、いまスキャンしたバーコードを紐づける(新規登録はしない)
+      name = selection.product.name;
+      await apiCall('updateProduct', {
+        store, code: selection.code, newCode: hqIncomingScannedCode,
+        brand, name, colorNo, itemNumber, category, memo: selection.product.memo || ''
+      });
+    }
+    document.getElementById('hq-incoming-status').textContent =
+      (selection.isNew ? '商品を登録しました。' : 'バーコードを紐づけました。') + '続けて入荷本数を入力してください';
     document.getElementById('hq-incoming-unknown').style.display = 'none';
     document.getElementById('hq-incoming-known').style.display = 'block';
-    document.getElementById('hq-incoming-product-name').textContent = payload.name;
-    document.getElementById('hq-incoming-product-brand').textContent = payload.brand;
+    document.getElementById('hq-incoming-product-name').textContent = name;
+    document.getElementById('hq-incoming-product-brand').textContent = brand;
     document.getElementById('hq-incoming-quantity').value = 1;
     await loadHqIncomingBrandOptions();
+    await loadHqIncomingProductList();
   } catch (e) {
     document.getElementById('hq-incoming-status').textContent = e.message;
   }

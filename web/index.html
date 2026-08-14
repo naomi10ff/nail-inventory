@@ -194,7 +194,7 @@
   </div>
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
-    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。下記を入力して登録すると、続けて入荷本数を登録できます。</p>
+    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。</p>
     <label for="hq-incoming-new-brand-select">ブランド</label>
     <select id="hq-incoming-new-brand-select"></select>
     <button class="link" type="button" id="btn-new-brand-toggle-incoming">リストにないブランドはこちら</button>
@@ -202,8 +202,13 @@
       <label for="hq-incoming-new-brand-new">新しいブランド名</label>
       <input type="text" id="hq-incoming-new-brand-new">
     </div>
-    <label for="hq-incoming-new-name">品名</label>
-    <input type="text" id="hq-incoming-new-name">
+    <label for="hq-incoming-existing-name-select">品名(先にブランドを選んでください)</label>
+    <select id="hq-incoming-existing-name-select"></select>
+    <button class="link" type="button" id="btn-new-name-toggle-incoming">リストにない商品名はこちら(新規商品)</button>
+    <div id="hq-incoming-new-name-form" style="display:none;">
+      <label for="hq-incoming-new-name">新しい品名</label>
+      <input type="text" id="hq-incoming-new-name">
+    </div>
     <label for="hq-incoming-new-color-no">カラーNO</label>
     <input type="text" id="hq-incoming-new-color-no">
     <label for="hq-incoming-new-item-number">品番(バーコードとは別。発注時にメーカー/問屋に伝える商品コード)</label>
