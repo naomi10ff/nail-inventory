@@ -385,7 +385,15 @@ function revokeApprovalIfStale_(store, timestamp) {
   }
 }
 
-/** 本社が店舗を選んで納品(入荷)を登録する。 */
+/**
+ * 本社が店舗を選んで納品(入荷)を登録する。
+ * refreshSummary_()(取引ログ全体を読み直して「現在庫サマリ」シートを書き直す処理)は
+ * ここでは呼ばない。入荷登録はスキャンごとに何度も実行される操作で、取引ログが増えるほど
+ * refreshSummary_()が遅くなり体感速度に直結するため。「現在庫サマリ」はアプリの画面表示
+ * では使っておらず(画面は毎回取引ログから直接集計している)、スプレッドシートを直接見る
+ * ための参考シートなので、最新化したい場合はApps Scriptエディタから
+ * refreshCurrentStockSummary() を手動実行する。
+ */
 function recordIncoming_(session, p) {
   requireRole_(session, ['hq']);
   if (!p.store) throw new Error('店舗を指定してください');
@@ -393,11 +401,10 @@ function recordIncoming_(session, p) {
   if (!product) throw new Error('商品が見つかりません。先に商品マスタへ登録してください');
   var quantity = Number(p.quantity) || 1;
   appendLog_(p.store, session.username, product, '入荷', quantity, p.memo);
-  refreshSummary_();
   return { product: product, quantity: quantity };
 }
 
-/** 本社が店舗を選んで廃棄(劣化・不良などによる在庫減)を登録する。 */
+/** 本社が店舗を選んで廃棄(劣化・不良などによる在庫減)を登録する。refreshSummary_()を呼ばない理由はrecordIncoming_と同じ。 */
 function recordDisposal_(session, p) {
   requireRole_(session, ['hq']);
   if (!p.store) throw new Error('店舗を指定してください');
@@ -405,7 +412,6 @@ function recordDisposal_(session, p) {
   if (!product) throw new Error('商品が見つかりません');
   var quantity = Number(p.quantity) || 1;
   appendLog_(p.store, session.username, product, '廃棄', quantity, p.memo);
-  refreshSummary_();
   return { product: product, quantity: quantity };
 }
 
@@ -850,4 +856,14 @@ function refreshSummary_() {
     return [e.store, e.brand, e.name, e.code, e.current, e.lastStocktakeCount, e.current <= 0, now];
   });
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+/**
+ * 「現在庫サマリ」シートを最新の状態に書き直す(参考用シートの手動更新)。
+ * 入荷登録・廃棄登録では速度のためこれを自動実行しなくなったので、スプレッドシート上で
+ * 最新の集計を見たいときは、Apps Scriptエディタからこの関数を手動で実行する。
+ */
+function refreshCurrentStockSummary() {
+  refreshSummary_();
+  Logger.log('現在庫サマリを更新しました。');
 }
