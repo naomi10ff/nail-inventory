@@ -1310,26 +1310,77 @@ async function loadDashboard() {
 
 // ---- 総在庫(店舗別在庫一覧・検索・エクスポート・リセット) ----
 async function loadTotalInventoryScreen() {
+  document.getElementById('hq-inventory-search').value = '';
   await renderInventoryTable(document.getElementById('store-filter').value);
 }
 
-document.getElementById('store-filter').addEventListener('change', (e) => renderInventoryTable(e.target.value));
+document.getElementById('store-filter').addEventListener('change', (e) => {
+  document.getElementById('hq-inventory-search').value = '';
+  renderInventoryTable(e.target.value);
+});
 
+let hqInventoryAllItems = [];
 let hqInventoryForExport = [];
 
 async function renderInventoryTable(store) {
   const data = await apiCall('getInventorySummary', { store: store || undefined });
-  hqInventoryForExport = data.items;
+  hqInventoryAllItems = data.items;
+  updateHqInventoryBrandFilterOptions();
+  renderHqInventoryRows(document.getElementById('hq-inventory-search').value);
+}
+
+/** ブランドの絞り込みプルダウンを、いま表示している範囲に実在するブランドだけで作り直す。 */
+function updateHqInventoryBrandFilterOptions() {
+  const select = document.getElementById('hq-inventory-brand-filter');
+  const current = select.value;
+  const brands = Array.from(new Set(hqInventoryAllItems.map((item) => item.brand).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+  select.innerHTML = '<option value="">全ブランド</option>';
+  brands.forEach((brand) => {
+    const opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
+  select.value = brands.includes(current) ? current : '';
+}
+
+document.getElementById('hq-inventory-brand-filter').addEventListener('change', () => {
+  renderHqInventoryRows(document.getElementById('hq-inventory-search').value);
+});
+
+document.getElementById('hq-inventory-search').addEventListener('input', () => {
+  renderHqInventoryRows(document.getElementById('hq-inventory-search').value);
+});
+
+function renderHqInventoryRows(query) {
   const container = document.getElementById('hq-inventory-container');
   container.innerHTML = '';
-  if (!data.items.length) {
+  if (!hqInventoryAllItems.length) {
+    hqInventoryForExport = [];
     container.textContent = '在庫データがありません';
+    return;
+  }
+
+  const brandFilter = document.getElementById('hq-inventory-brand-filter').value;
+  // スペース区切りの複数キーワードはすべて満たす(AND検索)商品だけに絞り込む
+  const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  const items = hqInventoryAllItems.filter((item) => {
+    if (brandFilter && item.brand !== brandFilter) return false;
+    if (!keywords.length) return true;
+    const haystack = normalizeSearchText([item.code, item.brand, item.name, item.colorNo].filter(Boolean).join(' '));
+    return keywords.every((kw) => haystack.includes(kw));
+  });
+  hqInventoryForExport = items;
+
+  if (!items.length) {
+    container.textContent = '該当する商品が見つかりません';
     return;
   }
   const table = document.createElement('table');
   table.className = 'stock-table';
   table.innerHTML = '<tr><th>店舗</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th>現在庫</th><th colspan="2"></th></tr>';
-  data.items.forEach((item) => {
+  items.forEach((item) => {
     const tr = document.createElement('tr');
     if (item.outOfStock) tr.className = 'out-of-stock';
     tr.innerHTML = `<td>${item.store}</td><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td><td>${item.currentStock}</td>`;
