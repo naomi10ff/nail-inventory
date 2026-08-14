@@ -6,28 +6,9 @@
 <title>ネイルサロン在庫管理</title>
 <link rel="stylesheet" href="shared/style.css">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
-  // QRコード生成用ライブラリを、CDNを複数試しながら読み込む。document.writeでの差し込みは
-  // 遅い回線とみなされるとChromeに無効化されることがあるため、通常のDOM操作で読み込む。
-  window.qrCodeReadyPromise = (function () {
-    var sources = [
-      'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js',
-      'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js'
-    ];
-    function loadScript(src) {
-      return new Promise(function (resolve, reject) {
-        var script = document.createElement('script');
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-    return sources.reduce(function (promise, src) {
-      return promise.catch(function () { return loadScript(src); });
-    }, Promise.reject());
-  })();
-</script>
+<!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
+     このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
+<script src="shared/qrcode.min.js"></script>
 </head>
 <body>
 

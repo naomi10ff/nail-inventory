@@ -1718,24 +1718,12 @@ window.addEventListener('afterprint', () => {
   document.body.classList.remove('printing-qr');
 });
 
-/** QRコード生成用ライブラリの読み込み待ち。読み込みに失敗していたら分かりやすいエラーを投げる。 */
-async function ensureQrCodeLoaded() {
-  try {
-    await window.qrCodeReadyPromise;
-  } catch (e) {
-    throw new Error('QRコード生成用の部品が読み込めませんでした。電波の良い場所でページを再読み込みしてから試してください。');
-  }
-}
-
 /** 商品一覧から、既に登録済みの商品のQRコードをいつでも呼び出して印刷できるようにする。 */
-async function showQrViewModal(code, name, brand) {
+function showQrViewModal(code, name, brand) {
   const holder = document.getElementById('qr-view-canvas-holder');
   holder.innerHTML = '';
-  const canvas = document.createElement('canvas');
-  holder.appendChild(canvas);
   try {
-    await ensureQrCodeLoaded();
-    await QRCode.toCanvas(canvas, String(code), { width: 120, errorCorrectionLevel: 'H' });
+    new QRCode(holder, { text: String(code), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
   } catch (e) {
     alert('QRコードの作成に失敗しました: ' + e.message);
     return;
@@ -1755,21 +1743,15 @@ document.getElementById('btn-print-selected-qr').addEventListener('click', async
     alert('QRコードを発行したい商品にチェックを入れてください');
     return;
   }
-  try {
-    await ensureQrCodeLoaded();
-  } catch (e) {
-    alert(e.message);
-    return;
-  }
   const grid = document.getElementById('qr-bulk-grid');
   grid.innerHTML = '';
   for (const p of selectedQrProducts) {
     const item = document.createElement('div');
     item.className = 'qr-bulk-item';
-    const canvas = document.createElement('canvas');
-    item.appendChild(canvas);
+    const qrHolder = document.createElement('div');
+    item.appendChild(qrHolder);
     try {
-      await QRCode.toCanvas(canvas, String(p.code), { width: 100, errorCorrectionLevel: 'H' });
+      new QRCode(qrHolder, { text: String(p.code), width: 100, height: 100, correctLevel: QRCode.CorrectLevel.H });
     } catch (e) {
       alert('QRコードの作成に失敗しました: ' + e.message);
       return;
@@ -1856,10 +1838,7 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
       if (!codeInput) {
         const holder = document.getElementById('p-qr-canvas-holder');
         holder.innerHTML = '';
-        const canvas = document.createElement('canvas');
-        holder.appendChild(canvas);
-        await ensureQrCodeLoaded();
-        await QRCode.toCanvas(canvas, result.code, { width: 120, errorCorrectionLevel: 'H' });
+        new QRCode(holder, { text: String(result.code), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
         const label = document.createElement('p');
         label.textContent = result.code + ' / ' + result.name;
         holder.appendChild(label);
