@@ -130,12 +130,99 @@ function openDangerModal(message, onConfirm) {
   cancelBtn.addEventListener('click', onCancelClick);
 }
 
-// ---- 総在庫一覧から、ブランド名・品名・カラーNO・在庫数をまとめて直せるようにする ----
+// ---- 総在庫一覧から、ブランド名・品名・カラーNO・カテゴリー・在庫数をまとめて直せるようにする ----
 // パスワード再入力を必須にする点はdanger-modalと同じ。
-function openAdjustModal(item, onConfirm) {
+async function loadAdjustBrandOptions(store) {
+  const data = await apiCall('getBrandList', { store });
+  const select = document.getElementById('adjust-modal-brand-select');
+  select.innerHTML = '<option value="">(未選択)</option>';
+  data.brands.forEach((brand) => {
+    const opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
+}
+
+document.getElementById('btn-new-brand-toggle-adjust').addEventListener('click', () => {
+  document.getElementById('adjust-modal-brand-new-form').style.display = 'block';
+});
+
+function currentAdjustBrandValue() {
+  const newForm = document.getElementById('adjust-modal-brand-new-form');
+  const newValue = document.getElementById('adjust-modal-brand-new').value.trim();
+  if (newForm.style.display !== 'none' && newValue) return newValue;
+  return document.getElementById('adjust-modal-brand-select').value;
+}
+
+function resetAdjustBrandNewForm() {
+  document.getElementById('adjust-modal-brand-new-form').style.display = 'none';
+  document.getElementById('adjust-modal-brand-new').value = '';
+}
+
+function setAdjustBrandValue(brand) {
+  resetAdjustBrandNewForm();
+  const select = document.getElementById('adjust-modal-brand-select');
+  if (!brand) {
+    select.value = '';
+    return;
+  }
+  const hasOption = Array.from(select.options).some((o) => o.value === brand);
+  if (hasOption) {
+    select.value = brand;
+  } else {
+    document.getElementById('adjust-modal-brand-new-form').style.display = 'block';
+    document.getElementById('adjust-modal-brand-new').value = brand;
+  }
+}
+
+async function loadAdjustCategoryOptions() {
+  const data = await apiCall('getCategoryList', {});
+  const select = document.getElementById('adjust-modal-category-select');
+  select.innerHTML = '<option value="">(未選択)</option>';
+  data.categories.forEach((category) => {
+    const opt = document.createElement('option');
+    opt.value = category;
+    opt.textContent = category;
+    select.appendChild(opt);
+  });
+}
+
+document.getElementById('btn-new-category-toggle-adjust').addEventListener('click', () => {
+  document.getElementById('adjust-modal-category-new-form').style.display = 'block';
+});
+
+function currentAdjustCategoryValue() {
+  const newForm = document.getElementById('adjust-modal-category-new-form');
+  const newValue = document.getElementById('adjust-modal-category-new').value.trim();
+  if (newForm.style.display !== 'none' && newValue) return newValue;
+  return document.getElementById('adjust-modal-category-select').value;
+}
+
+function resetAdjustCategoryNewForm() {
+  document.getElementById('adjust-modal-category-new-form').style.display = 'none';
+  document.getElementById('adjust-modal-category-new').value = '';
+}
+
+function setAdjustCategoryValue(category) {
+  resetAdjustCategoryNewForm();
+  const select = document.getElementById('adjust-modal-category-select');
+  if (!category) {
+    select.value = '';
+    return;
+  }
+  const hasOption = Array.from(select.options).some((o) => o.value === category);
+  if (hasOption) {
+    select.value = category;
+  } else {
+    document.getElementById('adjust-modal-category-new-form').style.display = 'block';
+    document.getElementById('adjust-modal-category-new').value = category;
+  }
+}
+
+async function openAdjustModal(item, onConfirm) {
   const overlay = document.getElementById('adjust-modal');
   const codeInput = document.getElementById('adjust-modal-code');
-  const brandInput = document.getElementById('adjust-modal-brand');
   const nameInput = document.getElementById('adjust-modal-name');
   const colorInput = document.getElementById('adjust-modal-colorno');
   const newStockInput = document.getElementById('adjust-modal-newstock');
@@ -147,9 +234,12 @@ function openAdjustModal(item, onConfirm) {
 
   document.getElementById('adjust-modal-label').textContent = `${item.store} / コード: ${item.code}`;
   codeInput.value = item.code;
-  brandInput.value = item.brand || '';
+  await loadAdjustBrandOptions(item.store);
+  setAdjustBrandValue(item.brand || '');
   nameInput.value = item.name || '';
   colorInput.value = item.colorNo || '';
+  await loadAdjustCategoryOptions();
+  setAdjustCategoryValue(item.category || '');
   newStockInput.value = item.currentStock;
   memoInput.value = '';
   passwordInput.value = '';
@@ -185,8 +275,8 @@ function openAdjustModal(item, onConfirm) {
     confirmBtn.disabled = true;
     try {
       await onConfirm({
-        newCode, brand: brandInput.value.trim(), name, colorNo: colorInput.value.trim(),
-        newStock, memo: memoInput.value.trim(), password
+        newCode, brand: currentAdjustBrandValue(), name, colorNo: colorInput.value.trim(),
+        category: currentAdjustCategoryValue(), newStock, memo: memoInput.value.trim(), password
       });
       close();
     } catch (e) {
@@ -1251,13 +1341,13 @@ async function renderInventoryTable(store) {
     adjustBtn.type = 'button';
     adjustBtn.className = 'link';
     adjustBtn.textContent = '修正';
-    adjustBtn.addEventListener('click', () => {
-      openAdjustModal(item, async ({ newCode, brand, name, colorNo, newStock, memo, password }) => {
-        const productsData = await apiCall('listProducts', { store: item.store });
-        const product = productsData.products.find((p) => String(p.code) === String(item.code));
+    adjustBtn.addEventListener('click', async () => {
+      const productsData = await apiCall('listProducts', { store: item.store });
+      const product = productsData.products.find((p) => String(p.code) === String(item.code));
+      openAdjustModal({ ...item, category: product ? product.category : '' }, async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
         await apiCall('updateProduct', {
-          store: item.store, code: item.code, newCode, brand, name, colorNo,
-          category: product ? product.category : '', memo: product ? product.memo : ''
+          store: item.store, code: item.code, newCode, brand, name, colorNo, category,
+          itemNumber: product ? product.itemNumber : '', memo: product ? product.memo : ''
         });
         const finalCode = newCode && newCode !== String(item.code) ? newCode : item.code;
         if (Number(newStock) !== item.currentStock) {

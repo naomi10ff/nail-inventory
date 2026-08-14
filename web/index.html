@@ -393,12 +393,24 @@
     <p class="hint" id="adjust-modal-label"></p>
     <label for="adjust-modal-code">商品コード(バーコード。書き換えると、それ以前の取引履歴は元のコードのまま残ります)</label>
     <input type="text" id="adjust-modal-code">
-    <label for="adjust-modal-brand">ブランド名</label>
-    <input type="text" id="adjust-modal-brand">
+    <label for="adjust-modal-brand-select">ブランド名(頭文字を入力すると絞り込めます)</label>
+    <select id="adjust-modal-brand-select"></select>
+    <button class="link" type="button" id="btn-new-brand-toggle-adjust">リストにないブランドはこちら</button>
+    <div id="adjust-modal-brand-new-form" style="display:none;">
+      <label for="adjust-modal-brand-new">新しいブランド名</label>
+      <input type="text" id="adjust-modal-brand-new">
+    </div>
     <label for="adjust-modal-name">品名</label>
     <input type="text" id="adjust-modal-name">
     <label for="adjust-modal-colorno">カラーNO</label>
     <input type="text" id="adjust-modal-colorno">
+    <label for="adjust-modal-category-select">カテゴリー</label>
+    <select id="adjust-modal-category-select"></select>
+    <button class="link" type="button" id="btn-new-category-toggle-adjust">リストにないカテゴリーはこちら</button>
+    <div id="adjust-modal-category-new-form" style="display:none;">
+      <label for="adjust-modal-category-new">新しいカテゴリー名</label>
+      <input type="text" id="adjust-modal-category-new">
+    </div>
     <label for="adjust-modal-newstock">正しい在庫数</label>
     <input type="number" id="adjust-modal-newstock" min="0">
     <label for="adjust-modal-memo">メモ(任意・修正理由など)</label>
