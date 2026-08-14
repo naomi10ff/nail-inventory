@@ -93,6 +93,25 @@ table.stock-table { width: 100%; border-collapse: collapse; margin-top: 12px; fo
 table.stock-table th, table.stock-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 
+/* 商品一覧・店舗別在庫一覧は列数が多く、幅いっぱいに詰めようとすると操作リンクが
+   縦に潰れて見えるため、詰めずに横スクロールで全体を見られるようにする。 */
+#products-table, #hq-inventory-container {
+  overflow-x: auto;
+}
+#products-table table.stock-table, #hq-inventory-container table.stock-table {
+  width: auto;
+  min-width: 100%;
+}
+#products-table table.stock-table th, #products-table table.stock-table td,
+#hq-inventory-container table.stock-table th, #hq-inventory-container table.stock-table td {
+  white-space: nowrap;
+}
+#products-table table.stock-table td:last-child button.link,
+#hq-inventory-container table.stock-table td:last-child button.link {
+  display: inline-block;
+  margin-right: 10px;
+}
+
 .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 14px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .topbar .store-name { font-weight: bold; }

@@ -886,6 +886,7 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
 document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
   document.getElementById('product-search').value = '';
+  document.getElementById('product-brand-filter').value = '';
   await loadHqBrandOptions();
   await loadHqCategoryOptions();
   await loadProducts();
@@ -893,6 +894,7 @@ document.getElementById('nav-products').addEventListener('click', async () => {
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
   document.getElementById('product-search').value = '';
+  document.getElementById('product-brand-filter').value = '';
   await loadHqBrandOptions();
   await loadHqCategoryOptions();
   await loadProducts();
@@ -1576,8 +1578,29 @@ async function loadProducts() {
   }
   const data = await apiCall('listProducts', { store });
   currentProductList = data.products;
+  updateProductBrandFilterOptions();
   renderProductsTable(document.getElementById('product-search').value);
 }
+
+/** ブランドの絞り込みプルダウンを、いま選んでいる店舗に実在するブランドだけで作り直す。 */
+function updateProductBrandFilterOptions() {
+  const select = document.getElementById('product-brand-filter');
+  const current = select.value;
+  const brands = Array.from(new Set(currentProductList.map((p) => p.brand).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+  select.innerHTML = '<option value="">全ブランド</option>';
+  brands.forEach((brand) => {
+    const opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
+  select.value = brands.includes(current) ? current : '';
+}
+
+document.getElementById('product-brand-filter').addEventListener('change', () => {
+  renderProductsTable(document.getElementById('product-search').value);
+});
 
 function renderProductsTable(query) {
   const store = document.getElementById('product-store-select').value;
@@ -1588,9 +1611,11 @@ function renderProductsTable(query) {
     return;
   }
 
+  const brandFilter = document.getElementById('product-brand-filter').value;
   // スペース区切りの複数キーワードはすべて満たす(AND検索)商品だけに絞り込む
   const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
   const filtered = currentProductList.filter((p) => {
+    if (brandFilter && p.brand !== brandFilter) return false;
     if (!keywords.length) return true;
     const haystack = normalizeSearchText([p.code, p.itemNumber, p.brand, p.name, p.colorNo].filter(Boolean).join(' '));
     return keywords.every((kw) => haystack.includes(kw));
@@ -1680,6 +1705,9 @@ function startEditProduct(product) {
   document.getElementById('btn-add-product').textContent = '更新する';
   document.getElementById('btn-cancel-edit-product').style.display = 'block';
   document.getElementById('p-qr-result').style.display = 'none';
+  // 商品一覧は下の方までスクロールされていることが多く、フォームが画面外だと
+  // 「編集」を押しても何も起きていないように見えるため、フォームまで自動でスクロールする
+  document.getElementById('product-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function cancelEditProduct() {
