@@ -4,11 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>ネイルサロン在庫管理</title>
-<link rel="stylesheet" href="shared/style.css">
+<!-- ASSET_VERSION: style.css / qrcode.min.js / app.js を書き換えるたびに、この下の
+     ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
+     組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
+     ブラウザに必ず読み直させるようにしている。 -->
+<link rel="stylesheet" href="shared/style.css?v=1">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
-<script src="shared/qrcode.min.js"></script>
+<script src="shared/qrcode.min.js?v=1"></script>
 </head>
 <body>
 
@@ -476,6 +480,6 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js?v=1"></script>
 </body>
 </html>
