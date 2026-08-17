@@ -469,9 +469,17 @@ let scannerStockLookup = null;
 document.getElementById('btn-nav-stock-lookup').addEventListener('click', () => {
   document.getElementById('stock-lookup-result').style.display = 'none';
   document.getElementById('stock-lookup-status').textContent = '';
+  document.getElementById('btn-rescan-stock-lookup').style.display = 'none';
   showScreen('screen-stock-lookup');
   rearmGate(stockLookupGate);
   startScanner('reader-4', onStockLookupScan, stockLookupGate).catch((e) => console.error(e));
+});
+
+document.getElementById('btn-rescan-stock-lookup').addEventListener('click', () => {
+  document.getElementById('stock-lookup-result').style.display = 'none';
+  document.getElementById('stock-lookup-status').textContent = '';
+  document.getElementById('btn-rescan-stock-lookup').style.display = 'none';
+  rearmGate(stockLookupGate);
 });
 
 document.getElementById('btn-back-4').addEventListener('click', async () => {
@@ -485,6 +493,7 @@ async function onStockLookupScan(code) {
     if (!result.found) {
       document.getElementById('stock-lookup-result').style.display = 'none';
       document.getElementById('stock-lookup-status').textContent = '未登録のコードです: ' + code;
+      document.getElementById('btn-rescan-stock-lookup').style.display = 'block';
       return;
     }
     document.getElementById('stock-lookup-status').textContent = '';
@@ -494,6 +503,7 @@ async function onStockLookupScan(code) {
     document.getElementById('stock-lookup-colorno').textContent = result.colorNo || '';
     document.getElementById('stock-lookup-count').textContent =
       result.currentStock + '本' + (result.outOfStock ? '(欠品)' : '');
+    document.getElementById('btn-rescan-stock-lookup').style.display = 'block';
   } catch (e) {
     document.getElementById('stock-lookup-status').textContent = e.message;
   }
