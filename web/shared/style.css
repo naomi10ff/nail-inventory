@@ -200,9 +200,14 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
     width: 100%;
     max-height: none;
     overflow: visible;
+    /* .modal-boxのpadding:20pxがそのまま残ると、印刷物全体がその分だけ右・下に
+       ズレてしまう(印刷でズレると報告があった原因の1つ)ため、印刷時はゼロにする */
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
   }
   body.printing-qr button, body.printing-qr .aone-controls, body.printing-qr p.hint { display: none !important; }
-  body.printing-qr #qr-bulk-preview-wrap { overflow: visible; border: none; background: none; }
+  body.printing-qr #qr-bulk-preview-wrap { overflow: visible; border: none; background: none; margin: 0 !important; }
   body.printing-qr .aone-page-wrap {
     width: auto !important;
     height: auto !important;
