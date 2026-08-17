@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>ネイルサロン在庫管理</title>
+
+<!-- ホーム画面に追加したとき、URLバーの無い全画面アプリとして開くための設定。
+     サービスワーカーは意図的に使っていない(オフラインキャッシュがまた別の
+     「新旧ファイルの食い違い」不具合を生みかねないため)。 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#b98a5e">
+<link rel="icon" href="shared/icons/icon-192.png">
+<!-- iOS Safariはmanifest.jsonを見ないため、ここで個別に指定する -->
+<link rel="apple-touch-icon" href="shared/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="在庫管理">
+
 <!-- ASSET_VERSION: style.css / qrcode.min.js / app.js を書き換えるたびに、この下の
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
