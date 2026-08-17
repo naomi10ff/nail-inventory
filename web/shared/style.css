@@ -163,6 +163,8 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
   display: grid;
   grid-template-columns: repeat(5, 35mm);
   grid-template-rows: repeat(19, 12mm);
+  /* エーワン公式のテストプリント用紙で実測: ラベルの間は縦横とも2mmの隙間がある */
+  gap: 2mm;
 }
 .aone-cell {
   width: 35mm;

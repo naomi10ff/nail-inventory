@@ -1802,16 +1802,16 @@ document.getElementById('btn-close-qr-view').addEventListener('click', () => {
 });
 
 // ---- QRコード一括印刷(エーワン 31171: A4・95面・ラベル35×12mm・5列×19段) ----
-// 公式の面付け表では「四辺余白付」とだけ記載され、正確な余白mm数値が公開されていないため、
-// ラベル間の隙間なしで敷き詰めた場合に上下・左右の余白が均等になる値を初期値としている
-// (縦: (297-19*12)/2=34.5mm、横: (210-5*35)/2=17.5mm)。実際の用紙とズレる場合に備えて
-// 上・左の余白を調整できるようにし、localStorageに保存して次回以降も使う。
+// 実際の用紙とズレる場合に備えて上・左の余白を調整できるようにし、localStorageに
+// 保存して次回以降も使う。
 const AONE_COLS = 5;
 const AONE_ROWS = 19;
 const AONE_PER_PAGE = AONE_COLS * AONE_ROWS;
 const AONE_PREVIEW_SCALE = 0.5;
-const AONE_DEFAULT_MARGIN_TOP = 34.5;
-const AONE_DEFAULT_MARGIN_LEFT = 17.5;
+// エーワン公式のテストプリント用紙(フォーマット番号F95A4-1)で実測した値。
+// 上16.5mm・左13.5mm、ラベルの間は上下左右とも2mmの隙間(.aone-sheetのgapで指定)。
+const AONE_DEFAULT_MARGIN_TOP = 16.5;
+const AONE_DEFAULT_MARGIN_LEFT = 13.5;
 
 function getAoneMargins() {
   const top = localStorage.getItem('aoneMarginTop');
