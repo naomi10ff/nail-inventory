@@ -191,6 +191,11 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
    QRパネル/モーダルは自然に対象から外れる)。 */
 @media print {
   @page { size: A4; margin: 0; }
+  /* visibility:hiddenだけだと、他の画面(長い商品一覧など)が非表示のままレイアウト上の
+     高さだけ残ってしまい、印刷が余分なページに分かれてしまう(「QRコード以外に文字だけの
+     ページが印刷される」不具合の原因)。印刷対象を含まない要素はdisplay:noneで
+     レイアウトからも完全に外す。 */
+  body.printing-qr > *:not(:has(.print-target)) { display: none !important; }
   body.printing-qr * { visibility: hidden; }
   body.printing-qr .print-target, body.printing-qr .print-target * { visibility: visible; }
   body.printing-qr .print-target {
