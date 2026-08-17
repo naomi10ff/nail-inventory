@@ -211,17 +211,23 @@
     <input type="text" id="manual-code-hq-incoming" style="flex:1;">
     <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-incoming">検索</button>
   </div>
+  <button type="button" class="secondary" id="btn-new-product-no-barcode">バーコード無しの商品を新規登録</button>
   <button type="button" class="secondary" id="btn-rescan-hq-incoming" style="display:none;">別の商品を読み直す</button>
 
   <div id="hq-incoming-known" class="card" style="display:none;">
     <p><strong id="hq-incoming-product-name"></strong>(<span id="hq-incoming-product-brand"></span>)</p>
+    <div id="hq-incoming-qr-result" class="print-target" style="display:none;">
+      <p>バーコード無しの商品として登録しました。発行したQRコードを印刷して現物/棚に貼ってください</p>
+      <div id="hq-incoming-qr-canvas-holder"></div>
+      <button type="button" class="secondary" id="btn-print-hq-incoming-qr">印刷する</button>
+    </div>
     <label for="hq-incoming-quantity">入荷本数</label>
     <input type="number" id="hq-incoming-quantity" value="1" min="1">
     <button type="button" class="primary" id="btn-submit-hq-incoming">入荷を登録</button>
   </div>
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
-    <p class="hint">このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。</p>
+    <p class="hint" id="hq-incoming-unknown-hint">このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。</p>
     <label for="hq-incoming-new-brand-select">ブランド</label>
     <select id="hq-incoming-new-brand-select"></select>
     <button class="link" type="button" id="btn-new-brand-toggle-incoming">リストにないブランドはこちら</button>

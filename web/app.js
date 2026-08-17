@@ -1133,7 +1133,10 @@ document.getElementById('btn-back-hq-disposal').addEventListener('click', async 
 // ---- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) ----
 function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-known').style.display = 'none';
+  document.getElementById('hq-incoming-qr-result').style.display = 'none';
   document.getElementById('hq-incoming-unknown').style.display = 'none';
+  document.getElementById('hq-incoming-unknown-hint').textContent =
+    'このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。';
   document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
   document.getElementById('hq-incoming-status').textContent = '';
   resetHqIncomingBrandNewForm();
@@ -1180,6 +1183,21 @@ document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () =
   rearmGate(hqIncomingGate);
 });
 
+/** バーコードが無い商品用: スキャン・手入力を介さず、いきなり新規登録フォームを開く。 */
+document.getElementById('btn-new-product-no-barcode').addEventListener('click', () => {
+  const store = document.getElementById('hq-incoming-store-select').value;
+  if (!store) {
+    document.getElementById('hq-incoming-status').textContent = '店舗を選択してください';
+    return;
+  }
+  resetHqIncomingScreen();
+  hqIncomingScannedCode = null;
+  document.getElementById('hq-incoming-unknown-hint').textContent =
+    'バーコード無しで新規登録します。コード欄は空欄のまま登録され、自動でQRコードが発行されます。';
+  document.getElementById('hq-incoming-unknown').style.display = 'block';
+  document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
+});
+
 document.getElementById('btn-register-new-from-incoming').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-incoming-store-select').value;
   const brand = currentHqIncomingBrandValue();
@@ -1196,12 +1214,17 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     let name;
+    let generatedCode = null;
     if (selection.isNew) {
-      // 新規商品として登録(このバーコードで新しいコードが割り当てられる)
+      // 新規商品として登録。コードが空欄(バーコード無しの新規登録)だった場合は
+      // 自動発行されたQRコードが返ってくるので、以降の入荷登録にはそちらを使う
       name = selection.name;
-      await apiCall('registerProduct', {
+      const wasBlank = !hqIncomingScannedCode;
+      const result = await apiCall('registerProduct', {
         store, code: hqIncomingScannedCode, brand, name, colorNo, itemNumber, category
       });
+      hqIncomingScannedCode = result.code;
+      if (wasBlank) generatedCode = result.code;
     } else {
       // 事前登録済みの商品に、いまスキャンしたバーコードを紐づける(新規登録はしない)
       name = selection.product.name;
@@ -1217,6 +1240,15 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     document.getElementById('hq-incoming-product-name').textContent = name;
     document.getElementById('hq-incoming-product-brand').textContent = brand;
     document.getElementById('hq-incoming-quantity').value = 1;
+    const qrResult = document.getElementById('hq-incoming-qr-result');
+    if (generatedCode) {
+      const holder = document.getElementById('hq-incoming-qr-canvas-holder');
+      holder.innerHTML = '';
+      new QRCode(holder, { text: String(generatedCode), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
+      qrResult.style.display = 'block';
+    } else {
+      qrResult.style.display = 'none';
+    }
     await loadHqIncomingBrandOptions();
     await loadHqIncomingProductList();
   } catch (e) {
@@ -1224,6 +1256,8 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
   }
   });
 });
+
+document.getElementById('btn-print-hq-incoming-qr').addEventListener('click', printCurrentModal);
 
 document.getElementById('btn-submit-hq-incoming').addEventListener('click', async (e) => {
   const store = document.getElementById('hq-incoming-store-select').value;
