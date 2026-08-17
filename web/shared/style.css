@@ -176,7 +176,7 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
   gap: 1mm;
   overflow: hidden;
 }
-.aone-cell .aone-qr { width: 10.5mm; height: 10.5mm; flex-shrink: 0; }
+.aone-cell .aone-qr { width: 9mm; height: 9mm; flex-shrink: 0; }
 .aone-cell .aone-qr canvas, .aone-cell .aone-qr img { width: 100%; height: 100%; }
 .aone-cell .aone-text {
   font-size: 6pt;
