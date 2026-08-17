@@ -1882,6 +1882,12 @@ document.getElementById('btn-print-selected-qr').addEventListener('click', () =>
   document.getElementById('qr-bulk-modal').style.display = 'flex';
 });
 
+document.getElementById('btn-clear-selected-qr').addEventListener('click', () => {
+  if (!selectedQrProducts.size) return;
+  selectedQrProducts.clear();
+  renderProductsTable();
+});
+
 document.getElementById('btn-aone-apply-margin').addEventListener('click', () => {
   const top = Number(document.getElementById('aone-margin-top').value);
   const left = Number(document.getElementById('aone-margin-left').value);
