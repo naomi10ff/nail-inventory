@@ -1587,6 +1587,7 @@ let selectedQrProducts = new Set();
 async function loadProducts() {
   const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('products-table');
+  selectedQrProducts.clear(); // 店舗を切り替えたら商品データ自体が別物になるので選択もリセットする
   if (!store) {
     currentProductList = [];
     container.textContent = '店舗を選択してください';
@@ -1637,7 +1638,6 @@ function renderProductsTable() {
   }
 
   container.innerHTML = '';
-  selectedQrProducts.clear();
   const table = document.createElement('table');
   table.className = 'stock-table';
   table.innerHTML = '<tr><th></th><th>コード</th><th>品名</th><th></th></tr>';
@@ -1650,6 +1650,8 @@ function renderProductsTable() {
     const checkTd = document.createElement('td');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    // ブランドで絞り込みを変えても、他のブランドで選んだQRコード発行対象は消えないようにする
+    checkbox.checked = selectedQrProducts.has(p);
     checkbox.addEventListener('change', () => {
       if (checkbox.checked) selectedQrProducts.add(p);
       else selectedQrProducts.delete(p);
@@ -1754,31 +1756,97 @@ document.getElementById('btn-close-qr-view').addEventListener('click', () => {
   document.getElementById('qr-view-modal').style.display = 'none';
 });
 
-/** 商品一覧でチェックした商品のQRコードを、まとめて発行して印刷用に並べる。 */
-document.getElementById('btn-print-selected-qr').addEventListener('click', async () => {
+// ---- QRコード一括印刷(エーワン 31171: A4・95面・ラベル35×12mm・5列×19段) ----
+// 公式の面付け表では「四辺余白付」とだけ記載され、正確な余白mm数値が公開されていないため、
+// ラベル間の隙間なしで敷き詰めた場合に上下・左右の余白が均等になる値を初期値としている
+// (縦: (297-19*12)/2=34.5mm、横: (210-5*35)/2=17.5mm)。実際の用紙とズレる場合に備えて
+// 上・左の余白を調整できるようにし、localStorageに保存して次回以降も使う。
+const AONE_COLS = 5;
+const AONE_ROWS = 19;
+const AONE_PER_PAGE = AONE_COLS * AONE_ROWS;
+const AONE_PREVIEW_SCALE = 0.5;
+const AONE_DEFAULT_MARGIN_TOP = 34.5;
+const AONE_DEFAULT_MARGIN_LEFT = 17.5;
+
+function getAoneMargins() {
+  const top = localStorage.getItem('aoneMarginTop');
+  const left = localStorage.getItem('aoneMarginLeft');
+  return {
+    top: top !== null ? Number(top) : AONE_DEFAULT_MARGIN_TOP,
+    left: left !== null ? Number(left) : AONE_DEFAULT_MARGIN_LEFT
+  };
+}
+
+function renderAoneSheets() {
+  const margins = getAoneMargins();
+  document.getElementById('aone-margin-top').value = margins.top;
+  document.getElementById('aone-margin-left').value = margins.left;
+
+  const products = Array.from(selectedQrProducts);
+  const container = document.getElementById('qr-bulk-sheets');
+  container.innerHTML = '';
+
+  for (let start = 0; start < products.length; start += AONE_PER_PAGE) {
+    const pageItems = products.slice(start, start + AONE_PER_PAGE);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'aone-page-wrap';
+    wrap.style.width = (210 * AONE_PREVIEW_SCALE) + 'mm';
+    wrap.style.height = (297 * AONE_PREVIEW_SCALE) + 'mm';
+
+    const page = document.createElement('div');
+    page.className = 'aone-page';
+    page.style.transform = `scale(${AONE_PREVIEW_SCALE})`;
+    page.style.paddingTop = margins.top + 'mm';
+    page.style.paddingLeft = margins.left + 'mm';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'aone-sheet';
+    pageItems.forEach((p) => {
+      const cell = document.createElement('div');
+      cell.className = 'aone-cell';
+      const qrHolder = document.createElement('div');
+      qrHolder.className = 'aone-qr';
+      cell.appendChild(qrHolder);
+      new QRCode(qrHolder, { text: String(p.code), width: 80, height: 80, correctLevel: QRCode.CorrectLevel.H });
+      const text = document.createElement('div');
+      text.className = 'aone-text';
+      text.textContent = (p.brand ? p.brand + ' ' : '') + p.name;
+      cell.appendChild(text);
+      sheet.appendChild(cell);
+    });
+
+    page.appendChild(sheet);
+    wrap.appendChild(page);
+    container.appendChild(wrap);
+  }
+}
+
+/** 商品一覧でチェックした商品のQRコードを、エーワン31171の面付けに合わせて並べる。 */
+document.getElementById('btn-print-selected-qr').addEventListener('click', () => {
   if (!selectedQrProducts.size) {
     alert('QRコードを発行したい商品にチェックを入れてください');
     return;
   }
-  const grid = document.getElementById('qr-bulk-grid');
-  grid.innerHTML = '';
-  for (const p of selectedQrProducts) {
-    const item = document.createElement('div');
-    item.className = 'qr-bulk-item';
-    const qrHolder = document.createElement('div');
-    item.appendChild(qrHolder);
-    try {
-      new QRCode(qrHolder, { text: String(p.code), width: 100, height: 100, correctLevel: QRCode.CorrectLevel.H });
-    } catch (e) {
-      alert('QRコードの作成に失敗しました: ' + e.message);
-      return;
-    }
-    const label = document.createElement('p');
-    label.textContent = (p.brand ? p.brand + ' ' : '') + p.name;
-    item.appendChild(label);
-    grid.appendChild(item);
+  try {
+    renderAoneSheets();
+  } catch (e) {
+    alert('QRコードの作成に失敗しました: ' + e.message);
+    return;
   }
   document.getElementById('qr-bulk-modal').style.display = 'flex';
+});
+
+document.getElementById('btn-aone-apply-margin').addEventListener('click', () => {
+  const top = Number(document.getElementById('aone-margin-top').value);
+  const left = Number(document.getElementById('aone-margin-left').value);
+  if (!Number.isFinite(top) || !Number.isFinite(left)) {
+    alert('余白は数値で入力してください');
+    return;
+  }
+  localStorage.setItem('aoneMarginTop', top);
+  localStorage.setItem('aoneMarginLeft', left);
+  renderAoneSheets();
 });
 
 document.getElementById('btn-print-qr-bulk').addEventListener('click', printCurrentModal);

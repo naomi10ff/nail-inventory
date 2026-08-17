@@ -483,11 +483,28 @@
   </div>
 </div>
 
-<!-- 商品一覧でチェックした複数商品のQRコードを、まとめて発行・印刷するためのモーダル -->
+<!-- 商品一覧でチェックした複数商品のQRコードを、エーワン31171(35×12mm・95面)用紙の
+     配置に合わせてまとめて発行・印刷するためのモーダル -->
 <div id="qr-bulk-modal" class="modal-overlay" style="display:none;">
-  <div class="modal-box print-target" style="max-width:600px;">
-    <h3>選択した商品のQRコード</h3>
-    <div id="qr-bulk-grid" class="qr-bulk-grid"></div>
+  <div class="modal-box print-target" style="max-width:680px;">
+    <h3>選択した商品のQRコード(エーワン 31171 / 35×12mm 95面)</h3>
+    <p class="hint">初回は普通紙に試し印刷して、ラベル用紙に重ねてズレが無いか確認してください。
+      ズレる場合は下の余白を調整して「反映する」を押すと、次回の印刷から使われます
+      (印刷ダイアログの余白設定は「なし」にしてください)。</p>
+    <div class="aone-controls" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="aone-margin-top">上の余白(mm)</label>
+        <input type="number" id="aone-margin-top" step="0.5" style="width:90px;">
+      </div>
+      <div>
+        <label for="aone-margin-left">左の余白(mm)</label>
+        <input type="number" id="aone-margin-left" step="0.5" style="width:90px;">
+      </div>
+      <button type="button" class="secondary" id="btn-aone-apply-margin" style="width:auto; margin-top:14px;">反映する</button>
+    </div>
+    <div id="qr-bulk-preview-wrap">
+      <div id="qr-bulk-sheets"></div>
+    </div>
     <button type="button" class="primary" id="btn-print-qr-bulk">印刷する</button>
     <button type="button" class="secondary" id="btn-close-qr-bulk">閉じる</button>
   </div>

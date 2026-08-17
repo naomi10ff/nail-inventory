@@ -142,21 +142,53 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 .modal-box h3 { margin: 0 0 10px; }
 .modal-box .error { background: #fdecea; padding: 10px; border-radius: 8px; }
 
-.qr-bulk-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: 14px;
+/* エーワン31171(A4・95面・ラベル1枚35×12mm・5列×19段)専用のQR一括印刷レイアウト。
+   画面上はプレビュー用に縮小表示し、印刷時だけ実寸(mm)で配置する。 */
+#qr-bulk-preview-wrap {
+  overflow-x: auto;
   margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee;
 }
-.qr-bulk-item { text-align: center; }
-.qr-bulk-item canvas { max-width: 100%; }
-.qr-bulk-item p { font-size: 0.75rem; margin: 4px 0 0; word-break: break-word; }
+.aone-page {
+  width: 210mm;
+  height: 297mm;
+  background: #fff;
+  box-sizing: border-box;
+  margin: 8px auto;
+  transform-origin: top left;
+}
+.aone-sheet {
+  display: grid;
+  grid-template-columns: repeat(5, 35mm);
+  grid-template-rows: repeat(19, 12mm);
+}
+.aone-cell {
+  width: 35mm;
+  height: 12mm;
+  box-sizing: border-box;
+  padding: 0.4mm 1.2mm;
+  display: flex;
+  align-items: center;
+  gap: 1mm;
+  overflow: hidden;
+}
+.aone-cell .aone-qr { width: 10.5mm; height: 10.5mm; flex-shrink: 0; }
+.aone-cell .aone-qr canvas, .aone-cell .aone-qr img { width: 100%; height: 100%; }
+.aone-cell .aone-text {
+  font-size: 6pt;
+  line-height: 1.15;
+  overflow: hidden;
+  word-break: break-word;
+}
 
 /* 印刷ボタンを押したとき、ダッシュボードやモーダルの背景ではなく発行したQRコードだけを
    印刷できるようにする。印刷したい要素に .print-target を付けておき、それ以外を隠す
    (display:noneの要素はvisibility:visibleを付けても表示されないため、非表示中の
    QRパネル/モーダルは自然に対象から外れる)。 */
 @media print {
+  @page { size: A4; margin: 0; }
   body.printing-qr * { visibility: hidden; }
   body.printing-qr .print-target, body.printing-qr .print-target * { visibility: visible; }
   body.printing-qr .print-target {
@@ -164,6 +196,18 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
     top: 0;
     left: 0;
     width: 100%;
+    max-height: none;
+    overflow: visible;
   }
-  body.printing-qr button { display: none !important; }
+  body.printing-qr button, body.printing-qr .aone-controls, body.printing-qr p.hint { display: none !important; }
+  body.printing-qr #qr-bulk-preview-wrap { overflow: visible; border: none; background: none; }
+  body.printing-qr .aone-page-wrap {
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    page-break-after: always;
+  }
+  body.printing-qr .aone-page-wrap:last-child { page-break-after: auto; }
+  body.printing-qr .aone-page { margin: 0; transform: none !important; }
 }
