@@ -82,6 +82,8 @@ function routeAction_(action, p) {
       return getBrandList_(validateToken_(p.token), p.store);
     case 'addBrand':
       return addBrand_(validateToken_(p.token), p);
+    case 'mergeBrand':
+      return mergeBrand_(validateToken_(p.token), p);
     case 'getCategoryList':
       return getCategoryList_(validateToken_(p.token));
     case 'resetProductStock':
@@ -325,6 +327,42 @@ function addBrand_(session, p) {
   }
   getSheet_(SHEET_BRANDS).appendRow([p.store, p.name]);
   return { store: p.store, name: p.name };
+}
+
+/**
+ * 表記ゆれ(大文字/小文字、全角/半角、スペースの有無など)で複数の書き方になっている
+ * ブランド名を1つに統一する。p.from(統一前の表記の配列)がついた商品マスタの行をすべて
+ * p.to(統一後の表記)に書き換え、統一前の表記をブランドマスタから削除する。
+ */
+function mergeBrand_(session, p) {
+  requireRole_(session, ['hq']);
+  if (!p.store) throw new Error('店舗を指定してください');
+  if (!p.to) throw new Error('統一後のブランド名を指定してください');
+  var from = p.from || [];
+  if (!from.length) throw new Error('統一するブランド名を指定してください');
+
+  ensureBrandExists_(p.store, p.to);
+
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var updatedCount = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === p.store && from.indexOf(data[i][3]) !== -1) {
+      sheet.getRange(i + 1, 4).setValue(p.to);
+      updatedCount++;
+    }
+  }
+
+  var brandSheet = getSheet_(SHEET_BRANDS);
+  var brandData = brandSheet.getDataRange().getValues();
+  for (var j = brandData.length - 1; j >= 1; j--) {
+    if (brandData[j][0] === p.store && from.indexOf(brandData[j][1]) !== -1) {
+      brandSheet.deleteRow(j + 1);
+    }
+  }
+
+  refreshSummary_(); // まとめて直す操作なので、参考シートも合わせて更新しておく
+  return { store: p.store, to: p.to, updatedCount: updatedCount };
 }
 
 // ---- カテゴリマスタ ----

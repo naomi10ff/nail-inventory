@@ -863,6 +863,7 @@ async function enterDashboard() {
   fillStoreSelect('hq-incoming-store-select', false);
   fillStoreSelect('hq-disposal-store-select', false);
   fillStoreSelect('hq-review-store-select', false);
+  fillStoreSelect('dedup-store-select', false);
   showScreen('screen-dashboard');
   await loadDashboard();
 }
@@ -909,6 +910,14 @@ document.getElementById('nav-hq-review').addEventListener('click', () => {
   document.getElementById('btn-approve-review').style.display = 'none';
   document.getElementById('btn-export-hq-review').style.display = 'none';
 });
+
+document.getElementById('nav-dedup').addEventListener('click', () => {
+  showScreen('screen-dedup');
+  document.getElementById('dedup-status').textContent = '';
+  document.getElementById('dedup-brand-results').innerHTML = '';
+  document.getElementById('dedup-name-results').innerHTML = '';
+});
+document.getElementById('btn-back-dedup').addEventListener('click', () => showScreen('screen-dashboard'));
 
 document.getElementById('nav-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
@@ -1860,6 +1869,135 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
 });
 
 document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
+
+// ---- マスタ整理(ブランド名・品名の表記ゆれチェック) ----
+// 大文字/小文字・全角/半角・スペースの有無などの違いだけで、本来同じはずのブランド名/品名が
+// 別表記として登録されてしまうケースを見つけるための重複候補検出キー。検索用の
+// normalizeSearchText よりさらに厳しく、スペースも取り除いて比較する。
+function dedupeKey(str) {
+  return normalizeSearchText(str).replace(/\s+/g, '');
+}
+
+document.getElementById('btn-scan-dedup').addEventListener('click', async (e) => {
+  const store = document.getElementById('dedup-store-select').value;
+  const statusEl = document.getElementById('dedup-status');
+  if (!store) {
+    statusEl.textContent = '店舗を選択してください';
+    return;
+  }
+  await withButtonBusy(e.currentTarget, '検索中...', async () => {
+    try {
+      const data = await apiCall('listProducts', { store });
+      statusEl.textContent = '';
+      renderBrandDuplicates(store, data.products);
+      renderNameDuplicates(data.products);
+    } catch (err) {
+      statusEl.textContent = err.message;
+    }
+  });
+});
+
+function renderBrandDuplicates(store, products) {
+  const container = document.getElementById('dedup-brand-results');
+  container.innerHTML = '';
+
+  const groups = {};
+  products.forEach((p) => {
+    if (!p.brand) return;
+    const key = dedupeKey(p.brand);
+    if (!groups[key]) groups[key] = new Map();
+    groups[key].set(p.brand, (groups[key].get(p.brand) || 0) + 1);
+  });
+  const candidates = Object.values(groups).filter((m) => m.size > 1);
+
+  if (!candidates.length) {
+    container.textContent = 'ブランド名の表記ゆれ候補は見つかりませんでした';
+    return;
+  }
+
+  candidates.forEach((variantMap) => {
+    const variants = Array.from(variantMap.entries()); // [[brand, count], ...]
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const summary = document.createElement('p');
+    summary.textContent = variants.map(([brand, count]) => `${brand}(${count}件)`).join(' / ');
+    card.appendChild(summary);
+
+    const label = document.createElement('label');
+    label.textContent = '統一後の表記';
+    card.appendChild(label);
+
+    const select = document.createElement('select');
+    variants.forEach(([brand]) => {
+      const opt = document.createElement('option');
+      opt.value = brand;
+      opt.textContent = brand;
+      select.appendChild(opt);
+    });
+    card.appendChild(select);
+
+    const mergeStatus = document.createElement('p');
+    mergeStatus.className = 'status';
+    card.appendChild(mergeStatus);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'primary';
+    btn.textContent = 'この表記に統一する';
+    btn.addEventListener('click', async () => {
+      const to = select.value;
+      const from = variants.map(([brand]) => brand).filter((brand) => brand !== to);
+      const totalCount = variants.reduce((sum, [, count]) => sum + count, 0);
+      if (!confirm(`${totalCount}件の商品のブランド名を「${to}」に統一します。よろしいですか?`)) return;
+      await withButtonBusy(btn, '処理中...', async () => {
+        try {
+          const result = await apiCall('mergeBrand', { store, from, to });
+          mergeStatus.textContent = `${result.updatedCount}件を「${to}」に統一しました`;
+          card.querySelectorAll('select, button').forEach((el) => { el.disabled = true; });
+        } catch (err) {
+          mergeStatus.textContent = err.message;
+        }
+      });
+    });
+    card.appendChild(btn);
+
+    container.appendChild(card);
+  });
+}
+
+function renderNameDuplicates(products) {
+  const container = document.getElementById('dedup-name-results');
+  container.innerHTML = '';
+
+  const groups = {};
+  products.forEach((p) => {
+    const key = (p.brand || '') + '||' + dedupeKey(p.name);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+  const candidates = Object.values(groups).filter((arr) => new Set(arr.map((p) => p.name)).size > 1);
+
+  if (!candidates.length) {
+    container.textContent = '品名の表記ゆれ候補は見つかりませんでした';
+    return;
+  }
+
+  candidates.forEach((items) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const table = document.createElement('table');
+    table.className = 'stock-table';
+    table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th></tr>';
+    items.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td>`;
+      table.appendChild(tr);
+    });
+    card.appendChild(table);
+    container.appendChild(card);
+  });
+}
 
 // ---- スタッフ管理(本社) ----
 document.getElementById('staff-store-select').addEventListener('change', loadStaff);

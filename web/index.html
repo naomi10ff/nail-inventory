@@ -143,6 +143,7 @@
     <button type="button" class="secondary" id="nav-accounts">アカウント</button>
     <button type="button" class="secondary" id="nav-logs">取引ログ</button>
     <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
+    <button type="button" class="secondary" id="nav-dedup">マスタ整理(表記ゆれ)</button>
   </div>
 
   <div class="card">
@@ -312,6 +313,26 @@
   <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
   <button type="button" class="primary" id="btn-print-selected-qr">選択した商品のQRコードをまとめて発行・印刷</button>
   <div id="products-table"></div>
+</section>
+
+<!-- マスタ整理(ブランド名・品名の表記ゆれチェック) -->
+<section id="screen-dedup" class="screen">
+  <div class="topbar"><button type="button" class="link" id="btn-back-dedup">&lt; ダッシュボードへ戻る</button></div>
+  <h2>マスタ整理(表記ゆれチェック)</h2>
+  <p class="hint">大文字/小文字・全角/半角・スペースの有無などの違いで、同じブランド/商品が
+    別表記のまま登録されていないか確認できます。</p>
+  <label for="dedup-store-select">店舗</label>
+  <select id="dedup-store-select"></select>
+  <button type="button" class="primary" id="btn-scan-dedup">重複候補を探す</button>
+  <p class="status" id="dedup-status"></p>
+
+  <h3 style="margin-top:24px;">ブランド名の候補(押すとまとめて統一できます)</h3>
+  <div id="dedup-brand-results"></div>
+
+  <h3 style="margin-top:24px;">品名の候補(同じブランド内・要確認)</h3>
+  <p class="hint">こちらは自動統一しません。本当に同じ商品か確認のうえ、商品管理画面の
+    「編集」「削除」で対応してください。</p>
+  <div id="dedup-name-results"></div>
 </section>
 
 <!-- スタッフ管理(本社用) -->
