@@ -297,7 +297,9 @@ function getBrandNamesForStore_(store) {
     if (data[i][0] === store && data[i][1]) brands.push(data[i][1]);
   }
   // 選択肢を辞書順にしておくと、プルダウンで頭文字を入力したときの候補ジャンプが機能しやすい
-  brands.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
+  // ブランド名が数字だけだとGoogleスプレッドシート側で数値型として返ってくることがあり、
+  // その場合localeCompareが無いため呼び出し前に必ず文字列化する
+  brands.sort(function (a, b) { return String(a).localeCompare(String(b), 'ja'); });
   return brands;
 }
 
@@ -644,8 +646,10 @@ function getInventorySummary_(session, storeParam, month) {
 
   items.sort(function (a, b) {
     if (a.store !== b.store) return a.store < b.store ? -1 : 1;
-    if (a.brand !== b.brand) return (a.brand || '').localeCompare(b.brand || '', 'ja');
-    return (a.name || '').localeCompare(b.name || '', 'ja');
+    // 品名が数字だけの商品(例: VETRO「552」)はGoogleスプレッドシート側で数値型として
+    // 返ってくることがあり、その場合localeCompareが無いため必ず文字列化してから比較する
+    if (a.brand !== b.brand) return String(a.brand || '').localeCompare(String(b.brand || ''), 'ja');
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
   });
 
   // 本社が店舗を指定せず全体を見る場合のみ、店舗別合計と総合計を付与する(店舗ロールには渡さない)。

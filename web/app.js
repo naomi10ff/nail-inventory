@@ -330,6 +330,7 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('store');
   localStorage.removeItem('role');
+  document.getElementById('login-error').textContent = '';
   showScreen('screen-login');
 }
 
@@ -1350,7 +1351,7 @@ function updateHqInventoryBrandFilterOptions() {
   const select = document.getElementById('hq-inventory-brand-filter');
   const current = select.value;
   const brands = Array.from(new Set(hqInventoryAllItems.map((item) => item.brand).filter(Boolean)))
-    .sort((a, b) => a.localeCompare(b, 'ja'));
+    .sort((a, b) => String(a).localeCompare(String(b), 'ja'));
   select.innerHTML = '<option value="">全ブランド</option>';
   brands.forEach((brand) => {
     const opt = document.createElement('option');
@@ -1602,7 +1603,7 @@ function updateProductBrandFilterOptions() {
   const select = document.getElementById('product-brand-filter');
   const current = select.value;
   const brands = Array.from(new Set(currentProductList.map((p) => p.brand).filter(Boolean)))
-    .sort((a, b) => a.localeCompare(b, 'ja'));
+    .sort((a, b) => String(a).localeCompare(String(b), 'ja'));
   select.innerHTML = '<option value="">全ブランド</option>';
   brands.forEach((brand) => {
     const opt = document.createElement('option');
