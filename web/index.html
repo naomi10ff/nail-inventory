@@ -281,16 +281,24 @@
   <p class="status" id="hq-disposal-status"></p>
 </section>
 
-<!-- 商品マスタ管理(店舗ごとに独立管理) -->
+<!-- 商品マスタ管理(店舗ごとに独立管理)。新規登録は入荷登録の画面から行うため、
+     ここでは検索・編集・QR表示/印刷・削除のみ扱う。 -->
 <section id="screen-products" class="screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
   <h2>商品管理</h2>
   <label for="product-store-select">店舗</label>
   <select id="product-store-select"></select>
-  <div class="card">
-    <h3 style="margin-top:0;" id="product-form-title">新規登録</h3>
-    <label for="p-code">コード(空欄で自動発行してQRラベルを出力。編集時に書き換えると、見つかった
-      バーコードに差し替えられます。すでに取引履歴がある商品のコードは変更しないでください)</label>
+  <label for="product-brand-filter">ブランドで絞り込み</label>
+  <select id="product-brand-filter">
+    <option value="">全ブランド</option>
+  </select>
+  <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
+  <button type="button" class="primary" id="btn-print-selected-qr">選択した商品のQRコードをまとめて発行・印刷</button>
+  <div id="products-table"></div>
+
+  <div class="card" id="product-edit-form-card" style="display:none;">
+    <h3 style="margin-top:0;" id="product-form-title">商品を編集</h3>
+    <label for="p-code">商品コード(バーコード。書き換えると、それ以前の取引履歴は元のコードのまま残ります)</label>
     <input type="text" id="p-code">
     <label for="p-brand-select">ブランド</label>
     <select id="p-brand-select"></select>
@@ -314,23 +322,10 @@
     </div>
     <label for="p-memo">メモ(例: 「チェリーブロッサムと同じ商品、旧バーコード」など)</label>
     <input type="text" id="p-memo">
-    <button type="button" class="primary" id="btn-add-product">登録</button>
-    <button type="button" class="link" id="btn-cancel-edit-product" style="display:none;">編集をキャンセルして新規登録に戻る</button>
+    <button type="button" class="primary" id="btn-add-product">更新する</button>
+    <button type="button" class="link" id="btn-cancel-edit-product">キャンセル</button>
     <p class="status" id="product-status"></p>
-    <div id="p-qr-result" class="print-target" style="display:none;">
-      <p>発行したQRコードを印刷して商品/棚に貼ってください</p>
-      <div id="p-qr-canvas-holder"></div>
-      <button type="button" class="secondary" id="btn-print-p-qr">印刷する</button>
-    </div>
   </div>
-  <h2 style="margin-top:28px;">商品一覧</h2>
-  <label for="product-brand-filter">ブランドで絞り込み</label>
-  <select id="product-brand-filter">
-    <option value="">全ブランド</option>
-  </select>
-  <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
-  <button type="button" class="primary" id="btn-print-selected-qr">選択した商品のQRコードをまとめて発行・印刷</button>
-  <div id="products-table"></div>
 </section>
 
 <!-- マスタ整理(ブランド名・品名の表記ゆれチェック) -->

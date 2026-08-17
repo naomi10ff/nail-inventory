@@ -897,6 +897,7 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
 });
 document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
+  cancelEditProduct();
   document.getElementById('product-brand-filter').value = '';
   await loadHqBrandOptions();
   await loadHqCategoryOptions();
@@ -1866,7 +1867,6 @@ document.getElementById('btn-close-qr-bulk').addEventListener('click', () => {
 
 function startEditProduct(product) {
   editingProductCode = product.code;
-  document.getElementById('product-form-title').textContent = '商品を編集';
   document.getElementById('p-code').value = product.code;
   setPBrandValue(product.brand || '');
   document.getElementById('p-name').value = product.name || '';
@@ -1874,9 +1874,8 @@ function startEditProduct(product) {
   document.getElementById('p-item-number').value = product.itemNumber || '';
   setPCategoryValue(product.category || '');
   document.getElementById('p-memo').value = product.memo || '';
-  document.getElementById('btn-add-product').textContent = '更新する';
-  document.getElementById('btn-cancel-edit-product').style.display = 'block';
-  document.getElementById('p-qr-result').style.display = 'none';
+  document.getElementById('product-status').textContent = '';
+  document.getElementById('product-edit-form-card').style.display = 'block';
   // 商品一覧は下の方までスクロールされていることが多く、フォームが画面外だと
   // 「編集」を押しても何も起きていないように見えるため、フォームまで自動でスクロールする
   document.getElementById('product-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1884,26 +1883,21 @@ function startEditProduct(product) {
 
 function cancelEditProduct() {
   editingProductCode = null;
-  document.getElementById('product-form-title').textContent = '新規登録';
   ['p-code', 'p-name', 'p-color-no', 'p-item-number', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
   resetPBrandNewForm();
   document.getElementById('p-brand-select').selectedIndex = 0;
   resetPCategoryNewForm();
   document.getElementById('p-category-select').selectedIndex = 0;
-  document.getElementById('btn-add-product').textContent = '登録';
-  document.getElementById('btn-cancel-edit-product').style.display = 'none';
-  document.getElementById('p-qr-result').style.display = 'none';
+  document.getElementById('product-edit-form-card').style.display = 'none';
 }
 
 document.getElementById('btn-cancel-edit-product').addEventListener('click', cancelEditProduct);
 
+// 新規登録は入荷登録の画面から行うため、ここでの「更新する」は既存商品の編集のみを扱う
 document.getElementById('btn-add-product').addEventListener('click', async (e) => {
   const statusEl = document.getElementById('product-status');
   const store = document.getElementById('product-store-select').value;
-  if (!store) {
-    statusEl.textContent = '店舗を選択してください';
-    return;
-  }
+  if (!store || !editingProductCode) return;
   const codeInput = document.getElementById('p-code').value.trim();
   const payload = {
     store,
@@ -1916,38 +1910,15 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
   };
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
-    if (editingProductCode) {
-      await apiCall('updateProduct', Object.assign({ code: editingProductCode, newCode: codeInput }, payload));
-      statusEl.textContent = '更新しました';
-      cancelEditProduct();
-    } else {
-      document.getElementById('p-qr-result').style.display = 'none';
-      const result = await apiCall('registerProduct', Object.assign({ code: codeInput || undefined }, payload));
-      statusEl.textContent = '登録しました';
-      ['p-code', 'p-name', 'p-color-no', 'p-item-number', 'p-memo'].forEach((id) => (document.getElementById(id).value = ''));
-      resetPBrandNewForm();
-      resetPCategoryNewForm();
-      document.getElementById('p-category-select').selectedIndex = 0;
-      await loadHqBrandOptions();
-
-      if (!codeInput) {
-        const holder = document.getElementById('p-qr-canvas-holder');
-        holder.innerHTML = '';
-        new QRCode(holder, { text: String(result.code), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
-        const label = document.createElement('p');
-        label.textContent = result.code + ' / ' + result.name;
-        holder.appendChild(label);
-        document.getElementById('p-qr-result').style.display = 'block';
-      }
-    }
+    await apiCall('updateProduct', Object.assign({ code: editingProductCode, newCode: codeInput }, payload));
+    statusEl.textContent = '更新しました';
+    cancelEditProduct();
     await loadProducts();
   } catch (e) {
     statusEl.textContent = e.message;
   }
   });
 });
-
-document.getElementById('btn-print-p-qr').addEventListener('click', () => window.print());
 
 // ---- マスタ整理(ブランド名・品名の表記ゆれチェック) ----
 // 大文字/小文字・全角/半角・スペースの有無などの違いだけで、本来同じはずのブランド名/品名が
