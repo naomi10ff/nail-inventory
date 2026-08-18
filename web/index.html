@@ -203,6 +203,7 @@
   <h2>入荷登録</h2>
   <label for="hq-incoming-store-select">店舗</label>
   <select id="hq-incoming-store-select"></select>
+  <div class="store-banner store-banner-empty" id="hq-incoming-store-banner">店舗を選択してください</div>
   <p class="hint">商品マスタに登録済みの商品はそのまま入荷を記録できます。未登録の商品はスキャン後にその場で商品登録もできます。</p>
   <div id="reader-hq-incoming"></div>
   <button type="button" class="secondary" id="btn-restart-camera-hq-incoming">カメラが固まったら押してください(再起動)</button>
@@ -223,6 +224,7 @@
     </div>
     <label for="hq-incoming-quantity">入荷本数</label>
     <input type="number" id="hq-incoming-quantity" value="1" min="1">
+    <p class="hint" id="hq-incoming-confirm-store" style="text-align:center; font-weight:bold;"></p>
     <button type="button" class="primary" id="btn-submit-hq-incoming">入荷を登録</button>
   </div>
 
@@ -262,6 +264,7 @@
   <h2>破棄登録</h2>
   <label for="hq-disposal-store-select">店舗</label>
   <select id="hq-disposal-store-select"></select>
+  <div class="store-banner store-banner-empty" id="hq-disposal-store-banner">店舗を選択してください</div>
   <p class="hint">廃棄する商品のバーコードをスキャンし、現在庫を確認してから廃棄本数を入力してください。この操作は取消せません(取引ログから該当行を削除すれば戻せます)。</p>
   <div id="reader-hq-disposal"></div>
   <button type="button" class="secondary" id="btn-restart-camera-hq-disposal">カメラが固まったら押してください(再起動)</button>
@@ -277,6 +280,7 @@
     <p>現在庫: <strong id="hq-disposal-current-stock"></strong></p>
     <label for="hq-disposal-quantity">廃棄本数</label>
     <input type="number" id="hq-disposal-quantity" value="1" min="1">
+    <p class="hint" id="hq-disposal-confirm-store" style="text-align:center; font-weight:bold;"></p>
     <button type="button" class="danger" id="btn-submit-hq-disposal">廃棄を登録</button>
   </div>
 

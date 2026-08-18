@@ -112,6 +112,19 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .topbar .store-name { font-weight: bold; }
 
+/* 入荷登録・破棄登録で店舗を選び間違えないよう、選択中の店舗名を常に大きく表示する */
+.store-banner {
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: bold;
+  text-align: center;
+  padding: 10px;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+.store-banner.store-banner-empty { background: var(--line); color: var(--fg); font-weight: normal; }
+
 #p-qr-result { text-align: center; margin-top: 16px; }
 #p-qr-result canvas { margin: 12px auto; }
 

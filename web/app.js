@@ -1131,7 +1131,21 @@ document.getElementById('btn-back-hq-disposal').addEventListener('click', async 
 });
 
 // ---- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) ----
+/** 入荷登録・破棄登録で店舗を選び間違えないよう、選択中の店舗名を大きく表示し続ける。 */
+function updateStoreBanner(selectId, bannerId) {
+  const store = document.getElementById(selectId).value;
+  const banner = document.getElementById(bannerId);
+  if (store) {
+    banner.textContent = store;
+    banner.classList.remove('store-banner-empty');
+  } else {
+    banner.textContent = '店舗を選択してください';
+    banner.classList.add('store-banner-empty');
+  }
+}
+
 function resetHqIncomingScreen() {
+  updateStoreBanner('hq-incoming-store-select', 'hq-incoming-store-banner');
   document.getElementById('hq-incoming-known').style.display = 'none';
   document.getElementById('hq-incoming-qr-result').style.display = 'none';
   document.getElementById('hq-incoming-unknown').style.display = 'none';
@@ -1162,6 +1176,7 @@ async function onHqIncomingScan(code) {
       document.getElementById('hq-incoming-product-name').textContent = product.name;
       document.getElementById('hq-incoming-product-brand').textContent = product.brand || '';
       document.getElementById('hq-incoming-quantity').value = 1;
+      document.getElementById('hq-incoming-confirm-store').textContent = '店舗: ' + store;
     } else {
       document.getElementById('hq-incoming-unknown').style.display = 'block';
     }
@@ -1240,6 +1255,7 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     document.getElementById('hq-incoming-product-name').textContent = name;
     document.getElementById('hq-incoming-product-brand').textContent = brand;
     document.getElementById('hq-incoming-quantity').value = 1;
+    document.getElementById('hq-incoming-confirm-store').textContent = '店舗: ' + store;
     const qrResult = document.getElementById('hq-incoming-qr-result');
     if (generatedCode) {
       const holder = document.getElementById('hq-incoming-qr-canvas-holder');
@@ -1278,6 +1294,7 @@ document.getElementById('btn-submit-hq-incoming').addEventListener('click', asyn
 
 // ---- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) ----
 function resetHqDisposalScreen() {
+  updateStoreBanner('hq-disposal-store-select', 'hq-disposal-store-banner');
   document.getElementById('hq-disposal-known').style.display = 'none';
   document.getElementById('hq-disposal-unknown').style.display = 'none';
   document.getElementById('btn-rescan-hq-disposal').style.display = 'none';
@@ -1300,6 +1317,7 @@ async function onHqDisposalScan(code) {
       document.getElementById('hq-disposal-current-stock').textContent =
         result.currentStock + '本' + (result.outOfStock ? '(欠品)' : '');
       document.getElementById('hq-disposal-quantity').value = 1;
+      document.getElementById('hq-disposal-confirm-store').textContent = '店舗: ' + store;
     } else {
       document.getElementById('hq-disposal-unknown').style.display = 'block';
     }
