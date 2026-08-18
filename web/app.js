@@ -18,6 +18,7 @@ const state = {
 let scannerStocktake = null;
 let scannerHqIncoming = null;
 let scannerHqDisposal = null;
+let scannerHqStockLookup = null;
 
 // 以前はタブ復帰(visibilitychange)で自動的にスキャナーを再起動していたが、
 // 新規商品登録フォームへの入力中にも発火してカメラが壊れる不具合が出たため廃止。
@@ -577,6 +578,7 @@ async function startScanner(elementId, onSuccess, gate) {
   if (elementId === 'reader-4') scannerStockLookup = scanner;
   if (elementId === 'reader-hq-incoming') scannerHqIncoming = scanner;
   if (elementId === 'reader-hq-disposal') scannerHqDisposal = scanner;
+  if (elementId === 'reader-hq-stock-lookup') scannerHqStockLookup = scanner;
 
   await scanner.start(
     { facingMode: 'environment' },
@@ -635,6 +637,7 @@ function scannerForElement_(elementId) {
   if (elementId === 'reader-4') return scannerStockLookup;
   if (elementId === 'reader-hq-incoming') return scannerHqIncoming;
   if (elementId === 'reader-hq-disposal') return scannerHqDisposal;
+  if (elementId === 'reader-hq-stock-lookup') return scannerHqStockLookup;
   return null;
 }
 
@@ -875,6 +878,7 @@ async function enterDashboard() {
   fillStoreSelect('hq-disposal-store-select', false);
   fillStoreSelect('hq-review-store-select', false);
   fillStoreSelect('dedup-store-select', false);
+  fillStoreSelect('hq-stock-lookup-store-select', false);
   showScreen('screen-dashboard');
   await loadDashboard();
 }
@@ -1543,6 +1547,75 @@ document.getElementById('btn-bulk-reset').addEventListener('click', () => {
       await loadTotalInventoryScreen();
     }
   );
+});
+
+// ---- 在庫検索(本社。店舗を選んでスキャンし、その店舗の最新在庫を確認する) ----
+const hqStockLookupGate = createGate({ rearmOnMiss: true, requiredMisses: 8 });
+
+document.getElementById('nav-hq-stock-lookup').addEventListener('click', () => {
+  document.getElementById('hq-stock-lookup-result').style.display = 'none';
+  document.getElementById('hq-stock-lookup-status').textContent = '';
+  document.getElementById('btn-rescan-hq-stock-lookup').style.display = 'none';
+  updateStoreBanner('hq-stock-lookup-store-select', 'hq-stock-lookup-store-banner');
+  showScreen('screen-hq-stock-lookup');
+  rearmGate(hqStockLookupGate);
+  startScanner('reader-hq-stock-lookup', onHqStockLookupScan, hqStockLookupGate).catch((e) => console.error(e));
+});
+
+document.getElementById('hq-stock-lookup-store-select').addEventListener('change', () => {
+  updateStoreBanner('hq-stock-lookup-store-select', 'hq-stock-lookup-store-banner');
+});
+
+document.getElementById('btn-back-hq-stock-lookup').addEventListener('click', async () => {
+  await stopScanner(scannerHqStockLookup);
+  showScreen('screen-dashboard');
+});
+
+// カメラが固まったときの対処は他のHQスキャン画面と同じ理由でページ再読み込みにしている
+document.getElementById('btn-restart-camera-hq-stock-lookup').addEventListener('click', () => {
+  location.reload();
+});
+
+async function onHqStockLookupScan(code) {
+  const store = document.getElementById('hq-stock-lookup-store-select').value;
+  if (!store) {
+    document.getElementById('hq-stock-lookup-status').textContent = '店舗を選択してください';
+    rearmGate(hqStockLookupGate);
+    return;
+  }
+  try {
+    const result = await apiCall('lookupCurrentStock', { store, code });
+    if (!result.found) {
+      document.getElementById('hq-stock-lookup-result').style.display = 'none';
+      document.getElementById('hq-stock-lookup-status').textContent = '未登録のコードです: ' + code;
+      document.getElementById('btn-rescan-hq-stock-lookup').style.display = 'block';
+      return;
+    }
+    document.getElementById('hq-stock-lookup-status').textContent = '';
+    document.getElementById('hq-stock-lookup-result').style.display = 'block';
+    document.getElementById('hq-stock-lookup-name').textContent = result.name;
+    document.getElementById('hq-stock-lookup-brand').textContent = result.brand || '';
+    document.getElementById('hq-stock-lookup-colorno').textContent = result.colorNo || '';
+    document.getElementById('hq-stock-lookup-count').textContent =
+      result.currentStock + '本' + (result.outOfStock ? '(欠品)' : '');
+    document.getElementById('btn-rescan-hq-stock-lookup').style.display = 'block';
+  } catch (e) {
+    document.getElementById('hq-stock-lookup-status').textContent = e.message;
+    rearmGate(hqStockLookupGate);
+  }
+}
+
+document.getElementById('btn-manual-add-hq-stock-lookup').addEventListener('click', () => {
+  const input = document.getElementById('manual-code-hq-stock-lookup');
+  const code = input.value.trim();
+  if (code) onHqStockLookupScan(code);
+});
+
+document.getElementById('btn-rescan-hq-stock-lookup').addEventListener('click', () => {
+  document.getElementById('hq-stock-lookup-result').style.display = 'none';
+  document.getElementById('hq-stock-lookup-status').textContent = '';
+  document.getElementById('btn-rescan-hq-stock-lookup').style.display = 'none';
+  rearmGate(hqStockLookupGate);
 });
 
 // ---- 商品マスタ(本社) ----

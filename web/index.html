@@ -162,6 +162,7 @@
     <button type="button" class="secondary" id="nav-logs">取引ログ</button>
     <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
     <button type="button" class="secondary" id="nav-dedup">マスタ整理(表記ゆれ)</button>
+    <button type="button" class="secondary" id="nav-hq-stock-lookup">在庫検索</button>
   </div>
 
   <div class="card">
@@ -289,6 +290,29 @@
   </div>
 
   <p class="status" id="hq-disposal-status"></p>
+</section>
+
+<!-- 在庫検索(本社用。店舗を選んでスキャンし、その店舗の最新在庫を確認する) -->
+<section id="screen-hq-stock-lookup" class="screen">
+  <div class="topbar"><button type="button" class="link" id="btn-back-hq-stock-lookup">&lt; ダッシュボードへ</button></div>
+  <h2>在庫検索</h2>
+  <label for="hq-stock-lookup-store-select">店舗</label>
+  <select id="hq-stock-lookup-store-select"></select>
+  <div class="store-banner store-banner-empty" id="hq-stock-lookup-store-banner">店舗を選択してください</div>
+  <p class="hint">バーコードをスキャンすると、その店舗の最新在庫を確認できます。</p>
+  <div id="reader-hq-stock-lookup"></div>
+  <button type="button" class="secondary" id="btn-restart-camera-hq-stock-lookup">カメラが固まったら押してください(再起動)</button>
+  <label for="manual-code-hq-stock-lookup">バーコードが読めない場合は手入力</label>
+  <div style="display:flex; gap:8px;">
+    <input type="text" id="manual-code-hq-stock-lookup" style="flex:1;">
+    <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-hq-stock-lookup">検索</button>
+  </div>
+  <button type="button" class="secondary" id="btn-rescan-hq-stock-lookup" style="display:none;">別の商品を読み直す</button>
+  <div id="hq-stock-lookup-result" class="card" style="display:none;">
+    <p><strong id="hq-stock-lookup-name"></strong>(<span id="hq-stock-lookup-brand"></span> <span id="hq-stock-lookup-colorno"></span>)</p>
+    <p>現在庫: <strong id="hq-stock-lookup-count"></strong></p>
+  </div>
+  <p class="status" id="hq-stock-lookup-status"></p>
 </section>
 
 <!-- 商品マスタ管理(店舗ごとに独立管理)。新規登録は入荷登録の画面から行うため、
