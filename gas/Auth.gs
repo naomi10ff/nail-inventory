@@ -3,7 +3,10 @@
  * Googleアカウント認証は使わず、アカウントシートに対して照合する。
  */
 
-var SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日間はログイン状態を保持
+// 本社アカウントは在庫のリセット・削除・アカウント管理など強い権限を持つため、
+// 一晩経ってもログインしたままにならないよう店舗アカウントより短く設定している。
+var SESSION_MAX_AGE_MS_STORE = 30 * 24 * 60 * 60 * 1000; // 店舗アカウント: 30日間
+var SESSION_MAX_AGE_MS_HQ = 24 * 60 * 60 * 1000; // 本社アカウント: 1日(24時間)
 
 function generateSalt_() {
   return Utilities.getUuid();
@@ -55,10 +58,12 @@ function validateToken_(token) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === token) {
       var issuedAt = new Date(data[i][4]).getTime();
-      if (Date.now() - issuedAt > SESSION_MAX_AGE_MS) {
+      var role = data[i][3];
+      var maxAge = role === 'hq' ? SESSION_MAX_AGE_MS_HQ : SESSION_MAX_AGE_MS_STORE;
+      if (Date.now() - issuedAt > maxAge) {
         throw new Error('セッションの有効期限が切れました。再ログインしてください');
       }
-      return { username: data[i][1], store: data[i][2], role: data[i][3] };
+      return { username: data[i][1], store: data[i][2], role: role };
     }
   }
   throw new Error('セッションが無効です。再ログインしてください');
