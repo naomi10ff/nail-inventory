@@ -445,6 +445,7 @@ function renderUnscanned() {
 
 document.getElementById('btn-nav-inventory').addEventListener('click', () => {
   document.getElementById('inventory-search').value = '';
+  document.getElementById('inventory-brand-filter').innerHTML = '<option value="">全ブランド</option>';
   document.getElementById('inventory-result').style.display = 'none';
   const monthInput = document.getElementById('inventory-month');
   if (!monthInput.value) monthInput.value = currentYearMonth();
@@ -792,11 +793,32 @@ async function loadInventory(month) {
     const data = await apiCall('getInventorySummary', { month });
     currentInventoryMonth = month;
     inventoryItems = data.items;
+    updateInventoryBrandFilterOptions();
     renderInventoryList(document.getElementById('inventory-search').value);
   } catch (e) {
     container.textContent = e.message;
   }
 }
+
+/** ブランドの絞り込みプルダウンを、いま表示している範囲に実在するブランドだけで作り直す。 */
+function updateInventoryBrandFilterOptions() {
+  const select = document.getElementById('inventory-brand-filter');
+  const current = select.value;
+  const brands = Array.from(new Set(inventoryItems.map((item) => item.brand).filter(Boolean)))
+    .sort((a, b) => String(a).localeCompare(String(b), 'ja'));
+  select.innerHTML = '<option value="">全ブランド</option>';
+  brands.forEach((brand) => {
+    const opt = document.createElement('option');
+    opt.value = brand;
+    opt.textContent = brand;
+    select.appendChild(opt);
+  });
+  select.value = brands.includes(current) ? current : '';
+}
+
+document.getElementById('inventory-brand-filter').addEventListener('change', () => {
+  renderInventoryList(document.getElementById('inventory-search').value);
+});
 
 /**
  * 検索用に文字列を正規化する。
@@ -825,11 +847,13 @@ function renderInventoryList(query) {
     return;
   }
 
+  const brandFilter = document.getElementById('inventory-brand-filter').value;
   // スペース区切りの複数キーワードはすべて満たす(AND検索)商品だけに絞り込む
   const keywords = normalizeSearchText(query).split(/\s+/).filter(Boolean);
   const filtered = inventoryItems.filter((item) => {
+    if (brandFilter && item.brand !== brandFilter) return false;
     if (!keywords.length) return true;
-    const haystack = normalizeSearchText([item.brand, item.name, item.colorNo].filter(Boolean).join(' '));
+    const haystack = normalizeSearchText([item.name, item.colorNo].filter(Boolean).join(' '));
     return keywords.every((kw) => haystack.includes(kw));
   });
   inventoryFilteredForExport = filtered;

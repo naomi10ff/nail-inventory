@@ -109,8 +109,12 @@
   <button type="button" class="primary" id="btn-confirm-inventory-month">確定</button>
 
   <div id="inventory-result" style="display:none;">
-    <label for="inventory-search">検索(ブランド・品名・カラーNO。スペース区切りでAND検索)</label>
-    <input type="text" id="inventory-search" placeholder="例: イシコッパ 06">
+    <label for="inventory-brand-filter">ブランドで絞り込み</label>
+    <select id="inventory-brand-filter">
+      <option value="">全ブランド</option>
+    </select>
+    <label for="inventory-search">検索(品名・カラーNO。スペース区切りでAND検索)</label>
+    <input type="text" id="inventory-search" placeholder="例: 06">
     <button type="button" class="secondary" id="btn-export-inventory">CSVエクスポート</button>
     <div id="inventory-container"></div>
   </div>
@@ -541,6 +545,6 @@
   </div>
 </div>
 
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
