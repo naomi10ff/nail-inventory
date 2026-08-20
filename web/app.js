@@ -2092,15 +2092,20 @@ document.getElementById('btn-scan-dedup').addEventListener('click', async (e) =>
   }
   await withButtonBusy(e.currentTarget, '検索中...', async () => {
     try {
-      const data = await apiCall('listProducts', { store });
-      statusEl.textContent = '';
-      renderBrandDuplicates(store, data.products);
-      renderNameDuplicates(data.products);
+      await runDedupScan(store);
+      document.getElementById('dedup-status').textContent = '';
     } catch (err) {
       statusEl.textContent = err.message;
     }
   });
 });
+
+/** ブランド/品名の重複候補を検索して描画する。削除後の再読み込みにも使う。 */
+async function runDedupScan(store) {
+  const data = await apiCall('listProducts', { store });
+  renderBrandDuplicates(store, data.products);
+  renderNameDuplicates(store, data.products);
+}
 
 function renderBrandDuplicates(store, products) {
   const container = document.getElementById('dedup-brand-results');
@@ -2171,7 +2176,7 @@ function renderBrandDuplicates(store, products) {
   });
 }
 
-function renderNameDuplicates(products) {
+function renderNameDuplicates(store, products) {
   const container = document.getElementById('dedup-name-results');
   container.innerHTML = '';
 
@@ -2193,10 +2198,41 @@ function renderNameDuplicates(products) {
     card.className = 'card';
     const table = document.createElement('table');
     table.className = 'stock-table';
-    table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th></tr>';
+    table.innerHTML = '<tr><th>コード</th><th>ブランド</th><th>品名</th><th>カラーNO</th><th></th></tr>';
+    // 商品管理と同様、data-*属性ではなくpをそのままクロージャで持たせてボタンから参照する
     items.forEach((p) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${p.code}</td><td>${p.brand || ''}</td><td>${p.name}</td><td>${p.colorNo || ''}</td>`;
+
+      const actionsTd = document.createElement('td');
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'link';
+      editBtn.textContent = '編集';
+      editBtn.addEventListener('click', async () => {
+        document.getElementById('product-store-select').value = store;
+        document.getElementById('product-brand-filter').value = '';
+        showScreen('screen-products');
+        await loadHqBrandOptions();
+        await loadHqCategoryOptions();
+        await loadProducts();
+        startEditProduct(p);
+      });
+      actionsTd.appendChild(editBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'link';
+      delBtn.textContent = '削除';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`「${p.name}」(${p.code})を削除しますか?`)) return;
+        await apiCall('deleteProduct', { store, code: p.code });
+        await runDedupScan(store);
+      });
+      actionsTd.appendChild(delBtn);
+
+      tr.appendChild(actionsTd);
       table.appendChild(tr);
     });
     card.appendChild(table);
