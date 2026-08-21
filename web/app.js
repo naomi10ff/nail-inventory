@@ -584,11 +584,18 @@ document.getElementById('btn-back-2').addEventListener('click', () => showScreen
 // 完了した直後だけは「現物が画面から一旦外れるまで待ってから次を受け付ける」
 // rearmGateAfterMiss()を使う。手動の「読み直す」ボタンや通信エラー時のリトライは、
 // 今映っているものをすぐ読み直したいので rearmGate() のまま即座に再開する。
+// valueAware: true のゲート(棚卸・在庫検索など、確定操作を挟まず連続でスキャンし続ける
+// 画面用)は「画面から消えたはずの時間」という推測ではなく、実際にデコードされた値そのもの
+// で判断する。同じ値が続く間は無視し、違う値が読めた瞬間に即カウントするので、次の商品に
+// すぐ移れる(=入荷登録が安定して感じられるのと同じ理由)一方、同じ商品を持ち続けても
+// 手ブレやピントの一瞬のズレで誤って再カウントされることがない。
 function createGate(options) {
   return {
     armed: true,
+    lastValue: null,
     missCount: 0,
     rearmOnMiss: !!options.rearmOnMiss,
+    valueAware: !!options.valueAware,
     pendingRearm: false,
     requiredMisses: options.requiredMisses || 8
   };
@@ -596,6 +603,7 @@ function createGate(options) {
 
 function rearmGate(gate) {
   gate.armed = true;
+  gate.lastValue = null;
   gate.missCount = 0;
   gate.pendingRearm = false;
 }
@@ -605,10 +613,7 @@ function rearmGateAfterMiss(gate) {
   gate.missCount = 0;
 }
 
-// requiredMisses: 8(fps10で約0.8秒)だと、手ブレやピントの一瞬のズレで「現物が画面から
-// 外れた」と誤判定し、カメラを向けたままでも同じ商品が再カウントされてしまう不具合が
-// あったため、外れた判定までの許容時間を約2秒に伸ばした。
-const stocktakeGate = createGate({ rearmOnMiss: true, requiredMisses: 20 });
+const stocktakeGate = createGate({ valueAware: true, requiredMisses: 20 });
 const hqIncomingGate = createGate({ rearmOnMiss: false });
 const hqDisposalGate = createGate({ rearmOnMiss: false });
 
@@ -648,6 +653,16 @@ async function startScanner(elementId, onSuccess, gate) {
       }
     },
     (decodedText) => {
+      if (gate.valueAware) {
+        if (decodedText === gate.lastValue) {
+          gate.missCount = 0; // 同じ商品がまだ画面内にある(まだ数えない)
+          return;
+        }
+        gate.lastValue = decodedText; // 違う値が読めた=次の商品に移ったとみなし、即カウントする
+        gate.missCount = 0;
+        onSuccess(decodedText);
+        return;
+      }
       if (!gate.armed) {
         gate.missCount = 0; // まだ画面内に写っている(検出できている)ので外れた判定をリセット
         return;
@@ -657,6 +672,16 @@ async function startScanner(elementId, onSuccess, gate) {
       onSuccess(decodedText);
     },
     () => {
+      if (gate.valueAware) {
+        if (gate.lastValue !== null) {
+          gate.missCount += 1;
+          if (gate.missCount >= gate.requiredMisses) {
+            gate.lastValue = null; // 完全に画面から外れたとみなし、同じ値が再度出てきたら数えられるようにする
+            gate.missCount = 0;
+          }
+        }
+        return;
+      }
       if (!gate.armed && (gate.rearmOnMiss || gate.pendingRearm)) {
         gate.missCount += 1;
         if (gate.missCount >= gate.requiredMisses) {
