@@ -82,6 +82,11 @@
     <input type="text" id="manual-code-1" style="flex:1;">
     <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-1">追加</button>
   </div>
+  <div id="stocktake-live-status" class="card" style="display:none;">
+    <p class="hint" style="margin:0 0 4px;">直前のスキャン</p>
+    <p style="margin:0; font-size:1.05rem;"><strong id="stocktake-last-name"></strong>(現在 <strong id="stocktake-last-count"></strong>本)</p>
+    <p class="hint" style="margin:10px 0 0;">合計 <strong id="stocktake-total-items"></strong>品目 / <strong id="stocktake-total-count"></strong>本</p>
+  </div>
   <div class="confirm-bar">
     <p class="hint" id="tally-summary">まだ何もスキャンしていません</p>
     <button type="button" class="primary" id="btn-confirm-stocktake" disabled>内容を確認する</button>
@@ -545,6 +550,6 @@
   </div>
 </div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

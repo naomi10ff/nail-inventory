@@ -668,6 +668,9 @@ async function onStocktakeScan(code) {
     }
     state.tally[code].count += 1;
     document.getElementById('stocktake-status').textContent = '';
+    document.getElementById('stocktake-live-status').style.display = 'block';
+    document.getElementById('stocktake-last-name').textContent = product.name;
+    document.getElementById('stocktake-last-count').textContent = state.tally[code].count;
     renderTally();
   } catch (e) {
     document.getElementById('stocktake-status').textContent = e.message;
@@ -746,9 +749,12 @@ function updateTallySummary() {
   if (!items.length) {
     summaryEl.textContent = 'まだ何もスキャンしていません';
     confirmBtn.disabled = true;
+    document.getElementById('stocktake-live-status').style.display = 'none';
   } else {
     summaryEl.textContent = `${items.length}品目 / 合計${totalCount}本をスキャン済み。よろしければ内容を確認してください`;
     confirmBtn.disabled = false;
+    document.getElementById('stocktake-total-items').textContent = items.length;
+    document.getElementById('stocktake-total-count').textContent = totalCount;
   }
 }
 
