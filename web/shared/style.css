@@ -57,6 +57,15 @@ button.link { background: none; color: var(--accent-dark); text-decoration: unde
 .menu-grid button { margin-top: 0; padding: 20px; font-size: 1.05rem; }
 
 .error { color: var(--danger); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
+
+/* 棚卸の状態(未実施/承認待ち/差し戻し/承認済み)を一目で分かるように並べて表示する */
+.status-steps { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
+.status-steps .step {
+  padding: 5px 10px; border-radius: 999px; background: #eee; color: #999;
+  font-size: 0.8rem; white-space: nowrap;
+}
+.status-steps .step.active { background: var(--accent); color: #fff; font-weight: bold; }
+.status-steps .step.active.warn { background: var(--danger); }
 .status { color: var(--ok); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
 
 #reader, #reader-4, #reader-hq-incoming, #reader-hq-disposal, #reader-hq-stock-lookup {
@@ -189,13 +198,15 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
   width: 35mm;
   height: 12mm;
   box-sizing: border-box;
-  padding: 0.4mm 1.2mm;
+  /* 印刷位置が多少ずれても隣のラベルや隙間にかからないよう、内側にゆとりを持たせている
+     (ラベル用紙の在庫が少なく、失敗すると惜しいため、ズレへの耐性を優先している) */
+  padding: 1mm 1.5mm;
   display: flex;
   align-items: center;
   gap: 1mm;
   overflow: hidden;
 }
-.aone-cell .aone-qr { width: 9mm; height: 9mm; flex-shrink: 0; }
+.aone-cell .aone-qr { width: 7.5mm; height: 7.5mm; flex-shrink: 0; }
 .aone-cell .aone-qr canvas, .aone-cell .aone-qr img { width: 100%; height: 100%; }
 .aone-cell .aone-text {
   font-size: 6pt;

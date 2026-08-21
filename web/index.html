@@ -21,7 +21,7 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=3">
+<link rel="stylesheet" href="shared/style.css?v=5">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
@@ -175,7 +175,7 @@
   <input type="month" id="store-review-month">
   <button type="button" class="primary" id="btn-load-store-review">確認する</button>
   <div id="store-review-summary"></div>
-  <div id="store-review-table"></div>
+  <div id="store-review-table" style="overflow-x:auto;"></div>
 </section>
 
 <!-- ==================== 本社用画面 ==================== -->
@@ -481,7 +481,7 @@
     <button type="button" class="secondary" style="width:auto; display:none;" id="btn-reject-review">差し戻す</button>
   </div>
   <div id="hq-review-summary"></div>
-  <div id="hq-review-table"></div>
+  <div id="hq-review-table" style="overflow-x:auto;"></div>
 </section>
 
 <!-- 取り消せない操作(在庫リセット等)の確認モーダル。パスワード再入力+警告表示+
@@ -573,6 +573,6 @@
   </div>
 </div>
 
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

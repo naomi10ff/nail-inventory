@@ -2494,17 +2494,26 @@ function renderReviewResult(data, summaryElId, tableElId) {
   let statusHtml;
   if (ms) {
     const dateStr = ms.implementedDate ? new Date(ms.implementedDate).toLocaleDateString('ja-JP') : '';
+    // 「未実施・承認待ち・差し戻し・承認済み」を並べて表示し、今の状態だけを色付けして
+    // 一目で分かるようにする(差し戻しは注意が必要な状態として赤色にする)。
+    const steps = [
+      { key: '未実施', label: '未実施' },
+      { key: '承認待ち', label: '承認待ち' },
+      { key: '差し戻し', label: '差し戻し' },
+      { key: '承認済み', label: '承認済み' }
+    ];
+    const stepsHtml = steps.map((s) => {
+      const isActive = s.key === ms.status;
+      const cls = 'step' + (isActive ? ' active' : '') + (isActive && s.key === '差し戻し' ? ' warn' : '');
+      return `<span class="${cls}">${s.label}</span>`;
+    }).join('');
+    statusHtml = `<div class="status-steps">${stepsHtml}</div>`;
     if (ms.status === '承認済み') {
-      statusHtml = `<p class="status" style="font-size:1.1rem; margin-bottom:2px;">承認済み</p>` +
-        `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / ${ms.approver}が承認済み</p>`;
+      statusHtml += `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / ${ms.approver}が承認済み</p>`;
     } else if (ms.status === '差し戻し') {
-      statusHtml = `<p class="error" style="font-size:1.1rem; margin-bottom:2px;">差し戻し</p>` +
-        `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / 理由: ${ms.rejectedReason || '記載なし'}</p>`;
+      statusHtml += `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / 理由: ${ms.rejectedReason || '記載なし'}</p>`;
     } else if (ms.status === '承認待ち') {
-      statusHtml = `<p style="font-size:1.1rem; margin-bottom:2px;">承認待ち</p>` +
-        `<p class="hint" style="margin-top:0;">実施日: ${dateStr}</p>`;
-    } else {
-      statusHtml = '<p style="font-size:1.1rem; margin-bottom:2px;">未実施</p>';
+      statusHtml += `<p class="hint" style="margin-top:0;">実施日: ${dateStr}</p>`;
     }
   } else if (data.approval.approved) {
     // 旧レスポンス互換(monthlyStatusが無い場合)
