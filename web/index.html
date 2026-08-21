@@ -90,7 +90,7 @@
 <section id="screen-stocktake" class="screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-1">&lt; メニューへ戻る</button></div>
   <h2>棚卸スキャン</h2>
-  <p class="hint">1本ずつスキャンしてください。同じ商品は自動でカウントされます。個数が違う場合は下の一覧で+/-や数字入力で直接修正できます。</p>
+  <p class="hint">1本スキャンしたら、「次の商品をスキャンする」を押してから次を読み取ってください。個数が違う場合は下の一覧で+/-や数字入力で直接修正できます。</p>
   <div id="reader"></div>
   <label for="manual-code-1">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
@@ -101,6 +101,7 @@
     <p class="hint" style="margin:0 0 4px;">直前のスキャン</p>
     <p style="margin:0; font-size:1.05rem;"><strong id="stocktake-last-name"></strong>(現在 <strong id="stocktake-last-count"></strong>本)</p>
     <p class="hint" style="margin:10px 0 0;">合計 <strong id="stocktake-total-items"></strong>品目 / <strong id="stocktake-total-count"></strong>本</p>
+    <button type="button" class="primary" id="btn-stocktake-next" style="margin-top:12px;">次の商品をスキャンする</button>
   </div>
   <div class="confirm-bar">
     <p class="hint" id="tally-summary">まだ何もスキャンしていません</p>
@@ -572,6 +573,6 @@
   </div>
 </div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

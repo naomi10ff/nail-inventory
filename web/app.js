@@ -438,6 +438,7 @@ function startStocktakeScan(mode) {
   renderTally();
   document.getElementById('tally-container').style.display = 'none';
   document.getElementById('stocktake-review').style.display = 'none';
+  document.getElementById('stocktake-live-status').style.display = 'none';
   showScreen('screen-stocktake');
   rearmGate(stocktakeGate);
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
@@ -613,7 +614,9 @@ function rearmGateAfterMiss(gate) {
   gate.missCount = 0;
 }
 
-const stocktakeGate = createGate({ valueAware: true, requiredMisses: 20 });
+// 自動再開(タイムアウトや値の比較)は2回試して2回とも誤カウントが再発したため、
+// 入荷登録と同じ「明示的に次へ進むまで完全に止める」方式に統一した。
+const stocktakeGate = createGate({ rearmOnMiss: false });
 const hqIncomingGate = createGate({ rearmOnMiss: false });
 const hqDisposalGate = createGate({ rearmOnMiss: false });
 
@@ -734,6 +737,7 @@ async function onStocktakeScan(code) {
     const product = await apiCall('lookupProduct', { code });
     if (!product) {
       document.getElementById('stocktake-status').textContent = '未登録のコードです: ' + code;
+      rearmGate(stocktakeGate); // 登録できなかった場合はすぐ次を試せるようにする
       return;
     }
     if (!state.tally[code]) {
@@ -745,10 +749,20 @@ async function onStocktakeScan(code) {
     document.getElementById('stocktake-last-name').textContent = product.name;
     document.getElementById('stocktake-last-count').textContent = state.tally[code].count;
     renderTally();
+    // 「次の商品をスキャンする」を押すまでカメラは反応しない(入荷登録と同じ、1件ずつ
+    // 明示的に確定する方式)。ここでは意図的に再開しない。
   } catch (e) {
     document.getElementById('stocktake-status').textContent = e.message;
+    rearmGate(stocktakeGate); // 通信エラー時はすぐ再試行できるようにする
   }
 }
+
+document.getElementById('btn-stocktake-next').addEventListener('click', () => {
+  // 今映っている現物からカメラが外れるまで待って再開する(入荷登録の「登録した直後」と同じ
+  // 考え方。押した瞬間まだ同じ商品が映っていることが多いため、即再開だと再カウントしてしまう)
+  rearmGateAfterMiss(stocktakeGate);
+  document.getElementById('stocktake-status').textContent = '次の商品をスキャンしてください';
+});
 
 document.getElementById('btn-manual-add-1').addEventListener('click', () => {
   const input = document.getElementById('manual-code-1');
@@ -845,6 +859,9 @@ document.getElementById('btn-confirm-stocktake').addEventListener('click', () =>
   document.getElementById('btn-toggle-unscanned').textContent = '未スキャンの商品を確認する';
   // スキャン中は隠していた商品ごとの一覧を、確認のタイミングでだけ表示する
   document.getElementById('tally-container').style.display = 'block';
+  // 「直前のスキャン」はもう関係ないので、確認画面に移ったら隠す(表示され続けて
+  // 混乱するとの指摘があったため)
+  document.getElementById('stocktake-live-status').style.display = 'none';
   const reviewEl = document.getElementById('stocktake-review');
   reviewEl.style.display = 'block';
   // 商品数が多いとタリー一覧が長くなり、表示が変わったこと自体が画面外で見えないことがあるため、
@@ -862,6 +879,11 @@ document.getElementById('btn-toggle-unscanned').addEventListener('click', () => 
 document.getElementById('btn-back-to-scan').addEventListener('click', () => {
   document.getElementById('stocktake-review').style.display = 'none';
   document.getElementById('tally-container').style.display = 'none';
+  // カメラは前回スキャンした商品のあとまだ止まったままなので、「次の商品をスキャンする」
+  // ボタンに再びアクセスできるよう、直前のスキャン情報を再表示する
+  if (Object.keys(state.tally).length) {
+    document.getElementById('stocktake-live-status').style.display = 'block';
+  }
 });
 
 document.getElementById('btn-send-stocktake').addEventListener('click', async () => {
