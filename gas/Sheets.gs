@@ -946,3 +946,18 @@ function bulkImportIkomaProducts() {
   }
   Logger.log('生駒店: ' + rows.length + '件登録、' + skipped + '件は既存のためスキップ');
 }
+
+/**
+ * 棚卸画面の「直前のスキャン/合計」表示を試すための一時的なテスト商品を登録する。
+ * ブランドを「テスト」にしているので、テスト後は商品管理でブランド「テスト」を
+ * 検索すればまとめて見つけられる。実行後は不要になる一時的な関数。
+ */
+function registerStocktakeTestProducts() {
+  var session = { role: 'hq' };
+  var store = '木津店';
+  var results = [
+    registerProduct_(session, { store: store, code: 'TESTBAR01', name: '【テスト】棚卸テスト商品(バーコード)', brand: 'テスト' }),
+    registerProduct_(session, { store: store, code: 'TESTQR01', name: '【テスト】棚卸テスト商品(QR)', brand: 'テスト' })
+  ];
+  Logger.log(JSON.stringify(results));
+}
