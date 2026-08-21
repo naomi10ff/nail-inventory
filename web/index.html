@@ -67,7 +67,22 @@
     <button type="button" class="primary" id="btn-nav-stocktake">棚卸(バーコードスキャン)</button>
     <button type="button" class="secondary" id="btn-nav-inventory">在庫情報を見る</button>
     <button type="button" class="secondary" id="btn-nav-stock-lookup">在庫検索</button>
-    <button type="button" class="secondary" id="btn-nav-store-review">棚卸承認の確認</button>
+    <button type="button" class="secondary" id="btn-nav-store-review">棚卸し確認</button>
+  </div>
+</section>
+
+<!-- 棚卸の開始前確認画面(今月すでに棚卸がある場合に「追加する/新しく数え直す」を選ぶ。
+     今月が承認済みでロックされている場合はここでその旨を表示して先に進めない) -->
+<section id="screen-stocktake-mode" class="screen">
+  <div class="topbar"><button type="button" class="link" id="btn-back-stocktake-mode">&lt; メニューへ戻る</button></div>
+  <h2>棚卸を始める</h2>
+  <div id="stocktake-mode-locked" class="card" style="display:none;">
+    <p></p>
+  </div>
+  <div id="stocktake-mode-choice" style="display:none;">
+    <p class="hint" id="stocktake-mode-info"></p>
+    <button type="button" class="primary" id="btn-stocktake-mode-add">既存のカウントに追加する</button>
+    <button type="button" class="secondary" id="btn-stocktake-mode-overwrite">新しく数え直す</button>
   </div>
 </section>
 
@@ -144,11 +159,11 @@
   <p class="status" id="stock-lookup-status"></p>
 </section>
 
-<!-- 棚卸承認の確認画面(店舗側。閲覧のみで承認操作はできない) -->
+<!-- 棚卸し確認画面(店舗側。閲覧のみで承認・差し戻し操作はできない) -->
 <section id="screen-store-review" class="screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-store-review">&lt; メニューへ戻る</button></div>
-  <h2>棚卸承認の確認</h2>
-  <p class="hint">本社が確認・承認した内容を店舗側からも確認できます。</p>
+  <h2>棚卸し確認</h2>
+  <p class="hint">今月の棚卸の状態(未実施・承認待ち・差し戻し・承認済み)と、本社が確認した内容を確認できます。</p>
   <label for="store-review-month">対象月</label>
   <input type="month" id="store-review-month">
   <button type="button" class="primary" id="btn-load-store-review">確認する</button>
@@ -456,6 +471,7 @@
   <div style="display:flex; gap:8px;">
     <button type="button" class="secondary" style="width:auto; display:none;" id="btn-export-hq-review">CSVエクスポート</button>
     <button type="button" class="primary" style="width:auto; display:none;" id="btn-approve-review">承認する</button>
+    <button type="button" class="secondary" style="width:auto; display:none;" id="btn-reject-review">差し戻す</button>
   </div>
   <div id="hq-review-summary"></div>
   <div id="hq-review-table"></div>
@@ -550,6 +566,6 @@
   </div>
 </div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

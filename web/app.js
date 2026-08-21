@@ -12,6 +12,7 @@ const state = {
   role: localStorage.getItem('role') || null,
   staffName: null,
   tally: {}, // code -> { code, name, brand, count } (棚卸で使用)
+  stocktakeMode: 'overwrite', // 'add'(既存カウントに加算)または'overwrite'(数え直し)
   stores: [] // 本社ダッシュボードで使用
 };
 
@@ -389,14 +390,53 @@ document.getElementById('btn-goto-menu').addEventListener('click', () => {
 });
 
 // ---- メニュー ----
-document.getElementById('btn-nav-stocktake').addEventListener('click', () => {
+// 棚卸に入る前に、今月の状態(未実施/承認待ち/差し戻し/承認済み)を確認する。
+// 承認済みならロックして進めない。今月すでに棚卸の記録があれば「追加する/新しく数え直す」を選ばせる。
+document.getElementById('btn-nav-stocktake').addEventListener('click', async () => {
+  // 結果が分かるまで画面を切り替えない(「未実施」で結局そのままスキャン画面へ進む場合に
+  // 中間画面が一瞬映って消えるのを避けるため)。
+  const lockedEl = document.getElementById('stocktake-mode-locked');
+  const choiceEl = document.getElementById('stocktake-mode-choice');
+  lockedEl.style.display = 'none';
+  choiceEl.style.display = 'none';
+  try {
+    const status = await apiCall('getStocktakeStatus', { month: currentYearMonth() });
+    if (status.status === '承認済み') {
+      lockedEl.querySelector('p').textContent =
+        '今月は本社承認済みのため、棚卸はできません。修正が必要な場合は本社にご連絡ください(差し戻しを依頼)。';
+      lockedEl.style.display = 'block';
+      showScreen('screen-stocktake-mode');
+    } else if (status.implementedDate) {
+      const dateStr = new Date(status.implementedDate).toLocaleDateString('ja-JP');
+      document.getElementById('stocktake-mode-info').textContent =
+        status.status === '差し戻し'
+          ? `本社から差し戻されています(理由: ${status.rejectedReason || '記載なし'})。前回の実施日: ${dateStr}`
+          : `今月はすでに ${dateStr} に棚卸を実施しています。`;
+      choiceEl.style.display = 'block';
+      showScreen('screen-stocktake-mode');
+    } else {
+      startStocktakeScan('overwrite');
+    }
+  } catch (e) {
+    lockedEl.querySelector('p').textContent = e.message;
+    lockedEl.style.display = 'block';
+    showScreen('screen-stocktake-mode');
+  }
+});
+
+document.getElementById('btn-back-stocktake-mode').addEventListener('click', () => showScreen('screen-menu'));
+document.getElementById('btn-stocktake-mode-add').addEventListener('click', () => startStocktakeScan('add'));
+document.getElementById('btn-stocktake-mode-overwrite').addEventListener('click', () => startStocktakeScan('overwrite'));
+
+function startStocktakeScan(mode) {
   state.tally = {};
+  state.stocktakeMode = mode;
   loadStocktakeProductList().catch((e) => console.error(e));
   renderTally();
   showScreen('screen-stocktake');
   rearmGate(stocktakeGate);
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
-});
+}
 
 // ---- 棚卸: 未スキャン商品一覧 ----
 // 「内容を確認する」を押した時点で送信はせず、まず商品マスタの全件と今スキャン済みの
@@ -776,11 +816,12 @@ document.getElementById('btn-back-to-scan').addEventListener('click', () => {
 document.getElementById('btn-send-stocktake').addEventListener('click', async () => {
   const items = Object.values(state.tally).map((t) => ({ code: t.code, count: t.count }));
   try {
-    const data = await apiCall('submitStocktake', { staffName: state.staffName, items });
+    const data = await apiCall('submitStocktake', { staffName: state.staffName, items, mode: state.stocktakeMode });
     document.getElementById('stocktake-status').textContent =
       `棚卸を送信しました(${data.recorded.length}品目)。` +
       (data.unknownCodes.length ? ` 未登録コード: ${data.unknownCodes.join(', ')}` : '');
     state.tally = {};
+    state.stocktakeMode = 'overwrite';
     renderTally();
     document.getElementById('stocktake-review').style.display = 'none';
   } catch (e) {
@@ -954,6 +995,7 @@ document.getElementById('nav-hq-review').addEventListener('click', () => {
   document.getElementById('hq-review-summary').innerHTML = '';
   document.getElementById('hq-review-table').innerHTML = '';
   document.getElementById('btn-approve-review').style.display = 'none';
+  document.getElementById('btn-reject-review').style.display = 'none';
   document.getElementById('btn-export-hq-review').style.display = 'none';
 });
 
@@ -2375,7 +2417,20 @@ function renderReviewResult(data, summaryElId, tableElId) {
     });
     summaryHtml += `<p class="hint">棚卸実施(1回の送信ごとに1行、古い順): ${lines.join('、')}</p>`;
   }
-  if (data.approval.approved) {
+  const ms = data.monthlyStatus;
+  if (ms) {
+    const dateStr = ms.implementedDate ? new Date(ms.implementedDate).toLocaleDateString('ja-JP') : '未実施';
+    if (ms.status === '承認済み') {
+      summaryHtml += `<p class="status">状態: 承認済み(実施日: ${dateStr} / ${ms.approver} が ${new Date(ms.approvedAt).toLocaleString('ja-JP')} に承認)</p>`;
+    } else if (ms.status === '差し戻し') {
+      summaryHtml += `<p class="error">状態: 差し戻し(実施日: ${dateStr} / 理由: ${ms.rejectedReason || '記載なし'})</p>`;
+    } else if (ms.status === '承認待ち') {
+      summaryHtml += `<p class="hint">状態: 承認待ち(実施日: ${dateStr})</p>`;
+    } else {
+      summaryHtml += '<p class="hint">状態: 未実施</p>';
+    }
+  } else if (data.approval.approved) {
+    // 旧レスポンス互換(monthlyStatusが無い場合)
     summaryHtml += `<p class="status">承認済み(${data.approval.approver} / ${new Date(data.approval.approvedAt).toLocaleString('ja-JP')})</p>`;
   } else {
     summaryHtml += '<p class="hint">未承認</p>';
@@ -2417,6 +2472,7 @@ document.getElementById('btn-load-hq-review').addEventListener('click', async ()
     const approveBtn = document.getElementById('btn-approve-review');
     approveBtn.style.display = 'block';
     approveBtn.textContent = currentHqReviewData.approval.approved ? '再承認する' : '承認する';
+    document.getElementById('btn-reject-review').style.display = 'block';
     document.getElementById('btn-export-hq-review').style.display = 'inline-block';
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
@@ -2448,6 +2504,24 @@ document.getElementById('btn-approve-review').addEventListener('click', async ()
     document.getElementById('hq-review-summary').innerHTML = '';
     document.getElementById('hq-review-table').innerHTML = '';
     document.getElementById('btn-approve-review').style.display = 'none';
+    document.getElementById('btn-reject-review').style.display = 'none';
+    document.getElementById('btn-export-hq-review').style.display = 'none';
+    showScreen('screen-dashboard');
+  } catch (e) {
+    document.getElementById('hq-review-summary').textContent = e.message;
+  }
+});
+
+document.getElementById('btn-reject-review').addEventListener('click', async () => {
+  if (!currentHqReviewData) return;
+  const reason = prompt('差し戻す理由(店舗に伝わります。空欄でも構いません)') || '';
+  try {
+    await apiCall('rejectStocktake', { store: currentHqReviewData.store, month: currentHqReviewData.month, reason });
+    currentHqReviewData = null;
+    document.getElementById('hq-review-summary').innerHTML = '';
+    document.getElementById('hq-review-table').innerHTML = '';
+    document.getElementById('btn-approve-review').style.display = 'none';
+    document.getElementById('btn-reject-review').style.display = 'none';
     document.getElementById('btn-export-hq-review').style.display = 'none';
     showScreen('screen-dashboard');
   } catch (e) {

@@ -36,12 +36,29 @@ function setupSpreadsheet() {
   setupSheet_(ss, SHEET_SUMMARY, ['店舗', 'ブランド', '商品名', 'コード', '現在庫', '直近棚卸数', '欠品', '更新日時']);
   setupSheet_(ss, SHEET_SESSIONS, ['トークン', 'ユーザー名', '店舗', '権限', '発行日時']);
   setupSheet_(ss, SHEET_BRANDS, BRANDS_HEADERS);
-  setupSheet_(ss, SHEET_APPROVALS, ['店舗', '年月', '承認者', '承認日時']);
+  setupSheet_(ss, SHEET_APPROVALS, ['店舗', '年月', '承認者', '承認日時', '状態', '差し戻し理由', '差し戻し日時']);
   setupSheet_(ss, SHEET_CATEGORIES, CATEGORIES_HEADERS);
   seedCategories_(ss);
   addItemNumberColumn_(ss);
+  addApprovalStatusColumns_(ss);
 
   seedAccounts_(ss);
+}
+
+/**
+ * 既に運用中の棚卸承認シート(「状態」「差し戻し理由」「差し戻し日時」列が無い状態)に、
+ * 非破壊で列を追加する。既存データは一切変更しない。承認済みの既存行は、承認者が入って
+ * いれば「承認済み」扱いとみなす後方互換ロジックをCode.gs側(getApprovalStatus_)で持たせて
+ * いるので、この列自体は空のままで問題ない。
+ */
+function addApprovalStatusColumns_(ss) {
+  var sheet = ss.getSheetByName(SHEET_APPROVALS);
+  if (!sheet || sheet.getLastRow() === 0) return;
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var toAdd = ['状態', '差し戻し理由', '差し戻し日時'].filter(function (h) { return headers.indexOf(h) === -1; });
+  if (!toAdd.length) return;
+  var col = sheet.getLastColumn() + 1;
+  sheet.getRange(1, col, 1, toAdd.length).setValues([toAdd]).setFontWeight('bold');
 }
 
 /**

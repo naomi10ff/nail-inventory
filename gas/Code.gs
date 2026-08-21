@@ -96,6 +96,10 @@ function routeAction_(action, p) {
       return getStocktakeReview_(validateToken_(p.token), p.store, p.month);
     case 'approveStocktake':
       return approveStocktake_(validateToken_(p.token), p);
+    case 'rejectStocktake':
+      return rejectStocktake_(validateToken_(p.token), p);
+    case 'getStocktakeStatus':
+      return getStocktakeStatusForClient_(validateToken_(p.token), p.store, p.month);
     default:
       throw new Error('不明なactionです: ' + action);
   }
@@ -455,10 +459,21 @@ function recordDisposal_(session, p) {
   return { product: product, quantity: quantity };
 }
 
-/** items: [{ code, count }, ...] 棚卸で連続スキャンした結果をまとめて送信する。 */
+/**
+ * items: [{ code, count }, ...] 棚卸で連続スキャンした結果をまとめて送信する。
+ * mode: 'add'なら今月すでに記録されている数量に加算、'overwrite'(省略時のデフォルト)なら
+ * 今回数えた数でそのまま置き換える。承認済みの月への送信はロックされ、エラーになる
+ * (差し戻しを受けるまで再送信できない)。
+ */
 function submitStocktake_(session, p) {
   var store = session.role === 'hq' ? p.store : session.store;
   requireStoreAccess_(session, store);
+
+  var month = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+  if (getMonthlyStocktakeStatus_(store, month).status === '承認済み') {
+    throw new Error('今月は本社承認済みのため棚卸はできません。修正が必要な場合は本社に差し戻しを依頼してください');
+  }
+  var mode = p.mode === 'add' ? 'add' : 'overwrite';
 
   var items = p.items || [];
   var timestamp = new Date(); // 送信内の全商品に同じ時刻を持たせ、1回の送信として後から突き合わせられるようにする
@@ -470,8 +485,9 @@ function submitStocktake_(session, p) {
       unknownCodes.push(item.code);
       return;
     }
-    appendLog_(store, p.staffName, product, '棚卸', item.count, '', timestamp);
-    recorded.push({ code: item.code, name: product.name, brand: product.brand, count: item.count });
+    var qty = mode === 'add' ? getLastStocktakeQtyThisMonth_(store, item.code, month) + item.count : item.count;
+    appendLog_(store, p.staffName, product, '棚卸', qty, '', timestamp);
+    recorded.push({ code: item.code, name: product.name, brand: product.brand, count: qty });
   });
   refreshSummary_();
 
@@ -722,10 +738,94 @@ function getApprovalStatus_(store, month) {
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === store && data[i][1] === month) {
-      return { approved: true, approver: data[i][2], approvedAt: data[i][3] };
+      var approver = data[i][2], approvedAt = data[i][3];
+      // 状態列(E列)が無い古い行は、承認者が入っていれば「承認済み」扱いにする(後方互換)。
+      var status = data[i][4] || (approver ? '承認済み' : '');
+      return {
+        approved: status === '承認済み',
+        approver: approver,
+        approvedAt: approvedAt,
+        status: status,
+        rejectedReason: data[i][5] || '',
+        rejectedAt: data[i][6] || null
+      };
     }
   }
-  return { approved: false };
+  return { approved: false, status: '' };
+}
+
+/**
+ * 店舗×年月の棚卸状態(未実施/承認待ち/差し戻し/承認済み)をまとめて返す。
+ * 承認済み・差し戻しはSHEET_APPROVALSに明示的な行がある場合のみ。それ以外(未実施/承認待ち)は
+ * 行を作らず、取引ログにその月の棚卸行があるかどうかだけで判定する。
+ */
+function getMonthlyStocktakeStatus_(store, month) {
+  var approval = getApprovalStatus_(store, month);
+  var implementedDate = getLatestStocktakeDateThisMonth_(store, month);
+  if (approval.status === '承認済み' || approval.status === '差し戻し') {
+    return {
+      status: approval.status,
+      implementedDate: implementedDate,
+      approver: approval.approver || '',
+      approvedAt: approval.approvedAt || null,
+      rejectedReason: approval.rejectedReason || '',
+      rejectedAt: approval.rejectedAt || null
+    };
+  }
+  return {
+    status: implementedDate ? '承認待ち' : '未実施',
+    implementedDate: implementedDate,
+    approver: '', approvedAt: null, rejectedReason: '', rejectedAt: null
+  };
+}
+
+/** その店舗・その月の棚卸ログのうち、最新の実施日(Date)。1件もなければnull。 */
+function getLatestStocktakeDateThisMonth_(store, month) {
+  var curCutoff = monthEndCutoff_(month);
+  var prevCutoff = monthEndCutoff_(previousMonthString_(month));
+  var sheet = getSheet_(SHEET_LOG);
+  var data = sheet.getDataRange().getValues();
+  var latest = null;
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (row[1] !== store || row[6] !== '棚卸') continue;
+    var ts = new Date(row[0]);
+    if (ts.getTime() < prevCutoff.getTime() || ts.getTime() >= curCutoff.getTime()) continue;
+    if (!latest || ts.getTime() > latest.getTime()) latest = ts;
+  }
+  return latest;
+}
+
+/**
+ * 棚卸の「既存のカウントに追加する」モードのベース値。その店舗・商品・今月の棚卸ログの
+ * うち最新の数量を返す(今月分がなければ0)。computeAllSummaryAsOf_の上書きロジックは
+ * 変更せず、送信時にここで加算済みの数量を計算してから1行として書き込む方式にしている。
+ */
+function getLastStocktakeQtyThisMonth_(store, code, month) {
+  var curCutoff = monthEndCutoff_(month);
+  var prevCutoff = monthEndCutoff_(previousMonthString_(month));
+  var sheet = getSheet_(SHEET_LOG);
+  var data = sheet.getDataRange().getValues();
+  var latestTs = null, latestQty = 0;
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (row[1] !== store || row[6] !== '棚卸' || String(row[3]) !== String(code)) continue;
+    var ts = new Date(row[0]);
+    if (ts.getTime() < prevCutoff.getTime() || ts.getTime() >= curCutoff.getTime()) continue;
+    if (!latestTs || ts.getTime() > latestTs.getTime()) { latestTs = ts; latestQty = Number(row[7]) || 0; }
+  }
+  return latestQty;
+}
+
+/** 棚卸開始前の状態確認(軽量)。店舗は自店のみ、本社はstore指定で他店舗も見れる。 */
+function getStocktakeStatusForClient_(session, storeParam, month) {
+  var store = session.role === 'hq' ? storeParam : session.store;
+  if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
+    throw new Error('他店舗のデータにはアクセスできません');
+  }
+  if (!store) throw new Error('店舗を指定してください');
+  if (!month) throw new Error('対象月を指定してください');
+  return getMonthlyStocktakeStatus_(store, month);
 }
 
 /** 指定した店舗・年月の、商品ごとの棚卸差異一覧と、その月の棚卸実施記録・承認状況をまとめて返す。 */
@@ -801,7 +901,8 @@ function getStocktakeReview_(session, storeParam, month) {
     previousMonth: previousMonthString_(month),
     items: items,
     stocktakeEvents: stocktakeEvents,
-    approval: getApprovalStatus_(store, month)
+    approval: getApprovalStatus_(store, month),
+    monthlyStatus: getMonthlyStocktakeStatus_(store, month)
   };
 }
 
@@ -810,7 +911,7 @@ function hasKey_(map, key) {
   return Object.prototype.hasOwnProperty.call(map, key);
 }
 
-/** 本社が、店舗×年月の棚卸内容を確認済みとして記録する。 */
+/** 本社が、店舗×年月の棚卸内容を確認済みとして記録する。差し戻し中だった場合はその内容をクリアする。 */
 function approveStocktake_(session, p) {
   requireRole_(session, ['hq']);
   if (!p.store || !p.month) throw new Error('店舗と対象月を指定してください');
@@ -821,11 +922,40 @@ function approveStocktake_(session, p) {
     if (data[i][0] === p.store && data[i][1] === p.month) {
       sheet.getRange(i + 1, 3).setValue(session.username);
       sheet.getRange(i + 1, 4).setValue(new Date());
+      sheet.getRange(i + 1, 5).setValue('承認済み');
+      sheet.getRange(i + 1, 6).setValue('');
+      sheet.getRange(i + 1, 7).setValue('');
       return { store: p.store, month: p.month, approver: session.username };
     }
   }
-  sheet.appendRow([p.store, p.month, session.username, new Date()]);
+  sheet.appendRow([p.store, p.month, session.username, new Date(), '承認済み', '', '']);
   return { store: p.store, month: p.month, approver: session.username };
+}
+
+/**
+ * 本社が、店舗×年月の棚卸を差し戻す(店舗が再度カウントできるようにする)。
+ * 承認済みの月はsubmitStocktake_でロックされるため、修正が必要なときはここから解除する。
+ */
+function rejectStocktake_(session, p) {
+  requireRole_(session, ['hq']);
+  if (!p.store || !p.month) throw new Error('店舗と対象月を指定してください');
+
+  var sheet = getSheet_(SHEET_APPROVALS);
+  var data = sheet.getDataRange().getValues();
+  var reason = p.reason || '';
+  var now = new Date();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === p.store && data[i][1] === p.month) {
+      sheet.getRange(i + 1, 3).setValue('');
+      sheet.getRange(i + 1, 4).setValue('');
+      sheet.getRange(i + 1, 5).setValue('差し戻し');
+      sheet.getRange(i + 1, 6).setValue(reason);
+      sheet.getRange(i + 1, 7).setValue(now);
+      return { store: p.store, month: p.month, status: '差し戻し' };
+    }
+  }
+  sheet.appendRow([p.store, p.month, '', '', '差し戻し', reason, now]);
+  return { store: p.store, month: p.month, status: '差し戻し' };
 }
 
 // ---- 在庫のリセット(本社限定・取り消し不可の操作) ----
