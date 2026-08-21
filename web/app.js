@@ -603,7 +603,10 @@ function rearmGateAfterMiss(gate) {
   gate.missCount = 0;
 }
 
-const stocktakeGate = createGate({ rearmOnMiss: true, requiredMisses: 8 });
+// requiredMisses: 8(fps10で約0.8秒)だと、手ブレやピントの一瞬のズレで「現物が画面から
+// 外れた」と誤判定し、カメラを向けたままでも同じ商品が再カウントされてしまう不具合が
+// あったため、外れた判定までの許容時間を約2秒に伸ばした。
+const stocktakeGate = createGate({ rearmOnMiss: true, requiredMisses: 20 });
 const hqIncomingGate = createGate({ rearmOnMiss: false });
 const hqDisposalGate = createGate({ rearmOnMiss: false });
 
