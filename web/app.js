@@ -997,20 +997,19 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
   showScreen('screen-total-inventory');
   await loadTotalInventoryScreen();
 });
+// この3つは互いに依存しない別々のAPI呼び出しなので、順番にawaitすると遅い方の
+// 待ち時間が積み重なってしまう(「ブランドで絞り込み」が出てくるまで妙に時間が
+// かかる、という指摘の原因)。Promise.allでまとめて並行実行する。
 document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
   cancelEditProduct();
   document.getElementById('product-brand-filter').value = '';
-  await loadHqBrandOptions();
-  await loadHqCategoryOptions();
-  await loadProducts();
+  await Promise.all([loadHqBrandOptions(), loadHqCategoryOptions(), loadProducts()]);
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
   document.getElementById('product-brand-filter').value = '';
-  await loadHqBrandOptions();
-  await loadHqCategoryOptions();
-  await loadProducts();
+  await Promise.all([loadHqBrandOptions(), loadHqCategoryOptions(), loadProducts()]);
 });
 
 document.getElementById('nav-staff').addEventListener('click', async () => { showScreen('hq-screen-staff'); await loadStaff(); });
