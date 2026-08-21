@@ -392,13 +392,15 @@ document.getElementById('btn-goto-menu').addEventListener('click', () => {
 // ---- メニュー ----
 // 棚卸に入る前に、今月の状態(未実施/承認待ち/差し戻し/承認済み)を確認する。
 // 承認済みならロックして進めない。今月すでに棚卸の記録があれば「追加する/新しく数え直す」を選ばせる。
-document.getElementById('btn-nav-stocktake').addEventListener('click', async () => {
+document.getElementById('btn-nav-stocktake').addEventListener('click', async (ev) => {
   // 結果が分かるまで画面を切り替えない(「未実施」で結局そのままスキャン画面へ進む場合に
-  // 中間画面が一瞬映って消えるのを避けるため)。
+  // 中間画面が一瞬映って消えるのを避けるため)。ただし何も反応がないように見えないよう、
+  // ボタン自体は確認中だと分かる表示にする。
   const lockedEl = document.getElementById('stocktake-mode-locked');
   const choiceEl = document.getElementById('stocktake-mode-choice');
   lockedEl.style.display = 'none';
   choiceEl.style.display = 'none';
+  await withButtonBusy(ev.currentTarget, '確認中...', async () => {
   try {
     const status = await apiCall('getStocktakeStatus', { month: currentYearMonth() });
     if (status.status === '承認済み') {
@@ -422,6 +424,7 @@ document.getElementById('btn-nav-stocktake').addEventListener('click', async () 
     lockedEl.style.display = 'block';
     showScreen('screen-stocktake-mode');
   }
+  });
 });
 
 document.getElementById('btn-back-stocktake-mode').addEventListener('click', () => showScreen('screen-menu'));
