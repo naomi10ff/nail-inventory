@@ -65,9 +65,12 @@ button.link { background: none; color: var(--accent-dark); text-decoration: unde
 
 .tally-group { margin-top: 16px; }
 .tally-group h3 { font-size: 0.9rem; color: var(--accent-dark); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
-.tally-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.95rem; }
-.tally-name { flex: 1; }
-.tally-stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* 品名を個数入力の右に並べると、幅が狭い端末では品名の列が極端に狭くなり
+   1文字ずつ折り返されて縦書きのように見えてしまうため、品名を上・個数入力を下に
+   縦に並べる。 */
+.tally-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; font-size: 0.95rem; }
+.tally-name { width: 100%; }
+.tally-stepper { display: flex; align-items: center; gap: 6px; }
 .stepper-btn {
   width: 34px; height: 34px; padding: 0; margin: 0;
   border-radius: 6px; border: 1px solid var(--line); background: #fff;

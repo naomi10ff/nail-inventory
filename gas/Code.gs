@@ -470,10 +470,15 @@ function submitStocktake_(session, p) {
   requireStoreAccess_(session, store);
 
   var month = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
-  if (getMonthlyStocktakeStatus_(store, month).status === '承認済み') {
+  // 承認状態(SHEET_APPROVALS)は行数が少なく軽いのでここで毎回確認する。取引ログ全体を
+  // 読む重い処理(加算モードのベース値計算)は、必要な場合のみ・1回だけに絞る(下記)。
+  if (getApprovalStatus_(store, month).status === '承認済み') {
     throw new Error('今月は本社承認済みのため棚卸はできません。修正が必要な場合は本社に差し戻しを依頼してください');
   }
   var mode = p.mode === 'add' ? 'add' : 'overwrite';
+  // 加算モードのときだけ、今月のこの店舗の棚卸ログを1回だけ読み込んで商品ごとの最新数量を
+  // マップ化する。商品ごとに毎回シートを読み直すと件数分だけ遅くなるため。
+  var thisMonthQtyByCode = mode === 'add' ? getThisMonthStocktakeMap_(store, month) : {};
 
   var items = p.items || [];
   var timestamp = new Date(); // 送信内の全商品に同じ時刻を持たせ、1回の送信として後から突き合わせられるようにする
@@ -485,17 +490,39 @@ function submitStocktake_(session, p) {
       unknownCodes.push(item.code);
       return;
     }
-    var qty = mode === 'add' ? getLastStocktakeQtyThisMonth_(store, item.code, month) + item.count : item.count;
+    var qty = mode === 'add' && hasKey_(thisMonthQtyByCode, item.code)
+      ? thisMonthQtyByCode[item.code] + item.count
+      : item.count;
     appendLog_(store, p.staffName, product, '棚卸', qty, '', timestamp);
     recorded.push({ code: item.code, name: product.name, brand: product.brand, count: qty });
   });
-  refreshSummary_();
+  // refreshSummary_()(現在庫サマリの再構築)はここでは呼ばない。recordIncoming_/recordDisposal_
+  // と同じ理由: 取引ログ全体を読み直すため件数が増えるほど遅くなり、棚卸は1回の送信で多数の
+  // 商品を扱うため特に影響が大きい。画面表示は毎回取引ログから直接計算しており、このシートは
+  // 参考用なので、最新化したい場合はrefreshCurrentStockSummary()を手動実行する。
 
   return {
     recorded: recorded,
     unknownCodes: unknownCodes,
     summary: getInventorySummary_(session, store)
   };
+}
+
+/** その店舗・今月の棚卸ログから、商品コードごとの最新数量のマップを1回のシート読み込みで作る。 */
+function getThisMonthStocktakeMap_(store, month) {
+  var curCutoff = monthEndCutoff_(month);
+  var prevCutoff = monthEndCutoff_(previousMonthString_(month));
+  var sheet = getSheet_(SHEET_LOG);
+  var data = sheet.getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (row[1] !== store || row[6] !== '棚卸') continue;
+    var ts = new Date(row[0]).getTime();
+    if (ts < prevCutoff.getTime() || ts >= curCutoff.getTime()) continue;
+    map[row[3]] = Number(row[7]) || 0; // ログは追記順なので、後の行が常に最新の値になる
+  }
+  return map;
 }
 
 function deleteLogEntry_(session, rowIndex) {
@@ -794,27 +821,6 @@ function getLatestStocktakeDateThisMonth_(store, month) {
     if (!latest || ts.getTime() > latest.getTime()) latest = ts;
   }
   return latest;
-}
-
-/**
- * 棚卸の「既存のカウントに追加する」モードのベース値。その店舗・商品・今月の棚卸ログの
- * うち最新の数量を返す(今月分がなければ0)。computeAllSummaryAsOf_の上書きロジックは
- * 変更せず、送信時にここで加算済みの数量を計算してから1行として書き込む方式にしている。
- */
-function getLastStocktakeQtyThisMonth_(store, code, month) {
-  var curCutoff = monthEndCutoff_(month);
-  var prevCutoff = monthEndCutoff_(previousMonthString_(month));
-  var sheet = getSheet_(SHEET_LOG);
-  var data = sheet.getDataRange().getValues();
-  var latestTs = null, latestQty = 0;
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (row[1] !== store || row[6] !== '棚卸' || String(row[3]) !== String(code)) continue;
-    var ts = new Date(row[0]);
-    if (ts.getTime() < prevCutoff.getTime() || ts.getTime() >= curCutoff.getTime()) continue;
-    if (!latestTs || ts.getTime() > latestTs.getTime()) { latestTs = ts; latestQty = Number(row[7]) || 0; }
-  }
-  return latestQty;
 }
 
 /** 棚卸開始前の状態確認(軽量)。店舗は自店のみ、本社はstore指定で他店舗も見れる。 */

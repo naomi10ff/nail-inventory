@@ -21,7 +21,7 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=1">
+<link rel="stylesheet" href="shared/style.css?v=2">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
@@ -110,12 +110,15 @@
   <div id="tally-container"></div>
 
   <div id="stocktake-review" style="display:none;">
-    <h3>未スキャンの商品</h3>
-    <p class="hint">まだスキャンしていない登録済み商品です。スキャン漏れがないか確認してから送信してください。</p>
-    <div id="unscanned-container"></div>
     <div style="display:flex; gap:8px;">
-      <button type="button" class="secondary" style="width:auto;" id="btn-back-to-scan">戻ってスキャンを続ける</button>
       <button type="button" class="primary" style="width:auto;" id="btn-send-stocktake">本社へ送信する</button>
+      <button type="button" class="secondary" style="width:auto;" id="btn-back-to-scan">戻ってスキャンを続ける</button>
+    </div>
+    <button type="button" class="secondary" id="btn-toggle-unscanned">未スキャンの商品を確認する</button>
+    <div id="unscanned-wrap" style="display:none;">
+      <h3>未スキャンの商品</h3>
+      <p class="hint">まだスキャンしていない登録済み商品です。スキャン漏れがないか確認してから送信してください。</p>
+      <div id="unscanned-container"></div>
     </div>
   </div>
 </section>
@@ -566,6 +569,6 @@
   </div>
 </div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

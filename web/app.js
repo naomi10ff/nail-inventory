@@ -806,7 +806,22 @@ document.getElementById('btn-confirm-stocktake').addEventListener('click', () =>
   }
   document.getElementById('stocktake-status').textContent = '';
   renderUnscanned();
-  document.getElementById('stocktake-review').style.display = 'block';
+  // 未スキャン一覧はボタンを押すまで非表示にする(見たい人だけ確認できればよく、
+  // 「本社へ送信する」への到達を毎回さえぎらないようにするため)
+  document.getElementById('unscanned-wrap').style.display = 'none';
+  document.getElementById('btn-toggle-unscanned').textContent = '未スキャンの商品を確認する';
+  const reviewEl = document.getElementById('stocktake-review');
+  reviewEl.style.display = 'block';
+  // 商品数が多いとタリー一覧が長くなり、表示が変わったこと自体が画面外で見えないことがあるため、
+  // 「本社へ送信する」ボタンが確実に見えるようスクロールする
+  reviewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('btn-toggle-unscanned').addEventListener('click', () => {
+  const wrap = document.getElementById('unscanned-wrap');
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? 'block' : 'none';
+  document.getElementById('btn-toggle-unscanned').textContent = isHidden ? '未スキャンの商品を隠す' : '未スキャンの商品を確認する';
 });
 
 document.getElementById('btn-back-to-scan').addEventListener('click', () => {
