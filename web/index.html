@@ -107,7 +107,10 @@
     <button type="button" class="primary" id="btn-confirm-stocktake" disabled>内容を確認する</button>
   </div>
   <p class="status" id="stocktake-status"></p>
-  <div id="tally-container"></div>
+  <!-- 商品数が多い店舗ではこの一覧がどんどん長くなり、スキャン中に画面が伸び続けて
+       操作しづらくなるため、スキャン中は非表示にし、「内容を確認する」を押した
+       ときだけ(数の修正のために)表示する -->
+  <div id="tally-container" style="display:none;"></div>
 
   <div id="stocktake-review" style="display:none;">
     <div style="display:flex; gap:8px;">
@@ -569,6 +572,6 @@
   </div>
 </div>
 
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

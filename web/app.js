@@ -436,6 +436,8 @@ function startStocktakeScan(mode) {
   state.stocktakeMode = mode;
   loadStocktakeProductList().catch((e) => console.error(e));
   renderTally();
+  document.getElementById('tally-container').style.display = 'none';
+  document.getElementById('stocktake-review').style.display = 'none';
   showScreen('screen-stocktake');
   rearmGate(stocktakeGate);
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
@@ -816,6 +818,8 @@ document.getElementById('btn-confirm-stocktake').addEventListener('click', () =>
   // 「本社へ送信する」への到達を毎回さえぎらないようにするため)
   document.getElementById('unscanned-wrap').style.display = 'none';
   document.getElementById('btn-toggle-unscanned').textContent = '未スキャンの商品を確認する';
+  // スキャン中は隠していた商品ごとの一覧を、確認のタイミングでだけ表示する
+  document.getElementById('tally-container').style.display = 'block';
   const reviewEl = document.getElementById('stocktake-review');
   reviewEl.style.display = 'block';
   // 商品数が多いとタリー一覧が長くなり、表示が変わったこと自体が画面外で見えないことがあるため、
@@ -832,6 +836,7 @@ document.getElementById('btn-toggle-unscanned').addEventListener('click', () => 
 
 document.getElementById('btn-back-to-scan').addEventListener('click', () => {
   document.getElementById('stocktake-review').style.display = 'none';
+  document.getElementById('tally-container').style.display = 'none';
 });
 
 document.getElementById('btn-send-stocktake').addEventListener('click', async () => {
@@ -845,6 +850,7 @@ document.getElementById('btn-send-stocktake').addEventListener('click', async ()
     state.stocktakeMode = 'overwrite';
     renderTally();
     document.getElementById('stocktake-review').style.display = 'none';
+    document.getElementById('tally-container').style.display = 'none';
   } catch (e) {
     document.getElementById('stocktake-status').textContent = e.message;
   }
