@@ -2481,42 +2481,67 @@ function monthLabel(monthStr) {
   return parts[1] ? `${Number(parts[1])}月末` : '';
 }
 
+/**
+ * 「今の状況」(状態バッジ)をまず大きく分かりやすく出し、実施記録の一覧・商品ごとの
+ * 差異テーブルといった細かい情報は、必要な人だけがボタンで開けるようにする(すべて
+ * 一度に表示すると情報が多すぎて分かりにくい、との指摘への対応)。
+ */
 function renderReviewResult(data, summaryElId, tableElId) {
   const summaryEl = document.getElementById(summaryElId);
-  let summaryHtml = '';
+  const tableContainer = document.getElementById(tableElId);
+
+  const ms = data.monthlyStatus;
+  let statusHtml;
+  if (ms) {
+    const dateStr = ms.implementedDate ? new Date(ms.implementedDate).toLocaleDateString('ja-JP') : '';
+    if (ms.status === '承認済み') {
+      statusHtml = `<p class="status" style="font-size:1.1rem; margin-bottom:2px;">承認済み</p>` +
+        `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / ${ms.approver}が承認済み</p>`;
+    } else if (ms.status === '差し戻し') {
+      statusHtml = `<p class="error" style="font-size:1.1rem; margin-bottom:2px;">差し戻し</p>` +
+        `<p class="hint" style="margin-top:0;">実施日: ${dateStr} / 理由: ${ms.rejectedReason || '記載なし'}</p>`;
+    } else if (ms.status === '承認待ち') {
+      statusHtml = `<p style="font-size:1.1rem; margin-bottom:2px;">承認待ち</p>` +
+        `<p class="hint" style="margin-top:0;">実施日: ${dateStr}</p>`;
+    } else {
+      statusHtml = '<p style="font-size:1.1rem; margin-bottom:2px;">未実施</p>';
+    }
+  } else if (data.approval.approved) {
+    // 旧レスポンス互換(monthlyStatusが無い場合)
+    statusHtml = `<p class="status">承認済み(${data.approval.approver} / ${new Date(data.approval.approvedAt).toLocaleString('ja-JP')})</p>`;
+  } else {
+    statusHtml = '<p class="hint">未承認</p>';
+  }
+
+  let eventsHtml;
   if (!data.stocktakeEvents.length) {
-    summaryHtml += '<p class="hint">この月はまだ棚卸が実施されていません。</p>';
+    eventsHtml = '<p class="hint">この月はまだ棚卸が実施されていません。</p>';
   } else {
     const lines = data.stocktakeEvents.map((e) => {
       const label = `${new Date(e.timestamp).toLocaleString('ja-JP')} / ${e.staffName || '(不明)'} / ${e.itemCount}品目`;
       return e.isLatest ? `<strong>${label}(最新)</strong>` : label;
     });
-    summaryHtml += `<p class="hint">棚卸実施(1回の送信ごとに1行、古い順): ${lines.join('、')}</p>`;
+    eventsHtml = `<p class="hint">棚卸実施(1回の送信ごとに1行、古い順): ${lines.join('、')}</p>`;
   }
-  const ms = data.monthlyStatus;
-  if (ms) {
-    const dateStr = ms.implementedDate ? new Date(ms.implementedDate).toLocaleDateString('ja-JP') : '未実施';
-    if (ms.status === '承認済み') {
-      summaryHtml += `<p class="status">状態: 承認済み(実施日: ${dateStr} / ${ms.approver} が ${new Date(ms.approvedAt).toLocaleString('ja-JP')} に承認)</p>`;
-    } else if (ms.status === '差し戻し') {
-      summaryHtml += `<p class="error">状態: 差し戻し(実施日: ${dateStr} / 理由: ${ms.rejectedReason || '記載なし'})</p>`;
-    } else if (ms.status === '承認待ち') {
-      summaryHtml += `<p class="hint">状態: 承認待ち(実施日: ${dateStr})</p>`;
-    } else {
-      summaryHtml += '<p class="hint">状態: 未実施</p>';
-    }
-  } else if (data.approval.approved) {
-    // 旧レスポンス互換(monthlyStatusが無い場合)
-    summaryHtml += `<p class="status">承認済み(${data.approval.approver} / ${new Date(data.approval.approvedAt).toLocaleString('ja-JP')})</p>`;
-  } else {
-    summaryHtml += '<p class="hint">未承認</p>';
-  }
-  summaryEl.innerHTML = summaryHtml;
 
-  const container = document.getElementById(tableElId);
-  container.innerHTML = '';
+  const detailsId = summaryElId + '-details';
+  const toggleId = summaryElId + '-toggle';
+  summaryEl.innerHTML = statusHtml +
+    `<button type="button" class="secondary" id="${toggleId}">詳細(実施記録・商品ごとの差異)を確認する</button>` +
+    `<div id="${detailsId}" style="display:none;">${eventsHtml}</div>`;
+  tableContainer.style.display = 'none';
+
+  document.getElementById(toggleId).addEventListener('click', () => {
+    const detailsEl = document.getElementById(detailsId);
+    const isHidden = detailsEl.style.display === 'none';
+    detailsEl.style.display = isHidden ? 'block' : 'none';
+    tableContainer.style.display = isHidden ? 'block' : 'none';
+    document.getElementById(toggleId).textContent = isHidden ? '詳細を隠す' : '詳細(実施記録・商品ごとの差異)を確認する';
+  });
+
+  tableContainer.innerHTML = '';
   if (!data.items.length) {
-    container.textContent = '商品が登録されていません';
+    tableContainer.textContent = '商品が登録されていません';
     return;
   }
   const table = document.createElement('table');
@@ -2532,7 +2557,7 @@ function renderReviewResult(data, summaryElId, tableElId) {
       `<td>${item.currentStock}</td><td>${item.diff}</td>`;
     table.appendChild(tr);
   });
-  container.appendChild(table);
+  tableContainer.appendChild(table);
 }
 
 // ---- 棚卸承認(本社) ----
