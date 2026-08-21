@@ -481,11 +481,14 @@ function submitStocktake_(session, p) {
   var thisMonthQtyByCode = mode === 'add' ? getThisMonthStocktakeMap_(store, month) : {};
 
   var items = p.items || [];
+  // 商品マスタを1回だけ読み込んでマップ化する。棚卸は1回の送信で多数の商品(場合によっては
+  // 数百件)を扱うため、商品ごとにlookupProduct_で毎回シートを読み直すと件数分だけ遅くなる。
+  var productMap = getProductMap_(store);
   var timestamp = new Date(); // 送信内の全商品に同じ時刻を持たせ、1回の送信として後から突き合わせられるようにする
   var recorded = [];
   var unknownCodes = [];
   items.forEach(function (item) {
-    var product = lookupProduct_(store, item.code);
+    var product = productMap[String(item.code)];
     if (!product) {
       unknownCodes.push(item.code);
       return;
@@ -496,16 +499,37 @@ function submitStocktake_(session, p) {
     appendLog_(store, p.staffName, product, '棚卸', qty, '', timestamp);
     recorded.push({ code: item.code, name: product.name, brand: product.brand, count: qty });
   });
-  // refreshSummary_()(現在庫サマリの再構築)はここでは呼ばない。recordIncoming_/recordDisposal_
-  // と同じ理由: 取引ログ全体を読み直すため件数が増えるほど遅くなり、棚卸は1回の送信で多数の
-  // 商品を扱うため特に影響が大きい。画面表示は毎回取引ログから直接計算しており、このシートは
-  // 参考用なので、最新化したい場合はrefreshCurrentStockSummary()を手動実行する。
+  // refreshSummary_()(現在庫サマリの再構築)や、この送信結果を反映したgetInventorySummary_の
+  // 再計算はここでは呼ばない。どちらも取引ログ・商品マスタ全体を読み直す重い処理で、画面側は
+  // 呼び出し結果のsummaryを使っておらず(recorded/unknownCodesのみ使用)、完全に無駄になって
+  // いたため削除した。最新の在庫は各画面が表示時に毎回計算し直す。
 
   return {
     recorded: recorded,
-    unknownCodes: unknownCodes,
-    summary: getInventorySummary_(session, store)
+    unknownCodes: unknownCodes
   };
+}
+
+/** 商品マスタを1回のシート読み込みで「コード→商品」のマップにする(棚卸の一括処理用)。 */
+function getProductMap_(store) {
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] !== store) continue;
+    map[String(data[i][1])] = {
+      store: data[i][0],
+      code: data[i][1],
+      name: data[i][2],
+      brand: data[i][3],
+      category: data[i][4],
+      maker: data[i][5],
+      unit: data[i][6],
+      colorNo: data[i][9],
+      itemNumber: data[i][10]
+    };
+  }
+  return map;
 }
 
 /** その店舗・今月の棚卸ログから、商品コードごとの最新数量のマップを1回のシート読み込みで作る。 */
