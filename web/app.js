@@ -762,6 +762,9 @@ document.getElementById('btn-stocktake-next').addEventListener('click', () => {
   // 考え方。押した瞬間まだ同じ商品が映っていることが多いため、即再開だと再カウントしてしまう)
   rearmGateAfterMiss(stocktakeGate);
   document.getElementById('stocktake-status').textContent = '次の商品をスキャンしてください';
+  // 前の商品名を表示したままだと押した反応が見えず不安になるため、次にスキャンできる
+  // ようになるまで「直前のスキャン」カードを一旦隠す
+  document.getElementById('stocktake-live-status').style.display = 'none';
 });
 
 document.getElementById('btn-manual-add-1').addEventListener('click', () => {
