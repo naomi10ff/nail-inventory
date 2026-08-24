@@ -1987,7 +1987,13 @@ function renderProductsTable() {
     delBtn.className = 'link';
     delBtn.textContent = '削除';
     delBtn.addEventListener('click', async () => {
-      if (!confirm('削除しますか?')) return;
+      // 誤操作を防ぐため、消えるものと消えないものを具体的に書いた警告文にする
+      // (「削除しますか?」だけだと軽く見えてうっかり押してしまうとの指摘のため)
+      const warning = `「${p.name}」(${p.code})を削除します。\n\n` +
+        'これまでの在庫数の記録は消えませんが、商品マスタからは無くなり、' +
+        '次にこのバーコードをスキャンすると「未登録」になります。\n\n' +
+        '本当に削除しますか?';
+      if (!confirm(warning)) return;
       await apiCall('deleteProduct', { store, code: p.code });
       await loadProducts();
     });
@@ -2350,7 +2356,11 @@ function renderNameDuplicates(store, products) {
       delBtn.className = 'link';
       delBtn.textContent = '削除';
       delBtn.addEventListener('click', async () => {
-        if (!confirm(`「${p.name}」(${p.code})を削除しますか?`)) return;
+        const warning = `「${p.name}」(${p.code})を削除します。\n\n` +
+          'これまでの在庫数の記録は消えませんが、商品マスタからは無くなり、' +
+          '次にこのバーコードをスキャンすると「未登録」になります。\n\n' +
+          '本当に削除しますか?';
+        if (!confirm(warning)) return;
         await apiCall('deleteProduct', { store, code: p.code });
         await runDedupScan(store);
       });
