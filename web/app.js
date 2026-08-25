@@ -2751,15 +2751,32 @@ document.getElementById('btn-reject-review').addEventListener('click', async () 
 });
 
 // ---- 棚卸承認の確認(店舗。閲覧のみ) ----
-document.getElementById('btn-nav-store-review').addEventListener('click', () => {
+document.getElementById('btn-nav-store-review').addEventListener('click', async () => {
   showScreen('screen-store-review');
   document.getElementById('store-review-month').value = currentYearMonth();
   document.getElementById('store-review-summary').innerHTML = '';
   document.getElementById('store-review-table').innerHTML = '';
-  // ログイン時に選んだ実施者名を初期値にしておく(「自分の」データをすぐ検索できるように)
-  document.getElementById('store-review-staff-filter').value = state.staffName || '';
   document.getElementById('store-review-logs-table').innerHTML = '';
+  await loadStoreReviewStaffOptions();
 });
+
+async function loadStoreReviewStaffOptions() {
+  const select = document.getElementById('store-review-staff-filter');
+  select.innerHTML = '<option value="">全員</option>';
+  try {
+    const data = await apiCall('getStaffList', {});
+    data.staff.forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = s.name;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  // ログイン時に選んだ実施者名を初期値にしておく(「自分の」データをすぐ検索できるように)
+  select.value = state.staffName || '';
+}
 
 document.getElementById('btn-search-store-review-logs').addEventListener('click', async () => {
   const staffName = document.getElementById('store-review-staff-filter').value.trim();
