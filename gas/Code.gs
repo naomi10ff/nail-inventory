@@ -71,7 +71,7 @@ function routeAction_(action, p) {
     case 'deleteProduct':
       return deleteProduct_(validateToken_(p.token), p);
     case 'getLogEntries':
-      return getLogEntries_(validateToken_(p.token), p.store, p.limit, p.type, p.staffName);
+      return getLogEntries_(validateToken_(p.token), p.store, p.limit, p.type, p.staffName, p.brand);
     case 'createAccount':
       return createAccount_(validateToken_(p.token), p);
     case 'resetPassword':
@@ -100,6 +100,8 @@ function routeAction_(action, p) {
       return rejectStocktake_(validateToken_(p.token), p);
     case 'getStocktakeStatus':
       return getStocktakeStatusForClient_(validateToken_(p.token), p.store, p.month);
+    case 'resetStocktakeThisMonth':
+      return resetStocktakeThisMonth_(validateToken_(p.token), p);
     default:
       throw new Error('不明なactionです: ' + action);
   }
@@ -510,6 +512,43 @@ function submitStocktake_(session, p) {
   };
 }
 
+/**
+ * 「新しく数え直す」を選んだときに、今月すでに記録されている棚卸ログを削除してから
+ * 数え直せるようにする。overwriteモードは今回スキャンした商品しか上書きしないため、
+ * これをせずに一部の商品だけ数え直すと、スキャンし忘れた商品に古いカウントが
+ * 残ってしまう。承認済みの月はsubmitStocktake_と同様にロックする。
+ */
+function resetStocktakeThisMonth_(session, p) {
+  var store = session.role === 'hq' ? p.store : session.store;
+  requireStoreAccess_(session, store);
+
+  var month = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+  if (getApprovalStatus_(store, month).status === '承認済み') {
+    throw new Error('今月は本社承認済みのため棚卸はできません。修正が必要な場合は本社に差し戻しを依頼してください');
+  }
+
+  var sheet = getSheet_(SHEET_LOG);
+  var data = sheet.getDataRange().getValues();
+  var deletedCount = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var row = data[i];
+    if (row[1] === store && row[6] === '棚卸' && Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'yyyy-MM') === month) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+
+  var approvalSheet = getSheet_(SHEET_APPROVALS);
+  var approvalData = approvalSheet.getDataRange().getValues();
+  for (var j = approvalData.length - 1; j >= 1; j--) {
+    if (approvalData[j][0] === store && approvalData[j][1] === month) {
+      approvalSheet.deleteRow(j + 1);
+    }
+  }
+
+  return { store: store, month: month, deletedCount: deletedCount };
+}
+
 /** 商品マスタを1回のシート読み込みで「コード→商品」のマップにする(棚卸の一括処理用)。 */
 function getProductMap_(store) {
   var sheet = getSheet_(SHEET_PRODUCTS);
@@ -603,7 +642,7 @@ function clearStoreLog_(session, p) {
   return { store: p.store, deletedCount: deletedCount };
 }
 
-function getLogEntries_(session, storeParam, limit, type, staffName) {
+function getLogEntries_(session, storeParam, limit, type, staffName, brand) {
   var store = session.role === 'hq' ? storeParam || null : session.store;
   if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
     throw new Error('他店舗のデータにはアクセスできません');
@@ -616,6 +655,7 @@ function getLogEntries_(session, storeParam, limit, type, staffName) {
     if (store && row[1] !== store) continue;
     if (type && row[6] !== type) continue;
     if (staffName && String(row[2]).indexOf(staffName) === -1) continue;
+    if (brand && String(row[5]).indexOf(brand) === -1) continue;
     rows.push({
       rowIndex: i + 1,
       timestamp: row[0],

@@ -429,7 +429,25 @@ document.getElementById('btn-nav-stocktake').addEventListener('click', async (ev
 
 document.getElementById('btn-back-stocktake-mode').addEventListener('click', () => showScreen('screen-menu'));
 document.getElementById('btn-stocktake-mode-add').addEventListener('click', () => startStocktakeScan('add'));
-document.getElementById('btn-stocktake-mode-overwrite').addEventListener('click', () => startStocktakeScan('overwrite'));
+
+// 「新しく数え直す」は、スキャンし忘れた商品に前回のカウントが残ってしまわないよう、
+// 今月すでに記録されている棚卸データを削除してから数え直す。取り消せない操作のため
+// 必ず確認ダイアログを出す。
+document.getElementById('btn-stocktake-mode-overwrite').addEventListener('click', async (ev) => {
+  const confirmed = confirm(
+    '「新しく数え直す」を選ぶと、今月すでに記録されている棚卸データはすべて削除されます。\n' +
+    'この操作は取り消せません。よろしいですか?'
+  );
+  if (!confirmed) return;
+  await withButtonBusy(ev.currentTarget, '削除中...', async () => {
+    try {
+      await apiCall('resetStocktakeThisMonth', {});
+      startStocktakeScan('overwrite');
+    } catch (e) {
+      document.getElementById('stocktake-mode-info').textContent = e.message;
+    }
+  });
+});
 
 function startStocktakeScan(mode) {
   state.tally = {};
@@ -486,12 +504,14 @@ function renderUnscanned() {
     const h3 = document.createElement('h3');
     h3.textContent = brand;
     group.appendChild(h3);
-    byBrand[brand].forEach((p) => {
-      const row = document.createElement('div');
-      row.className = 'tally-row';
-      row.innerHTML = `<span class="tally-name">${p.name}${p.colorNo ? ' (' + p.colorNo + ')' : ''}</span>`;
-      group.appendChild(row);
-    });
+    byBrand[brand]
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ja'))
+      .forEach((p) => {
+        const row = document.createElement('div');
+        row.className = 'tally-row';
+        row.innerHTML = `<span class="tally-name">${p.name}${p.colorNo ? ' (' + p.colorNo + ')' : ''}</span>`;
+        group.appendChild(row);
+      });
     container.appendChild(group);
   });
 }
@@ -837,18 +857,20 @@ function renderTally() {
     const h3 = document.createElement('h3');
     h3.textContent = brand;
     group.appendChild(h3);
-    byBrand[brand].forEach((item) => {
-      const row = document.createElement('div');
-      row.className = 'tally-row';
-      row.innerHTML = `
-        <span class="tally-name">${item.name}</span>
-        <span class="tally-stepper">
-          <button type="button" class="stepper-btn" data-code="${item.code}" data-delta="-1" aria-label="1本減らす">−</button>
-          <input type="number" class="tally-count-input" data-code="${item.code}" value="${item.count}" min="0">
-          <button type="button" class="stepper-btn" data-code="${item.code}" data-delta="1" aria-label="1本増やす">+</button>
-        </span>`;
-      group.appendChild(row);
-    });
+    byBrand[brand]
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ja'))
+      .forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'tally-row';
+        row.innerHTML = `
+          <span class="tally-name">${item.name}</span>
+          <span class="tally-stepper">
+            <button type="button" class="stepper-btn" data-code="${item.code}" data-delta="-1" aria-label="1本減らす">−</button>
+            <input type="number" class="tally-count-input" data-code="${item.code}" value="${item.count}" min="0">
+            <button type="button" class="stepper-btn" data-code="${item.code}" data-delta="1" aria-label="1本増やす">+</button>
+          </span>`;
+        group.appendChild(row);
+      });
     container.appendChild(group);
   });
 
@@ -2493,9 +2515,11 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 document.getElementById('log-store-filter').addEventListener('change', loadLogs);
 document.getElementById('log-type-filter').addEventListener('change', loadLogs);
 document.getElementById('btn-search-logs').addEventListener('click', loadLogs);
-// スタッフ名は入力しながら絞り込むと打鍵のたびに通信してしまうため、Enterキーでも検索できるようにする
-document.getElementById('log-staff-filter').addEventListener('keydown', (ev) => {
-  if (ev.key === 'Enter') loadLogs();
+// スタッフ名・ブランドは入力しながら絞り込むと打鍵のたびに通信してしまうため、Enterキーでも検索できるようにする
+['log-staff-filter', 'log-brand-filter'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') loadLogs();
+  });
 });
 
 document.getElementById('btn-clear-store-log').addEventListener('click', () => {
@@ -2519,21 +2543,23 @@ async function loadLogs() {
   const store = document.getElementById('log-store-filter').value;
   const type = document.getElementById('log-type-filter').value;
   const staffName = document.getElementById('log-staff-filter').value.trim();
+  const brand = document.getElementById('log-brand-filter').value.trim();
   const data = await apiCall('getLogEntries', {
     store: store || undefined,
     type: type || undefined,
     staffName: staffName || undefined,
+    brand: brand || undefined,
     limit: 200
   });
   const container = document.getElementById('logs-table');
   container.innerHTML = '';
   const table = document.createElement('table');
   table.className = 'stock-table';
-  table.innerHTML = '<tr><th>日時</th><th>店舗</th><th>スタッフ</th><th>商品</th><th>種別</th><th>数量</th><th></th></tr>';
+  table.innerHTML = '<tr><th>日時</th><th>店舗</th><th>スタッフ</th><th>ブランド</th><th>商品</th><th>種別</th><th>数量</th><th></th></tr>';
   data.logs.forEach((log) => {
     const tr = document.createElement('tr');
     const delBtn = `<button type="button" class="link" data-row="${log.rowIndex}">削除</button>`;
-    tr.innerHTML = `<td>${new Date(log.timestamp).toLocaleString('ja-JP')}</td><td>${log.store}</td><td>${log.staffName}</td><td>${log.name}</td><td>${log.type}</td><td>${log.quantity}</td><td>${delBtn}</td>`;
+    tr.innerHTML = `<td>${new Date(log.timestamp).toLocaleString('ja-JP')}</td><td>${log.store}</td><td>${log.staffName}</td><td>${log.brand || ''}</td><td>${log.name}</td><td>${log.type}</td><td>${log.quantity}</td><td>${delBtn}</td>`;
     table.appendChild(tr);
   });
   container.appendChild(table);
