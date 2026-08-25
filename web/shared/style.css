@@ -69,10 +69,10 @@ button.link { background: none; color: var(--accent-dark); text-decoration: unde
 .status { color: var(--ok); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
 
 #reader, #reader-4, #reader-hq-incoming, #reader-hq-disposal, #reader-hq-stock-lookup {
-  /* カメラ映像だけで画面の大半を占めてしまい、スキャン結果が画面外に隠れるとの
-     指摘があったため、高さに上限を設けて他の表示(直前のスキャン・一覧など)が
-     同じ画面内で見えるようにする。overflow:hiddenで映像の下側だけを切って収める。 */
-  width: 100%; max-height: 45vh; border-radius: 8px; overflow: hidden; margin-top: 12px;
+  /* 高さに上限を設けていたが、スキャン領域(qrbox)の判定は元のコンテナの高さを
+     基準に計算されるため、高さを制限するとスキャンできる位置がずれてしまう
+     不具合につながった可能性が高いため元に戻した。 */
+  width: 100%; border-radius: 8px; overflow: hidden; margin-top: 12px;
 }
 
 .tally-group { margin-top: 16px; }

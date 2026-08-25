@@ -649,13 +649,13 @@ async function startScanner(elementId, onSuccess, gate) {
       // videoConstraintsを指定すると外側のfacingMode指定が無視されてしまうため、
       // ここに背面カメラ指定を含めておく(含めないとインカメラになることがある)。
       // iOSは既定だと解像度が低く、バーコードの細い線がつぶれやすいため高解像度も要求する。
-      // focusMode:'continuous'は対応しているブラウザ・端末ではピント合わせを助けるが、
-      // iOS Safari(iPhoneのカメラ全般)は現状この指定を無視することが多く、完全には直らない。
+      // (focusMode:'continuous'を試しに追加していたが、以前スムーズにスキャンできて
+      // いた設定ではなかったため元に戻した。入荷登録・棚卸・在庫検索など全画面で
+      // この同じ設定を共有している=カメラの挙動はどの画面でも完全に同一のはず)
       videoConstraints: {
         facingMode: { exact: 'environment' },
         width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        advanced: [{ focusMode: 'continuous' }]
+        height: { ideal: 1080 }
       }
     },
     (decodedText) => {
