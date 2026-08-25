@@ -2491,17 +2491,25 @@ document.getElementById('btn-reset-password').addEventListener('click', async ()
 
 // ---- 取引ログ ----
 document.getElementById('log-store-filter').addEventListener('change', loadLogs);
+document.getElementById('log-type-filter').addEventListener('change', loadLogs);
+document.getElementById('btn-search-logs').addEventListener('click', loadLogs);
+// スタッフ名は入力しながら絞り込むと打鍵のたびに通信してしまうため、Enterキーでも検索できるようにする
+document.getElementById('log-staff-filter').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') loadLogs();
+});
 
 document.getElementById('btn-clear-store-log').addEventListener('click', () => {
   const store = document.getElementById('log-store-filter').value;
+  const type = document.getElementById('log-type-filter').value;
   if (!store) {
     alert('店舗を選択してください(全店舗のログを一括削除することはできません)');
     return;
   }
+  const target = type ? `${store}の「${type}」の取引ログ` : `${store}の取引ログ全て`;
   openDangerModal(
-    `${store}の取引ログを全て削除します。この操作は取り消せません。テストデータの整理などに使ってください。`,
+    `${target}を削除します。この操作は取り消せません。テストデータの整理などに使ってください。`,
     async (password) => {
-      await apiCall('clearStoreLog', { store, password });
+      await apiCall('clearStoreLog', { store, type: type || undefined, password });
       await loadLogs();
     }
   );
@@ -2509,7 +2517,14 @@ document.getElementById('btn-clear-store-log').addEventListener('click', () => {
 
 async function loadLogs() {
   const store = document.getElementById('log-store-filter').value;
-  const data = await apiCall('getLogEntries', { store: store || undefined, limit: 200 });
+  const type = document.getElementById('log-type-filter').value;
+  const staffName = document.getElementById('log-staff-filter').value.trim();
+  const data = await apiCall('getLogEntries', {
+    store: store || undefined,
+    type: type || undefined,
+    staffName: staffName || undefined,
+    limit: 200
+  });
   const container = document.getElementById('logs-table');
   container.innerHTML = '';
   const table = document.createElement('table');

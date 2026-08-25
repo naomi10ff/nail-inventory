@@ -464,7 +464,18 @@
   <h2>取引ログ</h2>
   <label for="log-store-filter">店舗で絞り込み</label>
   <select id="log-store-filter"><option value="">全店舗</option></select>
-  <button type="button" class="danger" style="width:auto; margin-top:8px;" id="btn-clear-store-log">選択中の店舗のログを全部削除</button>
+  <label for="log-type-filter">種別で絞り込み</label>
+  <select id="log-type-filter">
+    <option value="">全種別</option>
+    <option value="棚卸">棚卸</option>
+    <option value="入荷">入荷</option>
+    <option value="廃棄">廃棄</option>
+    <option value="調整">調整</option>
+  </select>
+  <label for="log-staff-filter">実施者(スタッフ名)で絞り込み</label>
+  <input type="text" id="log-staff-filter" placeholder="例: 田中">
+  <button type="button" class="secondary" style="width:auto; margin-top:8px;" id="btn-search-logs">検索する</button>
+  <button type="button" class="danger" style="width:auto; margin-top:8px;" id="btn-clear-store-log">選択中の条件のログを削除</button>
   <div id="logs-table"></div>
 </section>
 
@@ -575,6 +586,6 @@
   </div>
 </div>
 
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

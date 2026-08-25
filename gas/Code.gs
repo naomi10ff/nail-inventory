@@ -71,7 +71,7 @@ function routeAction_(action, p) {
     case 'deleteProduct':
       return deleteProduct_(validateToken_(p.token), p);
     case 'getLogEntries':
-      return getLogEntries_(validateToken_(p.token), p.store, p.limit);
+      return getLogEntries_(validateToken_(p.token), p.store, p.limit, p.type, p.staffName);
     case 'createAccount':
       return createAccount_(validateToken_(p.token), p);
     case 'resetPassword':
@@ -572,22 +572,30 @@ function clearStoreLog_(session, p) {
   requireRole_(session, ['hq']);
   verifyOwnPassword_(session, p.password);
   if (!p.store) throw new Error('店舗を指定してください');
+  // typeを指定すると、その種別(棚卸/入荷/廃棄/調整)のログだけを削除する。
+  // 例えばテストの棚卸データだけを消して、入荷・廃棄の実データは残したい場合に使う。
+  var type = p.type || null;
 
   var sheet = getSheet_(SHEET_LOG);
   var data = sheet.getDataRange().getValues();
   var deletedCount = 0;
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][1] === p.store) {
+    if (data[i][1] === p.store && (!type || data[i][6] === type)) {
       sheet.deleteRow(i + 1);
       deletedCount++;
     }
   }
 
-  var approvalSheet = getSheet_(SHEET_APPROVALS);
-  var approvalData = approvalSheet.getDataRange().getValues();
-  for (var j = approvalData.length - 1; j >= 1; j--) {
-    if (approvalData[j][0] === p.store) {
-      approvalSheet.deleteRow(j + 1);
+  // 棚卸データを消す場合(typeが棚卸、または全種別クリア)は、その店舗の承認状態も
+  // 意味を持たなくなるため合わせて削除し、未実施からやり直せるようにする。
+  // 入荷・廃棄だけを消す場合は棚卸の承認状態には影響しないため触らない。
+  if (!type || type === '棚卸') {
+    var approvalSheet = getSheet_(SHEET_APPROVALS);
+    var approvalData = approvalSheet.getDataRange().getValues();
+    for (var j = approvalData.length - 1; j >= 1; j--) {
+      if (approvalData[j][0] === p.store) {
+        approvalSheet.deleteRow(j + 1);
+      }
     }
   }
 
@@ -595,7 +603,7 @@ function clearStoreLog_(session, p) {
   return { store: p.store, deletedCount: deletedCount };
 }
 
-function getLogEntries_(session, storeParam, limit) {
+function getLogEntries_(session, storeParam, limit, type, staffName) {
   var store = session.role === 'hq' ? storeParam || null : session.store;
   if (session.role !== 'hq' && storeParam && storeParam !== session.store) {
     throw new Error('他店舗のデータにはアクセスできません');
@@ -606,6 +614,8 @@ function getLogEntries_(session, storeParam, limit) {
   for (var i = data.length - 1; i >= 1; i--) {
     var row = data[i];
     if (store && row[1] !== store) continue;
+    if (type && row[6] !== type) continue;
+    if (staffName && String(row[2]).indexOf(staffName) === -1) continue;
     rows.push({
       rowIndex: i + 1,
       timestamp: row[0],
