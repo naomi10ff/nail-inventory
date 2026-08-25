@@ -2756,6 +2756,34 @@ document.getElementById('btn-nav-store-review').addEventListener('click', () => 
   document.getElementById('store-review-month').value = currentYearMonth();
   document.getElementById('store-review-summary').innerHTML = '';
   document.getElementById('store-review-table').innerHTML = '';
+  // ログイン時に選んだ実施者名を初期値にしておく(「自分の」データをすぐ検索できるように)
+  document.getElementById('store-review-staff-filter').value = state.staffName || '';
+  document.getElementById('store-review-logs-table').innerHTML = '';
+});
+
+document.getElementById('btn-search-store-review-logs').addEventListener('click', async () => {
+  const staffName = document.getElementById('store-review-staff-filter').value.trim();
+  const container = document.getElementById('store-review-logs-table');
+  container.innerHTML = '検索中...';
+  try {
+    const data = await apiCall('getLogEntries', { type: '棚卸', staffName: staffName || undefined, limit: 200 });
+    container.innerHTML = '';
+    if (!data.logs.length) {
+      container.textContent = '該当するデータがありません';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'stock-table';
+    table.innerHTML = '<tr><th>日時</th><th>実施者</th><th>ブランド</th><th>商品</th><th>数量</th></tr>';
+    data.logs.forEach((log) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${new Date(log.timestamp).toLocaleString('ja-JP')}</td><td>${log.staffName}</td><td>${log.brand || ''}</td><td>${log.name}</td><td>${log.quantity}</td>`;
+      table.appendChild(tr);
+    });
+    container.appendChild(table);
+  } catch (e) {
+    container.textContent = e.message;
+  }
 });
 
 document.getElementById('btn-back-store-review').addEventListener('click', () => showScreen('screen-menu'));

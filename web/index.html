@@ -178,6 +178,15 @@
   <button type="button" class="primary" id="btn-load-store-review">確認する</button>
   <div id="store-review-summary"></div>
   <div id="store-review-table" style="overflow-x:auto;"></div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">自分が実施した棚卸データを確認</h3>
+    <p class="hint">実施者名で絞り込んで、自分がスキャンした商品・数量を確認できます。</p>
+    <label for="store-review-staff-filter">実施者名</label>
+    <input type="text" id="store-review-staff-filter" placeholder="例: 田中">
+    <button type="button" class="secondary" id="btn-search-store-review-logs">検索する</button>
+    <div id="store-review-logs-table" style="overflow-x:auto;"></div>
+  </div>
 </section>
 
 <!-- ==================== 本社用画面 ==================== -->
@@ -588,6 +597,6 @@
   </div>
 </div>
 
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
