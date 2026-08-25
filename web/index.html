@@ -172,13 +172,6 @@
 <section id="screen-store-review" class="screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-store-review">&lt; メニューへ戻る</button></div>
   <h2>棚卸し確認</h2>
-  <p class="hint">今月の棚卸の状態(未実施・承認待ち・差し戻し・承認済み)と、本社が確認した内容を確認できます。</p>
-  <label for="store-review-month">対象月</label>
-  <input type="month" id="store-review-month">
-  <button type="button" class="primary" id="btn-load-store-review">確認する</button>
-  <div id="store-review-summary"></div>
-  <div id="store-review-table" style="overflow-x:auto;"></div>
-
   <div class="card">
     <h3 style="margin-top:0;">自分が実施した棚卸データを確認</h3>
     <p class="hint">実施者名で絞り込んで、自分がスキャンした商品・数量を確認できます。</p>
@@ -187,6 +180,13 @@
     <button type="button" class="secondary" id="btn-search-store-review-logs">検索する</button>
     <div id="store-review-logs-table" style="overflow-x:auto;"></div>
   </div>
+
+  <p class="hint">今月の棚卸の状態(未実施・承認待ち・差し戻し・承認済み)と、本社が確認した内容を確認できます。</p>
+  <label for="store-review-month">対象月</label>
+  <input type="month" id="store-review-month">
+  <button type="button" class="primary" id="btn-load-store-review">確認する</button>
+  <div id="store-review-summary"></div>
+  <div id="store-review-table" style="overflow-x:auto;"></div>
 </section>
 
 <!-- ==================== 本社用画面 ==================== -->
