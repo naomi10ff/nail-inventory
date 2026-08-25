@@ -92,6 +92,8 @@
   <h2>棚卸スキャン</h2>
   <p class="hint">1本スキャンしたら、「次の商品をスキャンする」を押してから次を読み取ってください。個数が違う場合は下の一覧で+/-や数字入力で直接修正できます。</p>
   <div id="reader"></div>
+  <p class="hint" style="text-align:center; margin:4px 0 0;">ピントが合わない場合は、別のカメラ(レンズ)に切り替えられます</p>
+  <button type="button" class="secondary" id="btn-switch-camera-stocktake">別のカメラを試す</button>
   <label for="manual-code-1">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-1" style="flex:1;">
@@ -573,6 +575,6 @@
   </div>
 </div>
 
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

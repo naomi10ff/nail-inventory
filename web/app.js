@@ -444,6 +444,13 @@ function startStocktakeScan(mode) {
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
 }
 
+document.getElementById('btn-switch-camera-stocktake').addEventListener('click', async (ev) => {
+  await withButtonBusy(ev.currentTarget, '切り替え中...', async () => {
+    await switchCamera('reader', onStocktakeScan, stocktakeGate, 'stocktake-status');
+    rearmGate(stocktakeGate);
+  });
+});
+
 // ---- 棚卸: 未スキャン商品一覧 ----
 // 「内容を確認する」を押した時点で送信はせず、まず商品マスタの全件と今スキャン済みの
 // 一覧を突き合わせて未スキャン商品(欠品・スキャン漏れの可能性がある)を確認してもらい、
@@ -620,6 +627,45 @@ const stocktakeGate = createGate({ rearmOnMiss: false });
 const hqIncomingGate = createGate({ rearmOnMiss: false });
 const hqDisposalGate = createGate({ rearmOnMiss: false });
 
+// 一部の機種(iPhone13など)は「背面カメラ」指定だとiOSがピントの合いにくいレンズを
+// 自動選択してしまうことがある。カメラの一覧を取得しておき、ユーザーが手動で別の
+// 物理レンズに切り替えられるようにする(切り替えた選択はこのページを開いている間は
+// 覚えておき、同じ画面に入り直しても引き継ぐ)。
+let cachedCameraList = null;
+const cameraIndexByElement = {};
+
+async function getCameraList() {
+  if (!cachedCameraList) {
+    try {
+      cachedCameraList = await Html5Qrcode.getCameras();
+    } catch (e) {
+      cachedCameraList = [];
+    }
+  }
+  return cachedCameraList;
+}
+
+function getSelectedCameraId(elementId) {
+  const idx = cameraIndexByElement[elementId];
+  if (idx === undefined || !cachedCameraList || !cachedCameraList[idx]) return undefined;
+  return cachedCameraList[idx].id;
+}
+
+/** 次の物理カメラに切り替えて、同じ画面のスキャンをそのカメラで再開する。 */
+async function switchCamera(elementId, onSuccess, gate, statusElId) {
+  const statusEl = statusElId ? document.getElementById(statusElId) : null;
+  const cameras = await getCameraList();
+  if (cameras.length < 2) {
+    if (statusEl) statusEl.textContent = '切り替えられる別のカメラが見つかりませんでした';
+    return;
+  }
+  const nextIndex = ((cameraIndexByElement[elementId] || 0) + 1) % cameras.length;
+  cameraIndexByElement[elementId] = nextIndex;
+  await stopScanner(scannerForElement_(elementId));
+  if (statusEl) statusEl.textContent = `カメラを切り替えました(${nextIndex + 1}/${cameras.length})`;
+  await startScanner(elementId, onSuccess, gate);
+}
+
 async function startScanner(elementId, onSuccess, gate) {
   const formats = [
     Html5QrcodeSupportedFormats.QR_CODE,
@@ -637,8 +683,17 @@ async function startScanner(elementId, onSuccess, gate) {
   if (elementId === 'reader-hq-disposal') scannerHqDisposal = scanner;
   if (elementId === 'reader-hq-stock-lookup') scannerHqStockLookup = scanner;
 
+  const selectedCameraId = getSelectedCameraId(elementId);
+  // 特定のカメラに切り替え済みならdeviceIdで指定し、そうでなければ従来通り
+  // facingMode(背面カメラ)にまかせる。videoConstraintsを指定すると外側の
+  // 最初の引数は無視されるため、両方に同じ内容を渡す。
+  const cameraTarget = selectedCameraId ? { deviceId: { exact: selectedCameraId } } : { facingMode: 'environment' };
+  const videoConstraints = selectedCameraId
+    ? { deviceId: { exact: selectedCameraId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    : { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
+
   await scanner.start(
-    { facingMode: 'environment' },
+    cameraTarget,
     {
       fps: 10,
       // 正方形だと横長のバーコードに対して余白が多く読み取りにくいため、横長の矩形にする
@@ -646,17 +701,8 @@ async function startScanner(elementId, onSuccess, gate) {
         width: Math.max(240, Math.floor(viewfinderWidth * 0.85)),
         height: Math.max(120, Math.floor(viewfinderHeight * 0.4))
       }),
-      // videoConstraintsを指定すると外側のfacingMode指定が無視されてしまうため、
-      // ここに背面カメラ指定を含めておく(含めないとインカメラになることがある)。
       // iOSは既定だと解像度が低く、バーコードの細い線がつぶれやすいため高解像度も要求する。
-      // (focusMode:'continuous'を試しに追加していたが、以前スムーズにスキャンできて
-      // いた設定ではなかったため元に戻した。入荷登録・棚卸・在庫検索など全画面で
-      // この同じ設定を共有している=カメラの挙動はどの画面でも完全に同一のはず)
-      videoConstraints: {
-        facingMode: { exact: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
-      }
+      videoConstraints: videoConstraints
     },
     (decodedText) => {
       if (gate.valueAware) {
