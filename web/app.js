@@ -531,16 +531,13 @@ document.getElementById('btn-switch-camera-stocktake').addEventListener('click',
 // 一覧を突き合わせて未スキャン商品(欠品・スキャン漏れの可能性がある)を確認してもらい、
 // 「本社へ送信する」を押した時点で初めてsubmitStocktakeを呼ぶ2段階にしている。
 let stocktakeAllProducts = [];
-let stocktakeProductsLoaded = false;
 
 async function loadStocktakeProductList() {
   stocktakeAllProducts = [];
-  stocktakeProductsLoaded = false;
   document.getElementById('unscanned-container').innerHTML = '';
   document.getElementById('stocktake-review').style.display = 'none';
   const data = await apiCall('listProducts', {});
   stocktakeAllProducts = data.products;
-  stocktakeProductsLoaded = true;
 }
 
 function renderUnscanned() {
@@ -865,11 +862,13 @@ async function onStocktakeScan(code) {
   try {
     // 商品マスタは棚卸画面に入った時点で1回だけ読み込み済み(stocktakeAllProducts)。
     // スキャンのたびに毎回サーバーへ問い合わせると通信待ちの分だけ画面の反応が
-    // 遅く感じられ、スキャンする商品が増えるほど積み重なって負担になるため、
-    // まずは読み込み済みのデータから探す。読み込みがまだ終わっていない場合
-    // (画面を開いた直後など)だけ、念のためサーバーに問い合わせる。
+    // 遅く感じられるため、まずは読み込み済みのデータから探す。
+    // ただし、この読み込み後に本社が別端末で新規商品を登録した場合など、
+    // ローカルのデータに無いだけで実際には登録済みのことがあるため、
+    // ローカルで見つからなかった場合に限り「未登録」と決めつける前に
+    // サーバーへ再確認する(見つかる場合がほとんどのスキャンでは通信が発生せず速いまま)。
     let product = stocktakeAllProducts.find((p) => String(p.code) === String(code)) || null;
-    if (!product && !stocktakeProductsLoaded) {
+    if (!product) {
       product = await apiCall('lookupProduct', { code });
     }
     if (!product) {
