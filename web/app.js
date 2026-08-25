@@ -884,7 +884,12 @@ async function onStocktakeScan(code) {
     document.getElementById('stocktake-live-status').style.display = 'block';
     document.getElementById('stocktake-last-name').textContent = product.name;
     document.getElementById('stocktake-last-count').textContent = state.tally[code].count;
-    renderTally();
+    // renderTally()は#tally-container(スキャン中は非表示)を1からまるごと組み立て直す
+    // 重い処理で、スキャン済み商品が増えるほど1回あたりのコストが増え、スキャンする
+    // たびに毎回それを繰り返すとどんどん遅く感じられるようになる。スキャン中は非表示の
+    // 一覧を組み立て直す必要が無いので、ここでは合計件数などの軽い表示更新だけ行い、
+    // 実際に一覧を表示する(「内容を確認する」を押した)タイミングでまとめて組み立てる。
+    updateTallySummary();
     // 「次の商品をスキャンする」を押すまでカメラは反応しない(入荷登録と同じ、1件ずつ
     // 明示的に確定する方式)。ここでは意図的に再開しない。
   } catch (e) {
@@ -1000,6 +1005,8 @@ document.getElementById('btn-confirm-stocktake').addEventListener('click', () =>
   // 「本社へ送信する」への到達を毎回さえぎらないようにするため)
   document.getElementById('unscanned-wrap').style.display = 'none';
   document.getElementById('btn-toggle-unscanned').textContent = '未スキャンの商品を確認する';
+  // スキャン中は一覧の組み立てを省略していたため、表示する直前にここで一度だけ組み立てる
+  renderTally();
   // スキャン中は隠していた商品ごとの一覧を、確認のタイミングでだけ表示する
   document.getElementById('tally-container').style.display = 'block';
   // 「直前のスキャン」はもう関係ないので、確認画面に移ったら隠す(表示され続けて
