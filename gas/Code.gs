@@ -489,6 +489,7 @@ function submitStocktake_(session, p) {
   var timestamp = new Date(); // 送信内の全商品に同じ時刻を持たせ、1回の送信として後から突き合わせられるようにする
   var recorded = [];
   var unknownCodes = [];
+  var rows = [];
   items.forEach(function (item) {
     var product = productMap[String(item.code)];
     if (!product) {
@@ -498,9 +499,19 @@ function submitStocktake_(session, p) {
     var qty = mode === 'add' && hasKey_(thisMonthQtyByCode, item.code)
       ? thisMonthQtyByCode[item.code] + item.count
       : item.count;
-    appendLog_(store, p.staffName, product, '棚卸', qty, '', timestamp);
+    rows.push([timestamp, store, p.staffName || '', product.code, product.name, product.brand, '棚卸', qty, '']);
     recorded.push({ code: item.code, name: product.name, brand: product.brand, count: qty });
   });
+
+  // appendRow()を商品の数だけ(数百件になることもある)繰り返すと、1回ごとの通信の
+  // オーバーヘッドが積み重なって非常に遅くなる(実測で数十秒)。setValues()で
+  // 全行を1回の書き込みにまとめる。revokeApprovalIfStale_も全行が同じ時刻・同じ月
+  // なので1回だけ呼べば十分。
+  if (rows.length) {
+    var logSheet = getSheet_(SHEET_LOG);
+    logSheet.getRange(logSheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    revokeApprovalIfStale_(store, timestamp);
+  }
   // refreshSummary_()(現在庫サマリの再構築)や、この送信結果を反映したgetInventorySummary_の
   // 再計算はここでは呼ばない。どちらも取引ログ・商品マスタ全体を読み直す重い処理で、画面側は
   // 呼び出し結果のsummaryを使っておらず(recorded/unknownCodesのみ使用)、完全に無駄になって
