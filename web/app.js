@@ -2709,9 +2709,26 @@ function renderReviewResult(data, summaryElId, tableElId) {
     eventsHtml = `<p class="hint">棚卸実施(1回の送信ごとに1行、古い順): ${lines.join('、')}</p>`;
   }
 
+  // 差異(想定される在庫数と実際に棚卸した数のズレ)がある商品だけを、全商品の
+  // 一覧を開かなくても一目で分かるように、常に表示する専用の一覧にまとめる。
+  const diffItems = data.items.filter((item) => item.diff !== 0);
+  let diffHtml;
+  if (!diffItems.length) {
+    diffHtml = '<p class="hint" style="color:var(--ok); font-weight:bold;">差異のある商品はありません</p>';
+  } else {
+    const diffRows = diffItems.map((item) => {
+      const sign = item.diff > 0 ? '+' : '';
+      return `<tr><td>${item.brand || ''}</td><td>${item.name}</td><td>${sign}${item.diff}</td></tr>`;
+    }).join('');
+    diffHtml =
+      `<p class="hint" style="color:var(--danger); font-weight:bold;">差異のある商品: ${diffItems.length}件</p>` +
+      `<div style="overflow-x:auto;"><table class="stock-table">` +
+      `<tr><th>ブランド</th><th>品名</th><th>差異</th></tr>${diffRows}</table></div>`;
+  }
+
   const detailsId = summaryElId + '-details';
   const toggleId = summaryElId + '-toggle';
-  summaryEl.innerHTML = statusHtml +
+  summaryEl.innerHTML = statusHtml + diffHtml +
     `<button type="button" class="secondary" id="${toggleId}">詳細(実施記録・商品ごとの差異)を確認する</button>` +
     `<div id="${detailsId}" style="display:none;">${eventsHtml}</div>`;
   tableContainer.style.display = 'none';
