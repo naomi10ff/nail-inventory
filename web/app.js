@@ -2711,6 +2711,8 @@ function renderReviewResult(data, summaryElId, tableElId) {
 
   // 差異(想定される在庫数と実際に棚卸した数のズレ)がある商品だけを、全商品の
   // 一覧を開かなくても一目で分かるように、常に表示する専用の一覧にまとめる。
+  // 差異の数字だけでなく、先月末・入荷・廃棄・今月末の内訳も見えないと原因が
+  // 判断できないため、全商品テーブルと同じ列をそのまま使う。
   const diffItems = data.items.filter((item) => item.diff !== 0);
   let diffHtml;
   if (!diffItems.length) {
@@ -2718,12 +2720,15 @@ function renderReviewResult(data, summaryElId, tableElId) {
   } else {
     const diffRows = diffItems.map((item) => {
       const sign = item.diff > 0 ? '+' : '';
-      return `<tr><td>${item.brand || ''}</td><td>${item.name}</td><td>${sign}${item.diff}</td></tr>`;
+      return `<tr class="out-of-stock"><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td>` +
+        `<td>${item.prevStock}</td><td>${item.incoming}</td><td>${item.disposal}</td>` +
+        `<td>${item.currentStock}</td><td>${sign}${item.diff}</td></tr>`;
     }).join('');
     diffHtml =
       `<p class="hint" style="color:var(--danger); font-weight:bold;">差異のある商品: ${diffItems.length}件</p>` +
       `<div style="overflow-x:auto;"><table class="stock-table">` +
-      `<tr><th>ブランド</th><th>品名</th><th>差異</th></tr>${diffRows}</table></div>`;
+      `<tr><th>ブランド</th><th>品名</th><th>カラーNO</th><th>${monthLabel(data.previousMonth)}</th>` +
+      `<th>入荷</th><th>廃棄</th><th>${monthLabel(data.month)}</th><th>差異</th></tr>${diffRows}</table></div>`;
   }
 
   const detailsId = summaryElId + '-details';
