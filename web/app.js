@@ -16,6 +16,32 @@ const state = {
   stores: [] // 本社ダッシュボードで使用
 };
 
+// 棚卸の途中経過(state.tally)は、送信するまでは画面上のメモリ上にしかなかったため、
+// アプリを閉じる(ホーム画面アプリをタスクスワイプで消す等)とそれまでスキャンした分が
+// 全部消えてしまっていた。1件スキャン・修正するたびにlocalStorageへも保存しておき、
+// 棚卸に入るときに残っていれば復元できるようにする。
+function stocktakeDraftKey_() {
+  return 'stocktakeDraft_' + (state.store || '');
+}
+function saveStocktakeDraft() {
+  try {
+    localStorage.setItem(stocktakeDraftKey_(), JSON.stringify({ tally: state.tally, mode: state.stocktakeMode }));
+  } catch (e) { /* 保存に失敗しても棚卸自体は続行できるようにする */ }
+}
+function loadStocktakeDraft() {
+  try {
+    const raw = localStorage.getItem(stocktakeDraftKey_());
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function clearStocktakeDraft() {
+  try {
+    localStorage.removeItem(stocktakeDraftKey_());
+  } catch (e) { /* 無視 */ }
+}
+
 let scannerStocktake = null;
 let scannerHqIncoming = null;
 let scannerHqDisposal = null;
@@ -393,6 +419,22 @@ document.getElementById('btn-goto-menu').addEventListener('click', () => {
 // 棚卸に入る前に、今月の状態(未実施/承認待ち/差し戻し/承認済み)を確認する。
 // 承認済みならロックして進めない。今月すでに棚卸の記録があれば「追加する/新しく数え直す」を選ばせる。
 document.getElementById('btn-nav-stocktake').addEventListener('click', async (ev) => {
+  // アプリを閉じた等で送信前に途中経過が残っている場合は、まずそれを復元するか確認する。
+  // (通信不要でその場で分かるので、確認中の通信の前に聞く)
+  const draft = loadStocktakeDraft();
+  const draftItems = draft ? Object.values(draft.tally || {}) : [];
+  if (draftItems.length) {
+    const draftTotal = draftItems.reduce((sum, item) => sum + item.count, 0);
+    const resume = confirm(
+      `前回、棚卸し作業の途中(${draftItems.length}品目・${draftTotal}本)で中断されたデータが残っています。\n` +
+      '続きから再開しますか?\n(「キャンセル」を選ぶと、この途中データは削除され、最初からになります)'
+    );
+    if (resume) {
+      resumeStocktakeDraft(draft);
+      return;
+    }
+    clearStocktakeDraft();
+  }
   // 結果が分かるまで画面を切り替えない(「未実施」で結局そのままスキャン画面へ進む場合に
   // 中間画面が一瞬映って消えるのを避けるため)。ただし何も反応がないように見えないよう、
   // ボタン自体は確認中だと分かる表示にする。
@@ -452,6 +494,7 @@ document.getElementById('btn-stocktake-mode-overwrite').addEventListener('click'
 function startStocktakeScan(mode) {
   state.tally = {};
   state.stocktakeMode = mode;
+  clearStocktakeDraft();
   loadStocktakeProductList().catch((e) => console.error(e));
   renderTally();
   document.getElementById('tally-container').style.display = 'none';
@@ -460,6 +503,20 @@ function startStocktakeScan(mode) {
   showScreen('screen-stocktake');
   rearmGate(stocktakeGate);
   startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
+}
+
+/** アプリを閉じる等で送信前に失われかけた棚卸データを、保存されていた分から再開する。 */
+function resumeStocktakeDraft(draft) {
+  state.tally = draft.tally || {};
+  state.stocktakeMode = draft.mode || 'overwrite';
+  loadStocktakeProductList().catch((e) => console.error(e));
+  document.getElementById('tally-container').style.display = 'none';
+  document.getElementById('stocktake-review').style.display = 'none';
+  document.getElementById('stocktake-live-status').style.display = 'none';
+  showScreen('screen-stocktake');
+  rearmGate(stocktakeGate);
+  startScanner('reader', onStocktakeScan, stocktakeGate).catch((e) => console.error(e));
+  renderTally();
 }
 
 document.getElementById('btn-switch-camera-stocktake').addEventListener('click', async (ev) => {
@@ -922,11 +979,13 @@ function updateTallySummary() {
     summaryEl.textContent = 'まだ何もスキャンしていません';
     confirmBtn.disabled = true;
     document.getElementById('stocktake-live-status').style.display = 'none';
+    clearStocktakeDraft();
   } else {
     summaryEl.textContent = `${items.length}品目 / 合計${totalCount}本をスキャン済み。よろしければ内容を確認してください`;
     confirmBtn.disabled = false;
     document.getElementById('stocktake-total-items').textContent = items.length;
     document.getElementById('stocktake-total-count').textContent = totalCount;
+    saveStocktakeDraft();
   }
 }
 
