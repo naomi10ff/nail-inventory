@@ -1468,7 +1468,15 @@ async function onHqIncomingScan(code) {
   hqIncomingScannedCode = code;
   const store = document.getElementById('hq-incoming-store-select').value;
   try {
-    const product = await apiCall('lookupProduct', { store, code });
+    // 商品マスタは店舗選択時・画面に入った時点で読み込み済み(hqIncomingProductList、
+    // 未登録コード時の「既存の品名から選ぶ」に使っているもの)。スキャンのたびに毎回
+    // サーバーへ問い合わせると通信待ちの分だけ商品名の表示が遅く感じられるため、
+    // まずローカルのデータから探す。見つからない場合だけ(読み込みが間に合っていない
+    // 場合や、他端末が直後に新規登録した場合)サーバーに確認する。
+    let product = hqIncomingProductList.find((p) => String(p.code) === String(code)) || null;
+    if (!product) {
+      product = await apiCall('lookupProduct', { store, code });
+    }
     resetHqIncomingScreen();
     if (product) {
       document.getElementById('hq-incoming-known').style.display = 'block';
