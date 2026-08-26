@@ -2662,7 +2662,8 @@ function monthLabel(monthStr) {
  * 差異テーブルといった細かい情報は、必要な人だけがボタンで開けるようにする(すべて
  * 一度に表示すると情報が多すぎて分かりにくい、との指摘への対応)。
  */
-function renderReviewResult(data, summaryElId, tableElId) {
+function renderReviewResult(data, summaryElId, tableElId, options) {
+  options = options || {};
   const summaryEl = document.getElementById(summaryElId);
   const tableContainer = document.getElementById(tableElId);
 
@@ -2720,15 +2721,23 @@ function renderReviewResult(data, summaryElId, tableElId) {
   } else {
     const diffRows = diffItems.map((item) => {
       const sign = item.diff > 0 ? '+' : '';
+      // 編集可能な場合、差異の原因(数え間違いなど)をその場で正しい数量に直せるように
+      // 入力欄と保存ボタンを1列追加する(押すとその商品だけの棚卸を上書きで送信する)。
+      const editCell = options.editable
+        ? `<td><input type="number" class="tally-count-input" value="${item.currentStock}" min="0" style="width:60px;">` +
+          `<button type="button" class="link" data-review-save-code="${item.code}" style="padding:2px 0; margin-top:2px;">保存</button></td>`
+        : '';
       return `<tr class="out-of-stock"><td>${item.brand || ''}</td><td>${item.name}</td><td>${item.colorNo || ''}</td>` +
         `<td>${item.prevStock}</td><td>${item.incoming}</td><td>${item.disposal}</td>` +
-        `<td>${item.currentStock}</td><td>${sign}${item.diff}</td></tr>`;
+        `<td>${item.currentStock}</td><td>${sign}${item.diff}</td>${editCell}</tr>`;
     }).join('');
+    const editHeader = options.editable ? '<th>修正</th>' : '';
     diffHtml =
       `<p class="hint" style="color:var(--danger); font-weight:bold;">差異のある商品: ${diffItems.length}件</p>` +
+      (options.editable ? '<p class="hint">正しい数量を入力して「保存」を押すと、その商品だけ棚卸を上書きできます。</p>' : '') +
       `<div style="overflow-x:auto;"><table class="stock-table">` +
       `<tr><th>ブランド</th><th>品名</th><th>カラーNO</th><th>${monthLabel(data.previousMonth)}</th>` +
-      `<th>入荷</th><th>廃棄</th><th>${monthLabel(data.month)}</th><th>差異</th></tr>${diffRows}</table></div>`;
+      `<th>入荷</th><th>廃棄</th><th>${monthLabel(data.month)}</th><th>差異</th>${editHeader}</tr>${diffRows}</table></div>`;
   }
 
   const detailsId = summaryElId + '-details';
@@ -2745,6 +2754,33 @@ function renderReviewResult(data, summaryElId, tableElId) {
     tableContainer.style.display = isHidden ? 'block' : 'none';
     document.getElementById(toggleId).textContent = isHidden ? '詳細を隠す' : '詳細(実施記録・商品ごとの差異)を確認する';
   });
+
+  if (options.editable) {
+    summaryEl.querySelectorAll('[data-review-save-code]').forEach((btn) => {
+      // 数量の入力欄は保存ボタンの直前に置いているので、そこから直接取得する
+      // (商品コードに記号が含まれていてもセレクタとして壊れないようにするため)
+      const input = btn.previousElementSibling;
+      btn.addEventListener('click', async () => {
+        const newCount = Number(input.value);
+        if (isNaN(newCount) || newCount < 0) {
+          alert('正しい数量を入力してください');
+          return;
+        }
+        await withButtonBusy(btn, '保存中...', async () => {
+          try {
+            await apiCall('submitStocktake', {
+              staffName: state.staffName,
+              items: [{ code: btn.dataset.reviewSaveCode, count: newCount }],
+              mode: 'overwrite'
+            });
+            if (options.onSaved) options.onSaved();
+          } catch (e) {
+            alert(e.message);
+          }
+        });
+      });
+    });
+  }
 
   tableContainer.innerHTML = '';
   if (!data.items.length) {
@@ -2892,16 +2928,25 @@ document.getElementById('btn-search-store-review-logs').addEventListener('click'
 
 document.getElementById('btn-back-store-review').addEventListener('click', () => showScreen('screen-menu'));
 
-document.getElementById('btn-load-store-review').addEventListener('click', async () => {
+document.getElementById('btn-load-store-review').addEventListener('click', () => {
   const month = document.getElementById('store-review-month').value;
   if (!month) return;
+  loadStoreReview(month);
+});
+
+async function loadStoreReview(month) {
   try {
     const data = await apiCall('getStocktakeReview', { month });
-    renderReviewResult(data, 'store-review-summary', 'store-review-table');
+    // 店舗は差異のある商品をこの画面から直接修正できるようにする(editable)。
+    // 保存後は最新の差異を表示し直すため、自分自身を呼び直す。
+    renderReviewResult(data, 'store-review-summary', 'store-review-table', {
+      editable: true,
+      onSaved: () => loadStoreReview(month)
+    });
   } catch (e) {
     document.getElementById('store-review-summary').textContent = e.message;
   }
-});
+}
 
 // ---- 初期化(ログイン済みなら保存されたroleに応じて自動的に振り分ける) ----
 (async function init() {
