@@ -1194,6 +1194,15 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
   showScreen('screen-total-inventory');
   await loadTotalInventoryScreen();
 });
+
+// 日常的には使わない管理項目(商品管理・マスタ整理・スタッフ・アカウント)を
+// 「設定」1つにまとめ、ダッシュボードのボタン数を減らしている。
+document.getElementById('nav-hq-settings').addEventListener('click', () => {
+  showScreen('screen-hq-settings');
+});
+document.getElementById('btn-back-hq-settings').addEventListener('click', () => {
+  showScreen('screen-dashboard');
+});
 // この3つは互いに依存しない別々のAPI呼び出しなので、順番にawaitすると遅い方の
 // 待ち時間が積み重なってしまう(「ブランドで絞り込み」が出てくるまで妙に時間が
 // かかる、という指摘の原因)。Promise.allでまとめて並行実行する。

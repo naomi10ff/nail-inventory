@@ -196,15 +196,12 @@
   <div class="topbar"><span class="store-name">本社ダッシュボード</span><button type="button" class="link" id="hq-btn-logout">ログアウト</button></div>
   <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
     <button type="button" class="secondary" id="nav-total-inventory">総在庫</button>
-    <button type="button" class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
     <button type="button" class="secondary" id="nav-hq-incoming">入荷登録</button>
     <button type="button" class="secondary" id="nav-hq-disposal">破棄登録</button>
-    <button type="button" class="secondary" id="nav-staff">スタッフ</button>
-    <button type="button" class="secondary" id="nav-accounts">アカウント</button>
-    <button type="button" class="secondary" id="nav-logs">取引ログ</button>
     <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
-    <button type="button" class="secondary" id="nav-dedup">マスタ整理(表記ゆれ)</button>
     <button type="button" class="secondary" id="nav-hq-stock-lookup">在庫検索</button>
+    <button type="button" class="secondary" id="nav-logs">取引ログ</button>
+    <button type="button" class="secondary" id="nav-hq-settings">設定</button>
   </div>
 
   <div class="card">
@@ -216,6 +213,18 @@
   <div class="card">
     <h2>欠品商品(店舗横断)</h2>
     <div id="out-of-stock-container"></div>
+  </div>
+</section>
+
+<!-- 設定(商品管理・マスタ整理・スタッフ・アカウントなど、日常的には使わない管理項目をまとめる) -->
+<section id="screen-hq-settings" class="screen">
+  <div class="topbar"><button type="button" class="link" id="btn-back-hq-settings">&lt; ダッシュボードへ戻る</button></div>
+  <h2>設定</h2>
+  <div class="menu-grid">
+    <button type="button" class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
+    <button type="button" class="secondary" id="nav-dedup">マスタ整理(表記ゆれ)</button>
+    <button type="button" class="secondary" id="nav-staff">スタッフ</button>
+    <button type="button" class="secondary" id="nav-accounts">アカウント</button>
   </div>
 </section>
 
@@ -597,6 +606,6 @@
   </div>
 </div>
 
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>
