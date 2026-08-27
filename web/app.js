@@ -1195,13 +1195,17 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
   await loadTotalInventoryScreen();
 });
 
-// 日常的には使わない管理項目(商品管理・マスタ整理・スタッフ・アカウント)を
-// 「設定」1つにまとめ、ダッシュボードのボタン数を減らしている。
-document.getElementById('nav-hq-settings').addEventListener('click', () => {
-  showScreen('screen-hq-settings');
+// 日常的には使わない管理項目(商品管理・マスタ整理・スタッフ・アカウント)は、
+// ダッシュボードのボタン一覧を圧迫しないよう、右上の歯車アイコンからの
+// ドロップダウンメニューにまとめている。
+document.getElementById('btn-hq-settings-menu').addEventListener('click', () => {
+  const menu = document.getElementById('hq-settings-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
 });
-document.getElementById('btn-back-hq-settings').addEventListener('click', () => {
-  showScreen('screen-dashboard');
+['nav-products', 'nav-dedup', 'nav-staff', 'nav-accounts'].forEach((id) => {
+  document.getElementById(id).addEventListener('click', () => {
+    document.getElementById('hq-settings-menu').style.display = 'none';
+  });
 });
 // この3つは互いに依存しない別々のAPI呼び出しなので、順番にawaitすると遅い方の
 // 待ち時間が積み重なってしまう(「ブランドで絞り込み」が出てくるまで妙に時間が

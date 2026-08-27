@@ -21,7 +21,7 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=6">
+<link rel="stylesheet" href="shared/style.css?v=7">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
@@ -192,8 +192,23 @@
 <!-- ==================== 本社用画面 ==================== -->
 
 <!-- ダッシュボード(サマリーのみ。詳細な一覧は screen-total-inventory に分離) -->
-<section id="screen-dashboard" class="screen">
-  <div class="topbar"><span class="store-name">本社ダッシュボード</span><button type="button" class="link" id="hq-btn-logout">ログアウト</button></div>
+<section id="screen-dashboard" class="screen" style="position:relative;">
+  <div class="topbar">
+    <span class="store-name">本社ダッシュボード</span>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button type="button" class="link" id="btn-hq-settings-menu" aria-label="設定" style="font-size:1.3rem; padding:0; line-height:1;">&#9881;</button>
+      <button type="button" class="link" id="hq-btn-logout">ログアウト</button>
+    </div>
+  </div>
+
+  <!-- 歯車アイコンをタップすると開く、日常的には使わない管理項目のメニュー -->
+  <div id="hq-settings-menu" class="dropdown-menu" style="display:none;">
+    <button type="button" class="link" id="nav-products">商品管理(マスタ・ブランド)</button>
+    <button type="button" class="link" id="nav-dedup">マスタ整理(表記ゆれ)</button>
+    <button type="button" class="link" id="nav-staff">スタッフ</button>
+    <button type="button" class="link" id="nav-accounts">アカウント</button>
+  </div>
+
   <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
     <button type="button" class="secondary" id="nav-total-inventory">総在庫</button>
     <button type="button" class="secondary" id="nav-hq-incoming">入荷登録</button>
@@ -201,7 +216,6 @@
     <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
     <button type="button" class="secondary" id="nav-hq-stock-lookup">在庫検索</button>
     <button type="button" class="secondary" id="nav-logs">取引ログ</button>
-    <button type="button" class="secondary" id="nav-hq-settings">設定</button>
   </div>
 
   <div class="card">
@@ -213,18 +227,6 @@
   <div class="card">
     <h2>欠品商品(店舗横断)</h2>
     <div id="out-of-stock-container"></div>
-  </div>
-</section>
-
-<!-- 設定(商品管理・マスタ整理・スタッフ・アカウントなど、日常的には使わない管理項目をまとめる) -->
-<section id="screen-hq-settings" class="screen">
-  <div class="topbar"><button type="button" class="link" id="btn-back-hq-settings">&lt; ダッシュボードへ戻る</button></div>
-  <h2>設定</h2>
-  <div class="menu-grid">
-    <button type="button" class="secondary" id="nav-products">商品管理(マスタ・ブランド)</button>
-    <button type="button" class="secondary" id="nav-dedup">マスタ整理(表記ゆれ)</button>
-    <button type="button" class="secondary" id="nav-staff">スタッフ</button>
-    <button type="button" class="secondary" id="nav-accounts">アカウント</button>
   </div>
 </section>
 
@@ -606,6 +608,6 @@
   </div>
 </div>
 
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

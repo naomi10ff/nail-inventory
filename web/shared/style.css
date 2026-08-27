@@ -127,6 +127,34 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .topbar .store-name { font-weight: bold; }
 
+/* 歯車アイコンから開く設定メニュー(商品管理・マスタ整理・スタッフ・アカウントなど、
+   日常的には使わない管理項目)。日常操作のボタン一覧を圧迫しないよう画面右上に
+   浮かせて表示する。 */
+.dropdown-menu {
+  position: absolute;
+  top: 46px;
+  right: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(43, 35, 32, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 210px;
+  z-index: 50;
+}
+.dropdown-menu button.link {
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  margin: 0;
+  border-radius: 6px;
+  text-decoration: none;
+}
+.dropdown-menu button.link:active { background: var(--bg); }
+
 /* 入荷登録・破棄登録で店舗を選び間違えないよう、選択中の店舗名を常に大きく表示する */
 .store-banner {
   background: var(--accent);
