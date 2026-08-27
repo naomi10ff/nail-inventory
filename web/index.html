@@ -21,13 +21,36 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=7">
+<link rel="stylesheet" href="shared/style.css?v=8">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
 <script src="shared/qrcode.min.js?v=1"></script>
 </head>
 <body>
+
+<!-- 本社用サイドバー(常にDOMにあり、本社の画面を表示している間だけbodyのhq-modeクラスで
+     表示される。店舗側はこれまで通りスマホ1画面ずつの構成のまま変えていない)。 -->
+<button type="button" id="hq-sidebar-toggle" aria-label="メニュー">&#9776;</button>
+<nav id="hq-sidebar">
+  <div class="hq-sidebar-title">ネイルサロン在庫管理</div>
+  <button type="button" class="hq-sidebar-link" id="nav-dashboard-home">在庫状況(ホーム)</button>
+  <div class="hq-sidebar-group">日常の操作</div>
+  <button type="button" class="hq-sidebar-link" id="nav-total-inventory">総在庫</button>
+  <button type="button" class="hq-sidebar-link" id="nav-hq-incoming">入荷登録</button>
+  <button type="button" class="hq-sidebar-link" id="nav-hq-disposal">破棄登録</button>
+  <button type="button" class="hq-sidebar-link" id="nav-hq-review">棚卸承認</button>
+  <button type="button" class="hq-sidebar-link" id="nav-hq-stock-lookup">在庫検索</button>
+  <button type="button" class="hq-sidebar-link" id="nav-logs">取引ログ</button>
+  <div class="hq-sidebar-group">管理</div>
+  <button type="button" class="hq-sidebar-link" id="nav-products">商品管理(マスタ・ブランド)</button>
+  <button type="button" class="hq-sidebar-link" id="nav-dedup">マスタ整理(表記ゆれ)</button>
+  <button type="button" class="hq-sidebar-link" id="nav-staff">スタッフ</button>
+  <button type="button" class="hq-sidebar-link" id="nav-accounts">アカウント</button>
+  <div class="hq-sidebar-spacer"></div>
+  <button type="button" class="hq-sidebar-link" id="hq-sidebar-logout">ログアウト</button>
+</nav>
+<div id="hq-sidebar-backdrop"></div>
 
 <!-- ログイン画面(店舗・本社共通。ログイン後にroleを見て振り分ける) -->
 <section id="screen-login" class="screen active">
@@ -191,37 +214,14 @@
 
 <!-- ==================== 本社用画面 ==================== -->
 
-<!-- ダッシュボード(サマリーのみ。詳細な一覧は screen-total-inventory に分離) -->
-<section id="screen-dashboard" class="screen" style="position:relative;">
-  <div class="topbar">
-    <span class="store-name">本社ダッシュボード</span>
-    <div style="display:flex; align-items:center; gap:14px;">
-      <button type="button" class="link" id="btn-hq-settings-menu" aria-label="設定" style="font-size:1.3rem; padding:0; line-height:1;">&#9881;</button>
-      <button type="button" class="link" id="hq-btn-logout">ログアウト</button>
-    </div>
-  </div>
-
-  <!-- 歯車アイコンをタップすると開く、日常的には使わない管理項目のメニュー -->
-  <div id="hq-settings-menu" class="dropdown-menu" style="display:none;">
-    <button type="button" class="link" id="nav-products">商品管理(マスタ・ブランド)</button>
-    <button type="button" class="link" id="nav-dedup">マスタ整理(表記ゆれ)</button>
-    <button type="button" class="link" id="nav-staff">スタッフ</button>
-    <button type="button" class="link" id="nav-accounts">アカウント</button>
-  </div>
-
-  <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
-    <button type="button" class="secondary" id="nav-total-inventory">総在庫</button>
-    <button type="button" class="secondary" id="nav-hq-incoming">入荷登録</button>
-    <button type="button" class="secondary" id="nav-hq-disposal">破棄登録</button>
-    <button type="button" class="secondary" id="nav-hq-review">棚卸承認</button>
-    <button type="button" class="secondary" id="nav-hq-stock-lookup">在庫検索</button>
-    <button type="button" class="secondary" id="nav-logs">取引ログ</button>
-  </div>
+<!-- ダッシュボード = 本社の最初のページ。店舗別の在庫状況を一覧で見せる。 -->
+<section id="screen-dashboard" class="screen hq-screen">
+  <div class="topbar"><span class="store-name">在庫状況</span></div>
+  <p class="hint">店舗ごとの在庫本数・欠品件数です。行をタップするとその店舗の在庫一覧を確認できます。</p>
 
   <div class="card">
-    <h2>3店舗合計</h2>
-    <p id="grand-total"></p>
-    <div id="totals-by-store"></div>
+    <p id="grand-total" style="font-weight:bold; font-size:1.05rem; margin:0 0 10px;"></p>
+    <div id="store-status-table" style="overflow-x:auto;"></div>
   </div>
 
   <div class="card">
@@ -231,7 +231,7 @@
 </section>
 
 <!-- 総在庫(店舗別在庫一覧・検索・CSVエクスポート・個別/一括リセット) -->
-<section id="screen-total-inventory" class="screen">
+<section id="screen-total-inventory" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-total-inventory">&lt; ダッシュボードへ戻る</button></div>
   <h2>店舗別在庫一覧</h2>
   <label for="store-filter">店舗で絞り込み</label>
@@ -252,7 +252,7 @@
 </section>
 
 <!-- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) -->
-<section id="screen-hq-incoming" class="screen">
+<section id="screen-hq-incoming" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-hq-incoming">&lt; ダッシュボードへ</button></div>
   <h2>入荷登録</h2>
   <label for="hq-incoming-store-select">店舗</label>
@@ -313,7 +313,7 @@
 </section>
 
 <!-- 破棄登録(本社が店舗を選び、劣化・不良などによる在庫の廃棄を登録する) -->
-<section id="screen-hq-disposal" class="screen">
+<section id="screen-hq-disposal" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-hq-disposal">&lt; ダッシュボードへ</button></div>
   <h2>破棄登録</h2>
   <label for="hq-disposal-store-select">店舗</label>
@@ -346,7 +346,7 @@
 </section>
 
 <!-- 在庫検索(本社用。店舗を選んでスキャンし、その店舗の最新在庫を確認する) -->
-<section id="screen-hq-stock-lookup" class="screen">
+<section id="screen-hq-stock-lookup" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-hq-stock-lookup">&lt; ダッシュボードへ</button></div>
   <h2>在庫検索</h2>
   <label for="hq-stock-lookup-store-select">店舗</label>
@@ -370,7 +370,7 @@
 
 <!-- 商品マスタ管理(店舗ごとに独立管理)。新規登録は入荷登録の画面から行うため、
      ここでは検索・編集・QR表示/印刷・削除のみ扱う。 -->
-<section id="screen-products" class="screen">
+<section id="screen-products" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-products">&lt; ダッシュボードへ</button></div>
   <h2>商品管理</h2>
   <label for="product-store-select">店舗</label>
@@ -417,7 +417,7 @@
 </section>
 
 <!-- マスタ整理(ブランド名・品名の表記ゆれチェック) -->
-<section id="screen-dedup" class="screen">
+<section id="screen-dedup" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-dedup">&lt; ダッシュボードへ戻る</button></div>
   <h2>マスタ整理(表記ゆれチェック)</h2>
   <p class="hint">大文字/小文字・全角/半角・スペースの有無などの違いで、同じブランド/商品が
@@ -437,7 +437,7 @@
 </section>
 
 <!-- スタッフ管理(本社用) -->
-<section id="hq-screen-staff" class="screen">
+<section id="hq-screen-staff" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-staff">&lt; ダッシュボードへ</button></div>
   <h2>スタッフ管理</h2>
   <label for="staff-store-select">店舗</label>
@@ -451,7 +451,7 @@
 </section>
 
 <!-- アカウント管理 -->
-<section id="screen-accounts" class="screen">
+<section id="screen-accounts" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-accounts">&lt; ダッシュボードへ</button></div>
   <h2>アカウント管理</h2>
   <div class="card">
@@ -479,7 +479,7 @@
 </section>
 
 <!-- 取引ログ -->
-<section id="screen-logs" class="screen">
+<section id="screen-logs" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-logs">&lt; ダッシュボードへ</button></div>
   <h2>取引ログ</h2>
   <label for="log-store-filter">店舗で絞り込み</label>
@@ -502,7 +502,7 @@
 </section>
 
 <!-- 棚卸承認(本社が店舗ごとに、月次の在庫・入荷・廃棄の差異を確認して承認する) -->
-<section id="screen-hq-review" class="screen">
+<section id="screen-hq-review" class="screen hq-screen">
   <div class="topbar"><button type="button" class="link" id="btn-back-hq-review">&lt; ダッシュボードへ</button></div>
   <h2>棚卸承認</h2>
   <label for="hq-review-store-select">店舗</label>
@@ -608,6 +608,6 @@
   </div>
 </div>
 
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>

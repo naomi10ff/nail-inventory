@@ -127,33 +127,102 @@ tr.out-of-stock td { color: var(--danger); font-weight: bold; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .topbar .store-name { font-weight: bold; }
 
-/* 歯車アイコンから開く設定メニュー(商品管理・マスタ整理・スタッフ・アカウントなど、
-   日常的には使わない管理項目)。日常操作のボタン一覧を圧迫しないよう画面右上に
-   浮かせて表示する。 */
-.dropdown-menu {
-  position: absolute;
-  top: 46px;
-  right: 16px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(43, 35, 32, 0.18);
-  padding: 6px;
+/* 本社用サイドバー。店舗側(スマホでのスキャン中心)の1画面ずつの構成は変えず、
+   本社の画面(bodyにhq-modeが付いているとき)だけ左側に常設のナビゲーションを出す。
+   広い画面(PC想定)では常時表示、狭い画面ではハンバーガーボタンで開閉する
+   オフキャンバスメニューにする。 */
+#hq-sidebar-toggle { display: none; }
+#hq-sidebar { display: none; }
+#hq-sidebar-backdrop { display: none; }
+
+body.hq-mode #hq-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 210px;
-  z-index: 50;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background: #fff;
+  border-right: 1px solid var(--line);
+  padding: 18px 12px;
+  overflow-y: auto;
+  z-index: 60;
+  transition: transform 0.2s ease;
 }
-.dropdown-menu button.link {
+.hq-sidebar-title {
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.95rem;
+  padding: 4px 10px 16px;
+  color: var(--accent-dark);
+}
+.hq-sidebar-group {
+  font-size: 0.72rem;
+  color: #9a8d82;
+  letter-spacing: 0.04em;
+  padding: 14px 10px 4px;
+}
+.hq-sidebar-spacer { flex: 1; }
+button.hq-sidebar-link {
   width: 100%;
   text-align: left;
-  padding: 10px 10px;
+  padding: 11px 10px;
   margin: 0;
-  border-radius: 6px;
-  text-decoration: none;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font-size: 0.92rem;
+  cursor: pointer;
 }
-.dropdown-menu button.link:active { background: var(--bg); }
+button.hq-sidebar-link:active { background: var(--bg); }
+#hq-sidebar-logout { color: var(--danger); }
+
+/* 本社画面の本体は、サイドバー(240px)の分だけ右にずらす。店舗側の画面
+   (hq-screenクラスが無いもの)には一切影響しない。 */
+body.hq-mode .screen.hq-screen.active {
+  max-width: none;
+  margin: 0;
+  padding-left: calc(16px + 240px);
+}
+
+@media (max-width: 860px) {
+  /* 狭い画面ではサイドバーを画面外に隠し、ハンバーガーボタンで開閉する */
+  body.hq-mode #hq-sidebar-toggle {
+    display: block;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 61;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    margin: 0;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 1.2rem;
+  }
+  body.hq-mode #hq-sidebar {
+    transform: translateX(-100%);
+  }
+  body.hq-mode #hq-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+  }
+  body.hq-mode #hq-sidebar-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 59;
+  }
+  body.hq-mode .screen.hq-screen.active {
+    padding-left: 16px;
+    padding-top: 56px;
+  }
+}
 
 /* 入荷登録・破棄登録で店舗を選び間違えないよう、選択中の店舗名を常に大きく表示する */
 .store-banner {

@@ -70,7 +70,17 @@ async function apiCall(action, payload) {
 // ---- 画面切替 ----
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((el) => el.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  const target = document.getElementById(id);
+  target.classList.add('active');
+  // 本社側の画面(hq-screen)を表示している間だけ、bodyにhq-modeを付けて
+  // サイドバー(#hq-sidebar)を表示する。店舗側の画面ではこれまで通り非表示のまま。
+  document.body.classList.toggle('hq-mode', target.classList.contains('hq-screen'));
+  closeHqSidebar();
+}
+
+function closeHqSidebar() {
+  document.getElementById('hq-sidebar').classList.remove('open');
+  document.getElementById('hq-sidebar-backdrop').classList.remove('open');
 }
 
 function setText(id, text) {
@@ -345,7 +355,7 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   }
 });
 
-[['btn-logout-1', 'screen-login'], ['btn-logout-2', 'screen-login'], ['hq-btn-logout', 'screen-login']].forEach(([btnId]) => {
+['btn-logout-1', 'btn-logout-2', 'hq-sidebar-logout'].forEach((btnId) => {
   document.getElementById(btnId).addEventListener('click', logout);
 });
 
@@ -1195,18 +1205,18 @@ document.getElementById('nav-total-inventory').addEventListener('click', async (
   await loadTotalInventoryScreen();
 });
 
-// 日常的には使わない管理項目(商品管理・マスタ整理・スタッフ・アカウント)は、
-// ダッシュボードのボタン一覧を圧迫しないよう、右上の歯車アイコンからの
-// ドロップダウンメニューにまとめている。
-document.getElementById('btn-hq-settings-menu').addEventListener('click', () => {
-  const menu = document.getElementById('hq-settings-menu');
-  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+document.getElementById('nav-dashboard-home').addEventListener('click', () => {
+  showScreen('screen-dashboard');
+  loadDashboard().catch((e) => console.error(e));
 });
-['nav-products', 'nav-dedup', 'nav-staff', 'nav-accounts'].forEach((id) => {
-  document.getElementById(id).addEventListener('click', () => {
-    document.getElementById('hq-settings-menu').style.display = 'none';
-  });
+
+// スマホ幅ではサイドバーは画面外に隠れており、ハンバーガーボタンで開閉する
+// (広い画面では常に表示されるので、このボタン自体もCSSで非表示になる)。
+document.getElementById('hq-sidebar-toggle').addEventListener('click', () => {
+  document.getElementById('hq-sidebar').classList.toggle('open');
+  document.getElementById('hq-sidebar-backdrop').classList.toggle('open');
 });
+document.getElementById('hq-sidebar-backdrop').addEventListener('click', closeHqSidebar);
 // この3つは互いに依存しない別々のAPI呼び出しなので、順番にawaitすると遅い方の
 // 待ち時間が積み重なってしまう(「ブランドで絞り込み」が出てくるまで妙に時間が
 // かかる、という指摘の原因)。Promise.allでまとめて並行実行する。
@@ -1675,17 +1685,42 @@ document.getElementById('btn-submit-hq-disposal').addEventListener('click', asyn
   });
 });
 
-// ---- 本社ダッシュボード(サマリーのみ) ----
+// ---- 本社ダッシュボード(本社の最初のページ。店舗別の在庫状況) ----
 async function loadDashboard() {
   const summaryAll = await apiCall('getInventorySummary', {});
-  document.getElementById('grand-total').textContent = '総在庫本数: ' + summaryAll.grandTotal;
-  const totalsEl = document.getElementById('totals-by-store');
-  totalsEl.innerHTML = '';
-  Object.keys(summaryAll.totalsByStore).forEach((store) => {
-    const p = document.createElement('p');
-    p.textContent = store + ' : ' + summaryAll.totalsByStore[store] + '本';
-    totalsEl.appendChild(p);
+  document.getElementById('grand-total').textContent = '3店舗合計 総在庫本数: ' + summaryAll.grandTotal;
+
+  // 欠品件数は店舗ごとの内訳が必要なので、summaryAll.items(全店舗・全商品)から
+  // その場で集計する(新たな通信は増やさない)。
+  const outOfStockCountByStore = {};
+  (summaryAll.items || []).forEach((item) => {
+    if (item.outOfStock) outOfStockCountByStore[item.store] = (outOfStockCountByStore[item.store] || 0) + 1;
   });
+
+  const tableContainer = document.getElementById('store-status-table');
+  tableContainer.innerHTML = '';
+  const stores = Object.keys(summaryAll.totalsByStore);
+  if (!stores.length) {
+    tableContainer.textContent = '店舗データがありません';
+  } else {
+    const table = document.createElement('table');
+    table.className = 'stock-table';
+    table.innerHTML = '<tr><th>店舗</th><th>在庫本数</th><th>欠品件数</th></tr>';
+    stores.forEach((store) => {
+      const oosCount = outOfStockCountByStore[store] || 0;
+      const tr = document.createElement('tr');
+      if (oosCount) tr.className = 'out-of-stock';
+      tr.style.cursor = 'pointer';
+      tr.innerHTML = `<td>${store}</td><td>${summaryAll.totalsByStore[store]}本</td><td>${oosCount}件</td>`;
+      tr.addEventListener('click', async () => {
+        document.getElementById('store-filter').value = store;
+        showScreen('screen-total-inventory');
+        await loadTotalInventoryScreen();
+      });
+      table.appendChild(tr);
+    });
+    tableContainer.appendChild(table);
+  }
 
   const outOfStock = await apiCall('getOutOfStock', {});
   const oosEl = document.getElementById('out-of-stock-container');
