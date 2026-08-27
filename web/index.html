@@ -21,7 +21,7 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=8">
+<link rel="stylesheet" href="shared/style.css?v=9">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
@@ -122,7 +122,7 @@
     <input type="text" id="manual-code-1" style="flex:1;">
     <button type="button" class="secondary" style="width:auto; margin-top:0;" id="btn-manual-add-1">追加</button>
   </div>
-  <div id="stocktake-live-status" class="card" style="display:none;">
+  <div id="stocktake-live-status" class="card fixed-result-panel" style="display:none;">
     <p class="hint" style="margin:0 0 4px;">直前のスキャン</p>
     <p style="margin:0; font-size:1.05rem;"><strong id="stocktake-last-name"></strong>(現在 <strong id="stocktake-last-count"></strong>本)</p>
     <p class="hint" style="margin:10px 0 0;">合計 <strong id="stocktake-total-items"></strong>品目 / <strong id="stocktake-total-count"></strong>本</p>
@@ -269,7 +269,7 @@
   <button type="button" class="secondary" id="btn-new-product-no-barcode">バーコード無しの商品を新規登録</button>
   <button type="button" class="secondary" id="btn-rescan-hq-incoming" style="display:none;">別の商品を読み直す</button>
 
-  <div id="hq-incoming-known" class="card" style="display:none;">
+  <div id="hq-incoming-known" class="card fixed-result-panel" style="display:none;">
     <p><strong id="hq-incoming-product-name"></strong>(<span id="hq-incoming-product-brand"></span>)</p>
     <div id="hq-incoming-qr-result" class="print-target" style="display:none;">
       <p>バーコード無しの商品として登録しました。発行したQRコードを印刷して現物/棚に貼ってください</p>
@@ -329,7 +329,7 @@
   </div>
   <button type="button" class="secondary" id="btn-rescan-hq-disposal" style="display:none;">別の商品を読み直す</button>
 
-  <div id="hq-disposal-known" class="card" style="display:none;">
+  <div id="hq-disposal-known" class="card fixed-result-panel" style="display:none;">
     <p><strong id="hq-disposal-product-name"></strong>(<span id="hq-disposal-product-brand"></span> <span id="hq-disposal-product-colorno"></span>)</p>
     <p>現在庫: <strong id="hq-disposal-current-stock"></strong></p>
     <label for="hq-disposal-quantity">廃棄本数</label>

@@ -234,8 +234,43 @@ body.hq-mode .screen.hq-screen.active {
   padding: 10px;
   border-radius: 8px;
   margin: 10px 0;
+  /* カメラでスキャンする位置まで下にスクロールしても、どの店舗を操作しているか
+     見失わないよう画面上部に貼り付けたままにする */
+  position: sticky;
+  top: 0;
+  z-index: 15;
 }
 .store-banner.store-banner-empty { background: var(--line); color: var(--fg); font-weight: normal; }
+@media (max-width: 860px) {
+  /* 本社画面ではハンバーガーボタン(左上、高さ56px分を確保済み)と重ならない位置まで下げる */
+  body.hq-mode .store-banner { top: 56px; }
+}
+
+/* 入荷登録・破棄登録・棚卸のスキャン結果(直前に読み取った商品名や個数)を、
+   カメラの表示位置に関わらず画面下部に常に見えるようにする。これらのカードは
+   商品名・数量入力・登録ボタン程度の分量に留めており、スクロールしないと見えない
+   バーコード無し新規登録フォームなど分量の多いものは対象外(通常のカード表示のまま)。 */
+.fixed-result-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  margin: 0;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 14px 14px 0 0;
+  max-height: 42vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 20px rgba(43, 35, 32, 0.18);
+}
+
+/* fixed-result-panelがある画面は、画面下部のボタン等がその裏に隠れないよう
+   あらかじめ余白を確保しておく(パネル非表示時に少し空白が残るのは許容する)。 */
+#screen-hq-incoming, #screen-hq-disposal, #screen-stocktake {
+  padding-bottom: 260px;
+}
 
 #p-qr-result { text-align: center; margin-top: 16px; }
 #p-qr-result canvas { margin: 12px auto; }
