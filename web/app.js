@@ -2862,10 +2862,14 @@ function renderReviewResult(data, summaryElId, tableElId, options) {
 // ---- 棚卸承認(本社) ----
 let currentHqReviewData = null;
 
-document.getElementById('btn-load-hq-review').addEventListener('click', async () => {
+document.getElementById('btn-load-hq-review').addEventListener('click', () => {
   const store = document.getElementById('hq-review-store-select').value;
   const month = document.getElementById('hq-review-month').value;
   if (!store || !month) return;
+  loadHqReview(store, month);
+});
+
+async function loadHqReview(store, month) {
   try {
     currentHqReviewData = await apiCall('getStocktakeReview', { store, month });
     renderReviewResult(currentHqReviewData, 'hq-review-summary', 'hq-review-table');
@@ -2877,7 +2881,7 @@ document.getElementById('btn-load-hq-review').addEventListener('click', async ()
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
   }
-});
+}
 
 document.getElementById('btn-export-hq-review').addEventListener('click', () => {
   if (!currentHqReviewData) return;
@@ -2897,16 +2901,15 @@ document.getElementById('btn-export-hq-review').addEventListener('click', () => 
 
 document.getElementById('btn-approve-review').addEventListener('click', async () => {
   if (!currentHqReviewData) return;
+  const store = currentHqReviewData.store;
+  const month = currentHqReviewData.month;
   try {
-    await apiCall('approveStocktake', { store: currentHqReviewData.store, month: currentHqReviewData.month });
-    // 承認したら内容は表示したままにせず、ダッシュボードに戻る
-    currentHqReviewData = null;
-    document.getElementById('hq-review-summary').innerHTML = '';
-    document.getElementById('hq-review-table').innerHTML = '';
-    document.getElementById('btn-approve-review').style.display = 'none';
-    document.getElementById('btn-reject-review').style.display = 'none';
-    document.getElementById('btn-export-hq-review').style.display = 'none';
-    showScreen('screen-dashboard');
+    await apiCall('approveStocktake', { store, month });
+    // 承認後もこの画面に留まり、状態バッジが「承認済み」に変わったことを
+    // その場で確認できるようにする(以前はダッシュボードへ即座に戻っており、
+    // 本当に承認できたか確認できないとの指摘があったため)。
+    alert('承認しました');
+    await loadHqReview(store, month);
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
   }
@@ -2914,16 +2917,17 @@ document.getElementById('btn-approve-review').addEventListener('click', async ()
 
 document.getElementById('btn-reject-review').addEventListener('click', async () => {
   if (!currentHqReviewData) return;
-  const reason = prompt('差し戻す理由(店舗に伝わります。空欄でも構いません)') || '';
+  const store = currentHqReviewData.store;
+  const month = currentHqReviewData.month;
+  const reason = prompt('差し戻す理由(店舗に伝わります。空欄でも構いません)');
+  if (reason === null) return; // キャンセルされた場合は何もしない
   try {
-    await apiCall('rejectStocktake', { store: currentHqReviewData.store, month: currentHqReviewData.month, reason });
-    currentHqReviewData = null;
-    document.getElementById('hq-review-summary').innerHTML = '';
-    document.getElementById('hq-review-table').innerHTML = '';
-    document.getElementById('btn-approve-review').style.display = 'none';
-    document.getElementById('btn-reject-review').style.display = 'none';
-    document.getElementById('btn-export-hq-review').style.display = 'none';
-    showScreen('screen-dashboard');
+    await apiCall('rejectStocktake', { store, month, reason });
+    // 差し戻し後もこの画面に留まり、状態バッジが「差し戻し」に変わったことを
+    // その場で確認できるようにする(以前はダッシュボードへ即座に戻っており、
+    // 本当に差し戻せたか確認できないとの指摘があったため)。
+    alert('差し戻しました');
+    await loadHqReview(store, month);
   } catch (e) {
     document.getElementById('hq-review-summary').textContent = e.message;
   }
