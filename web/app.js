@@ -1200,9 +1200,13 @@ function fillStoreSelect(elementId, includeAll) {
 }
 
 // ---- ナビゲーション ----
-document.getElementById('nav-total-inventory').addEventListener('click', async () => {
+// 総在庫は全店舗・全商品を読み込むと重いため、画面に入っただけでは読み込まず、
+// 店舗を選んで「表示する」を押したときだけ読み込む(ダッシュボードの店舗別
+// 一覧から特定の店舗をタップして来た場合は、その場で読み込んでよい=下記のクリック
+// ハンドラでloadTotalInventoryScreen()を直接呼んでいる)。
+document.getElementById('nav-total-inventory').addEventListener('click', () => {
   showScreen('screen-total-inventory');
-  await loadTotalInventoryScreen();
+  document.getElementById('hq-inventory-container').textContent = '店舗を選んで「表示する」を押してください';
 });
 
 document.getElementById('nav-dashboard-home').addEventListener('click', () => {
@@ -1742,9 +1746,8 @@ async function loadTotalInventoryScreen() {
   await renderInventoryTable(document.getElementById('store-filter').value);
 }
 
-document.getElementById('store-filter').addEventListener('change', (e) => {
-  document.getElementById('hq-inventory-search').value = '';
-  renderInventoryTable(e.target.value);
+document.getElementById('btn-load-total-inventory').addEventListener('click', async (ev) => {
+  await withButtonBusy(ev.currentTarget, '読み込み中...', loadTotalInventoryScreen);
 });
 
 let hqInventoryAllItems = [];
