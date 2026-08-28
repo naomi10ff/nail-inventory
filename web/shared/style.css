@@ -234,16 +234,19 @@ body.hq-mode .screen.hq-screen.active {
   padding: 10px;
   border-radius: 8px;
   margin: 10px 0;
-  /* カメラでスキャンする位置まで下にスクロールしても、どの店舗を操作しているか
-     見失わないよう画面上部に貼り付けたままにする */
+}
+.store-banner.store-banner-empty { background: var(--line); color: var(--fg); font-weight: normal; }
+/* 破棄登録は店舗バナーを画面上部に貼り付けたままにする(入荷登録は逆にこれが
+   カメラの表示を邪魔するとの指摘があり、手入力欄の上に移動して貼り付けは
+   やめた。破棄登録は変更しない)。 */
+.store-banner-sticky {
   position: sticky;
   top: 0;
   z-index: 15;
 }
-.store-banner.store-banner-empty { background: var(--line); color: var(--fg); font-weight: normal; }
 @media (max-width: 860px) {
   /* 本社画面ではハンバーガーボタン(左上、高さ56px分を確保済み)と重ならない位置まで下げる */
-  body.hq-mode .store-banner { top: 56px; }
+  body.hq-mode .store-banner-sticky { top: 56px; }
 }
 
 /* 入荷登録・破棄登録・棚卸のスキャン結果(直前に読み取った商品名や個数)を、

@@ -1276,9 +1276,6 @@ document.getElementById('nav-hq-disposal').addEventListener('click', () => {
 // 直らないことがあり、実際にはタブを閉じて開き直す(=ブラウザによる完全な再取得)しか
 // 効かないケースが確認された。ページの再読み込みも同じくブラウザにカメラを完全に
 // 手放させる操作なので、こちらの方が確実。
-document.getElementById('btn-restart-camera-hq-incoming').addEventListener('click', () => {
-  location.reload();
-});
 document.getElementById('btn-restart-camera-hq-disposal').addEventListener('click', () => {
   location.reload();
 });

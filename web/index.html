@@ -21,7 +21,7 @@
      ?v=数字 を1つずつ増やすこと。ブラウザ側のキャッシュにより「新しいHTMLに古いJSが
      組み合わさる」不具合が何度も起きたため、内容が変わったらURL自体を変えて
      ブラウザに必ず読み直させるようにしている。 -->
-<link rel="stylesheet" href="shared/style.css?v=9">
+<link rel="stylesheet" href="shared/style.css?v=10">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <!-- QRコード発行用ライブラリは店舗のネットワークでCDNがブロックされる事例が続いたため、
      このリポジトリに同梱して配信する(GitHub Pagesの他ファイルと同じ場所から読み込まれる) -->
@@ -258,10 +258,9 @@
   <h2>入荷登録</h2>
   <label for="hq-incoming-store-select">店舗</label>
   <select id="hq-incoming-store-select"></select>
-  <div class="store-banner store-banner-empty" id="hq-incoming-store-banner">店舗を選択してください</div>
   <p class="hint">商品マスタに登録済みの商品はそのまま入荷を記録できます。未登録の商品はスキャン後にその場で商品登録もできます。</p>
   <div id="reader-hq-incoming"></div>
-  <button type="button" class="secondary" id="btn-restart-camera-hq-incoming">カメラが固まったら押してください(再起動)</button>
+  <div class="store-banner store-banner-empty" id="hq-incoming-store-banner">店舗を選択してください</div>
   <label for="manual-code-hq-incoming">バーコードが読めない場合は手入力</label>
   <div style="display:flex; gap:8px;">
     <input type="text" id="manual-code-hq-incoming" style="flex:1;">
@@ -319,7 +318,7 @@
   <h2>破棄登録</h2>
   <label for="hq-disposal-store-select">店舗</label>
   <select id="hq-disposal-store-select"></select>
-  <div class="store-banner store-banner-empty" id="hq-disposal-store-banner">店舗を選択してください</div>
+  <div class="store-banner store-banner-sticky store-banner-empty" id="hq-disposal-store-banner">店舗を選択してください</div>
   <p class="hint">廃棄する商品のバーコードをスキャンし、現在庫を確認してから廃棄本数を入力してください。この操作は取消せません(取引ログから該当行を削除すれば戻せます)。</p>
   <div id="reader-hq-disposal"></div>
   <button type="button" class="secondary" id="btn-restart-camera-hq-disposal">カメラが固まったら押してください(再起動)</button>
@@ -609,6 +608,6 @@
   </div>
 </div>
 
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>
