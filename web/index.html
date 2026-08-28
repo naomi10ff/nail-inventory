@@ -217,6 +217,14 @@
 <!-- ダッシュボード = 本社の最初のページ。店舗別の在庫状況を一覧で見せる。 -->
 <section id="screen-dashboard" class="screen hq-screen">
   <div class="topbar"><span class="store-name">在庫状況</span></div>
+
+  <!-- スマホでの作業時、サイドバーを開かずにすぐ使えるよう、よく使う2つだけ
+       ここにも近道ボタンとして置く(左のサイドバーからも同じ画面に行ける)。 -->
+  <div class="menu-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
+    <button type="button" class="secondary" id="nav-hq-incoming-shortcut">入荷登録</button>
+    <button type="button" class="secondary" id="nav-products-shortcut">商品管理</button>
+  </div>
+
   <p class="hint">店舗ごとの在庫本数・欠品件数です。行をタップするとその店舗の在庫一覧を確認できます。</p>
 
   <div class="card">
@@ -608,6 +616,6 @@
   </div>
 </div>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>

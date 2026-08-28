@@ -1214,6 +1214,16 @@ document.getElementById('nav-dashboard-home').addEventListener('click', () => {
   loadDashboard().catch((e) => console.error(e));
 });
 
+// ダッシュボード上の近道ボタン。サイドバーの本来のボタンをそのままクリックさせる
+// ことで、遷移時のセットアップ処理(商品一覧の読み込み・カメラ起動など)を
+// 重複させずに済ませる。
+document.getElementById('nav-hq-incoming-shortcut').addEventListener('click', () => {
+  document.getElementById('nav-hq-incoming').click();
+});
+document.getElementById('nav-products-shortcut').addEventListener('click', () => {
+  document.getElementById('nav-products').click();
+});
+
 // スマホ幅ではサイドバーは画面外に隠れており、ハンバーガーボタンで開閉する
 // (広い画面では常に表示されるので、このボタン自体もCSSで非表示になる)。
 document.getElementById('hq-sidebar-toggle').addEventListener('click', () => {
