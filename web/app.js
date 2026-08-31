@@ -2195,6 +2195,41 @@ function renderProductsTable() {
     qrBtn.addEventListener('click', () => showQrViewModal(p.code, p.name, p.brand));
     actionsTd.appendChild(qrBtn);
 
+    // 商品管理の一覧には在庫数を持っていない(listProductsは商品マスタのみを返す)ため、
+    // 押した時点でlookupCurrentStockを呼んでその場の在庫数を取得してからモーダルを開く。
+    // 総在庫画面の「修正」と同じopenAdjustModalを使い回している。
+    const stockBtn = document.createElement('button');
+    stockBtn.type = 'button';
+    stockBtn.className = 'link';
+    stockBtn.textContent = '在庫を修正';
+    stockBtn.addEventListener('click', async () => {
+      await withButtonBusy(stockBtn, '読み込み中...', async () => {
+        let currentStock = 0;
+        try {
+          const result = await apiCall('lookupCurrentStock', { store, code: p.code });
+          currentStock = result.found ? result.currentStock : 0;
+        } catch (err) {
+          alert(err.message);
+          return;
+        }
+        await openAdjustModal(
+          { store, code: p.code, brand: p.brand, name: p.name, colorNo: p.colorNo, category: p.category, currentStock },
+          async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
+            await apiCall('updateProduct', {
+              store, code: p.code, newCode, brand, name, colorNo, category,
+              itemNumber: p.itemNumber, memo: p.memo
+            });
+            const finalCode = newCode && newCode !== String(p.code) ? newCode : p.code;
+            if (Number(newStock) !== currentStock) {
+              await apiCall('adjustProductStock', { store, code: finalCode, newStock, memo, password });
+            }
+            await loadProducts();
+          }
+        );
+      });
+    });
+    actionsTd.appendChild(stockBtn);
+
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'link';
