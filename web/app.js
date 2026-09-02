@@ -1267,6 +1267,13 @@ document.getElementById('nav-dedup').addEventListener('click', () => {
 });
 document.getElementById('btn-back-dedup').addEventListener('click', () => showScreen('screen-dashboard'));
 
+document.getElementById('btn-switch-camera-hq-incoming').addEventListener('click', async (ev) => {
+  await withButtonBusy(ev.currentTarget, '切り替え中...', async () => {
+    await switchCamera('reader-hq-incoming', onHqIncomingScan, hqIncomingGate, 'hq-incoming-status');
+    rearmGate(hqIncomingGate);
+  });
+});
+
 document.getElementById('nav-hq-incoming').addEventListener('click', () => {
   resetHqIncomingScreen();
   showScreen('screen-hq-incoming');
