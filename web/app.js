@@ -1520,11 +1520,16 @@ async function onHqIncomingScan(code) {
     }
     resetHqIncomingScreen();
     if (product) {
-      document.getElementById('hq-incoming-known').style.display = 'block';
-      document.getElementById('hq-incoming-product-name').textContent = product.name;
-      document.getElementById('hq-incoming-product-brand').textContent = product.brand || '';
-      document.getElementById('hq-incoming-quantity').value = 1;
-      document.getElementById('hq-incoming-confirm-store').textContent = '店舗: ' + store;
+      // 見つかった商品は、確認画面を挟まず個数1でその場ですぐ入荷登録する。実運用では
+      // 1個ずつ入荷本数を毎回変えることはほぼ無いため、確認ボタンを1回減らして
+      // 連続スキャンの速度を上げている(個数を変えたい場合は取引ログの編集で対応)。
+      await apiCall('recordIncoming', { store, code, quantity: 1 });
+      document.getElementById('hq-incoming-status').textContent =
+        product.name + (product.brand ? '(' + product.brand + ')' : '') + ' を入荷登録しました';
+      // すぐに再開すると、登録した現物がまだカメラに映ったままの場合に同じ商品を
+      // 再検出してしまうため、一旦画面から外れてから次を受け付けるようにする
+      rearmGateAfterMiss(hqIncomingGate);
+      return;
     } else {
       document.getElementById('hq-incoming-unknown').style.display = 'block';
     }
@@ -1596,22 +1601,33 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
         brand, name, colorNo, itemNumber, category, memo: selection.product.memo || ''
       });
     }
-    document.getElementById('hq-incoming-status').textContent =
-      (selection.isNew ? '商品を登録しました。' : 'バーコードを紐づけました。') + '続けて入荷本数を入力してください';
-    document.getElementById('hq-incoming-unknown').style.display = 'none';
-    document.getElementById('hq-incoming-known').style.display = 'block';
-    document.getElementById('hq-incoming-product-name').textContent = name;
-    document.getElementById('hq-incoming-product-brand').textContent = brand;
-    document.getElementById('hq-incoming-quantity').value = 1;
-    document.getElementById('hq-incoming-confirm-store').textContent = '店舗: ' + store;
-    const qrResult = document.getElementById('hq-incoming-qr-result');
+    // 登録・紐づけと同じひと手間で入荷本数1も一緒に記録する。以前はこのあと改めて
+    // 「入荷を登録」を押す必要があり、処理待ち(処理中...)が2回になっていたため。
+    await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity: 1 });
+
     if (generatedCode) {
+      // バーコード無しで発行したQRコードは印刷して現物に貼る必要があるため、
+      // 印刷案内だけ画面に残し、次のスキャンは「別の商品を読み直す」で手動に進める
+      resetHqIncomingScreen();
+      document.getElementById('hq-incoming-known').style.display = 'block';
+      document.getElementById('hq-incoming-product-name').textContent = name;
+      document.getElementById('hq-incoming-product-brand').textContent = brand;
+      document.querySelector('label[for="hq-incoming-quantity"]').style.display = 'none';
+      document.getElementById('hq-incoming-quantity').style.display = 'none';
+      document.getElementById('hq-incoming-confirm-store').style.display = 'none';
+      document.getElementById('btn-submit-hq-incoming').style.display = 'none';
       const holder = document.getElementById('hq-incoming-qr-canvas-holder');
       holder.innerHTML = '';
       new QRCode(holder, { text: String(generatedCode), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
-      qrResult.style.display = 'block';
+      document.getElementById('hq-incoming-qr-result').style.display = 'block';
+      document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
+      document.getElementById('hq-incoming-status').textContent =
+        '商品を登録し、入荷1個を登録しました。発行したQRコードを印刷してください';
     } else {
-      qrResult.style.display = 'none';
+      resetHqIncomingScreen();
+      document.getElementById('hq-incoming-status').textContent =
+        (selection.isNew ? '商品を登録し、' : 'バーコードを紐づけ、') + '入荷1個を登録しました';
+      rearmGateAfterMiss(hqIncomingGate);
     }
     await loadHqIncomingBrandOptions();
     await loadHqIncomingProductList();
