@@ -1611,6 +1611,32 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     // 「入荷を登録」を押す必要があり、処理待ち(処理中...)が2回になっていたため。
     await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity: 1 });
 
+    // ローカルキャッシュ(ブランドの選択肢・hqIncomingProductList)を、サーバーから
+    // 丸ごと読み直さずその場で更新する。以前はloadHqIncomingBrandOptions()・
+    // loadHqIncomingProductList()で全件再取得しており、登録のたびに通信が2回増えて
+    // 「処理中」の時間が長くなっていたため。
+    const brandSelect = document.getElementById('hq-incoming-new-brand-select');
+    if (brand && ![...brandSelect.options].some((o) => o.value === brand)) {
+      const opt = document.createElement('option');
+      opt.value = brand;
+      opt.textContent = brand;
+      brandSelect.appendChild(opt);
+    }
+    const updatedProduct = {
+      code: hqIncomingScannedCode, name, brand, category,
+      maker: selection.isNew ? '' : selection.product.maker,
+      unit: selection.isNew ? '本' : selection.product.unit,
+      memo: selection.isNew ? '' : (selection.product.memo || ''),
+      colorNo, itemNumber
+    };
+    const oldCode = selection.isNew ? hqIncomingScannedCode : selection.code;
+    const existingIndex = hqIncomingProductList.findIndex((p) => String(p.code) === String(oldCode));
+    if (existingIndex >= 0) {
+      hqIncomingProductList[existingIndex] = updatedProduct;
+    } else {
+      hqIncomingProductList.push(updatedProduct);
+    }
+
     if (generatedCode) {
       // バーコード無しで発行したQRコードは印刷して現物に貼る必要があるため、
       // 印刷案内だけ画面に残し、次のスキャンは「別の商品を読み直す」で手動に進める
@@ -1637,8 +1663,6 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
       );
       rearmGateAfterMiss(hqIncomingGate);
     }
-    await loadHqIncomingBrandOptions();
-    await loadHqIncomingProductList();
   } catch (e) {
     setHqIncomingStatus(e.message, false);
   }

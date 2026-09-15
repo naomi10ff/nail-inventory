@@ -244,29 +244,43 @@ function updateProduct_(session, p) {
   ensureCategoryExists_(p.category);
 
   var sheet = getSheet_(SHEET_PRODUCTS);
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === p.store && String(data[i][1]) === String(p.code)) {
-      var row = i + 1;
-      var newCode = p.newCode ? String(p.newCode).trim() : '';
-      if (newCode && newCode !== String(p.code)) {
-        if (lookupProduct_(p.store, newCode)) {
-          throw new Error('このコードは既に登録されています');
-        }
-        // registerProduct_と同じ理由で、コード列は数値化されないよう文字列として固定する
-        sheet.getRange(row, 2).setNumberFormat('@').setValue(newCode);
+  // lookupProduct_と同じ理由(商品マスタが増えるほど遅くなるため)で、全行読み込みの
+  // ループではなくTextFinderで該当行だけを探す。
+  var lastRow = sheet.getLastRow();
+  var row = -1;
+  if (lastRow >= 2) {
+    var finder = sheet.getRange(2, 2, lastRow - 1, 1).createTextFinder(String(p.code)).matchEntireCell(true);
+    var match = finder.findNext();
+    while (match) {
+      if (sheet.getRange(match.getRow(), 1).getValue() === p.store) {
+        row = match.getRow();
+        break;
       }
-      sheet.getRange(row, 3).setValue(p.name || '');
-      sheet.getRange(row, 4).setValue(p.brand || '');
-      sheet.getRange(row, 5).setValue(p.category || '');
-      sheet.getRange(row, 8).setValue(p.memo || '');
-      sheet.getRange(row, 10).setValue(p.colorNo || '');
-      sheet.getRange(row, 11).setValue(p.itemNumber || '');
-      refreshSummary_(); // ブランド名等の変更をサマリ表示にも反映する
-      return { store: p.store, code: newCode || p.code };
+      match = finder.findNext();
     }
   }
-  throw new Error('商品が見つかりません');
+  if (row === -1) throw new Error('商品が見つかりません');
+
+  var newCode = p.newCode ? String(p.newCode).trim() : '';
+  if (newCode && newCode !== String(p.code)) {
+    if (lookupProduct_(p.store, newCode)) {
+      throw new Error('このコードは既に登録されています');
+    }
+    // registerProduct_と同じ理由で、コード列は数値化されないよう文字列として固定する
+    sheet.getRange(row, 2).setNumberFormat('@').setValue(newCode);
+  }
+  sheet.getRange(row, 3).setValue(p.name || '');
+  sheet.getRange(row, 4).setValue(p.brand || '');
+  sheet.getRange(row, 5).setValue(p.category || '');
+  sheet.getRange(row, 8).setValue(p.memo || '');
+  sheet.getRange(row, 10).setValue(p.colorNo || '');
+  sheet.getRange(row, 11).setValue(p.itemNumber || '');
+  // refreshSummary_()(取引ログ全体を読み直して「現在庫サマリ」を書き直す処理)は
+  // ここでは呼ばない。recordIncoming_と同じ理由で、この関数は入荷登録中の
+  // バーコード紐づけでスキャンごとに呼ばれるため、取引ログが増えるほど体感速度に
+  // 直結してしまう。「現在庫サマリ」は画面表示では使っておらず参考シートのため、
+  // 最新化したい場合はApps ScriptエディタからrefreshCurrentStockSummary()を手動実行する。
+  return { store: p.store, code: newCode || p.code };
 }
 
 /** 指定した店舗の商品マスタ一覧。本社は店舗を指定して閲覧する。 */
