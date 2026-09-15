@@ -1066,16 +1066,18 @@ function rejectStocktake_(session, p) {
 }
 
 // ---- 在庫のリセット(本社限定・取り消し不可の操作) ----
-// どちらもパスワードの再検証(verifyOwnPassword_)を必須にしている。
-// 実体としては、対象の店舗×商品に対して数量0の「棚卸」を記録することで在庫を0に戻す。
+// resetProductStock_・resetStoreInventory_はパスワードの再検証(verifyOwnPassword_)を
+// 必須にしている。実体としては、対象の店舗×商品に対して数量0の「棚卸」を記録することで
+// 在庫を0に戻す。
 
 /**
  * 入力ミスやシステムの不具合などで実際と違う数になった在庫を、正しい数に直接書き換える。
  * 種別「調整」として記録するため、棚卸承認画面の棚卸実施回数には数えられない。
+ * 頻繁に使う操作のためパスワード再確認は求めない(一括リセットのような取り消し前提の
+ * 操作ではなく、通常の運用の範囲内の修正のため)。
  */
 function adjustProductStock_(session, p) {
   requireRole_(session, ['hq']);
-  verifyOwnPassword_(session, p.password);
   if (!p.store || !p.code) throw new Error('店舗と商品コードを指定してください');
   var newStock = Number(p.newStock);
   if (p.newStock === undefined || p.newStock === '' || isNaN(newStock) || newStock < 0) {

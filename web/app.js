@@ -265,7 +265,6 @@ async function openAdjustModal(item, onConfirm) {
   const colorInput = document.getElementById('adjust-modal-colorno');
   const newStockInput = document.getElementById('adjust-modal-newstock');
   const memoInput = document.getElementById('adjust-modal-memo');
-  const passwordInput = document.getElementById('adjust-modal-password');
   const errorEl = document.getElementById('adjust-modal-error');
   const confirmBtn = document.getElementById('adjust-modal-confirm');
   const cancelBtn = document.getElementById('adjust-modal-cancel');
@@ -280,7 +279,6 @@ async function openAdjustModal(item, onConfirm) {
   setAdjustCategoryValue(item.category || '');
   newStockInput.value = item.currentStock;
   memoInput.value = '';
-  passwordInput.value = '';
   errorEl.textContent = '';
   overlay.style.display = 'flex';
 
@@ -293,7 +291,6 @@ async function openAdjustModal(item, onConfirm) {
     const newCode = codeInput.value.trim();
     const name = nameInput.value.trim();
     const newStock = newStockInput.value.trim();
-    const password = passwordInput.value;
     if (!newCode) {
       errorEl.textContent = '商品コードを入力してください';
       return;
@@ -306,15 +303,11 @@ async function openAdjustModal(item, onConfirm) {
       errorEl.textContent = '正しい在庫数を入力してください';
       return;
     }
-    if (!password) {
-      errorEl.textContent = 'パスワードを入力してください';
-      return;
-    }
     confirmBtn.disabled = true;
     try {
       await onConfirm({
         newCode, brand: currentAdjustBrandValue(), name, colorNo: colorInput.value.trim(),
-        category: currentAdjustCategoryValue(), newStock, memo: memoInput.value.trim(), password
+        category: currentAdjustCategoryValue(), newStock, memo: memoInput.value.trim()
       });
       close();
     } catch (e) {
@@ -1484,6 +1477,17 @@ function updateStoreBanner(selectId, bannerId) {
   }
 }
 
+/**
+ * スキャン後すぐに自動登録される(確認画面を挟まない)ため、登録できたかどうかが
+ * ひと目で分かるよう、成功時だけ目立つ帯(status-success-banner)で表示する。
+ * 呼び出し側でtextContentとクラスを個別に触ると消し忘れの元になるため、必ずこれ経由にする。
+ */
+function setHqIncomingStatus(text, success) {
+  const el = document.getElementById('hq-incoming-status');
+  el.textContent = text;
+  el.classList.toggle('status-success-banner', !!success);
+}
+
 function resetHqIncomingScreen() {
   updateStoreBanner('hq-incoming-store-select', 'hq-incoming-store-banner');
   document.getElementById('hq-incoming-known').style.display = 'none';
@@ -1492,7 +1496,7 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-unknown-hint').textContent =
     'このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。';
   document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
-  document.getElementById('hq-incoming-status').textContent = '';
+  setHqIncomingStatus('', false);
   resetHqIncomingBrandNewForm();
   document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
   resetHqIncomingNameNewForm();
@@ -1524,8 +1528,10 @@ async function onHqIncomingScan(code) {
       // 1個ずつ入荷本数を毎回変えることはほぼ無いため、確認ボタンを1回減らして
       // 連続スキャンの速度を上げている(個数を変えたい場合は取引ログの編集で対応)。
       await apiCall('recordIncoming', { store, code, quantity: 1 });
-      document.getElementById('hq-incoming-status').textContent =
-        product.name + (product.brand ? '(' + product.brand + ')' : '') + ' を入荷登録しました';
+      setHqIncomingStatus(
+        '✓ ' + product.name + (product.brand ? '(' + product.brand + ')' : '') + ' を入荷登録しました',
+        true
+      );
       // すぐに再開すると、登録した現物がまだカメラに映ったままの場合に同じ商品を
       // 再検出してしまうため、一旦画面から外れてから次を受け付けるようにする
       rearmGateAfterMiss(hqIncomingGate);
@@ -1535,7 +1541,7 @@ async function onHqIncomingScan(code) {
     }
     document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
   } catch (e) {
-    document.getElementById('hq-incoming-status').textContent = e.message;
+    setHqIncomingStatus(e.message, false);
     rearmGate(hqIncomingGate); // 通信エラー時はすぐ再スキャンできるようにする
   }
 }
@@ -1555,7 +1561,7 @@ document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () =
 document.getElementById('btn-new-product-no-barcode').addEventListener('click', () => {
   const store = document.getElementById('hq-incoming-store-select').value;
   if (!store) {
-    document.getElementById('hq-incoming-status').textContent = '店舗を選択してください';
+    setHqIncomingStatus('店舗を選択してください', false);
     return;
   }
   resetHqIncomingScreen();
@@ -1575,7 +1581,7 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
   const category = currentHqIncomingCategoryValue();
 
   if (selection.isNew && !selection.name) {
-    document.getElementById('hq-incoming-status').textContent = '品名を選択するか、新しい品名を入力してください';
+    setHqIncomingStatus('品名を選択するか、新しい品名を入力してください', false);
     return;
   }
 
@@ -1621,18 +1627,20 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
       new QRCode(holder, { text: String(generatedCode), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
       document.getElementById('hq-incoming-qr-result').style.display = 'block';
       document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
-      document.getElementById('hq-incoming-status').textContent =
-        '商品を登録し、入荷1個を登録しました。発行したQRコードを印刷してください';
+      setHqIncomingStatus(
+        '✓ 商品を登録し、入荷1個を登録しました。発行したQRコードを印刷してください', true
+      );
     } else {
       resetHqIncomingScreen();
-      document.getElementById('hq-incoming-status').textContent =
-        (selection.isNew ? '商品を登録し、' : 'バーコードを紐づけ、') + '入荷1個を登録しました';
+      setHqIncomingStatus(
+        '✓ ' + (selection.isNew ? '商品を登録し、' : 'バーコードを紐づけ、') + '入荷1個を登録しました', true
+      );
       rearmGateAfterMiss(hqIncomingGate);
     }
     await loadHqIncomingBrandOptions();
     await loadHqIncomingProductList();
   } catch (e) {
-    document.getElementById('hq-incoming-status').textContent = e.message;
+    setHqIncomingStatus(e.message, false);
   }
   });
 });
@@ -1872,14 +1880,14 @@ function renderHqInventoryRows(query) {
         }
         await openAdjustModal(
           { ...item, category: product ? product.category : '' },
-          async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
+          async ({ newCode, brand, name, colorNo, category, newStock, memo }) => {
             await apiCall('updateProduct', {
               store: item.store, code: item.code, newCode, brand, name, colorNo, category,
               itemNumber: product ? product.itemNumber : '', memo: product ? product.memo : ''
             });
             const finalCode = newCode && newCode !== String(item.code) ? newCode : item.code;
             if (Number(newStock) !== item.currentStock) {
-              await apiCall('adjustProductStock', { store: item.store, code: finalCode, newStock, memo, password });
+              await apiCall('adjustProductStock', { store: item.store, code: finalCode, newStock, memo });
             }
             await loadTotalInventoryScreen();
           }
@@ -2237,14 +2245,14 @@ function renderProductsTable() {
         }
         await openAdjustModal(
           { store, code: p.code, brand: p.brand, name: p.name, colorNo: p.colorNo, category: p.category, currentStock },
-          async ({ newCode, brand, name, colorNo, category, newStock, memo, password }) => {
+          async ({ newCode, brand, name, colorNo, category, newStock, memo }) => {
             await apiCall('updateProduct', {
               store, code: p.code, newCode, brand, name, colorNo, category,
               itemNumber: p.itemNumber, memo: p.memo
             });
             const finalCode = newCode && newCode !== String(p.code) ? newCode : p.code;
             if (Number(newStock) !== currentStock) {
-              await apiCall('adjustProductStock', { store, code: finalCode, newStock, memo, password });
+              await apiCall('adjustProductStock', { store, code: finalCode, newStock, memo });
             }
             await loadProducts();
           }

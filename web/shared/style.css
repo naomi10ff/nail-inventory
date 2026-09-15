@@ -67,6 +67,13 @@ button.link { background: none; color: var(--accent-dark); text-decoration: unde
 .status-steps .step.active { background: var(--accent); color: #fff; font-weight: bold; }
 .status-steps .step.active.warn { background: var(--danger); }
 .status { color: var(--ok); font-size: 0.9rem; min-height: 1.2em; margin-top: 8px; }
+/* 確認画面を挟まず自動で登録される操作(入荷登録など)で、登録できたことを一目で
+   分かるようにするための強調表示。連続スキャン中にうっかり見落とされないように、
+   小さい文字色だけの.statusより目立つ帯にしている。 */
+.status.status-success-banner {
+  color: #fff; background: var(--ok); font-weight: bold; font-size: 1.05rem;
+  padding: 10px 14px; border-radius: 8px; text-align: center;
+}
 
 #reader, #reader-4, #reader-hq-incoming, #reader-hq-disposal, #reader-hq-stock-lookup {
   /* 高さに上限を設けていたが、スキャン領域(qrbox)の判定は元のコンテナの高さを
