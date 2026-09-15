@@ -153,25 +153,36 @@ function setStaffActive_(session, p) {
 // 商品は「店舗」×「コード」で一意。店舗ごとに独立したマスタを持ち、同じバーコードでも
 // 店舗が違えば別の商品として登録できる。
 
-/** 内部用の純粋な検索。store・codeを直接指定する(セッションの解釈は呼び出し側で行う)。 */
+/**
+ * 内部用の純粋な検索。store・codeを直接指定する(セッションの解釈は呼び出し側で行う)。
+ * 入荷登録・廃棄登録はスキャンのたびに呼ばれるため、商品マスタが増えるほど遅くなる
+ * 「全行読み込み+ループ」ではなく、TextFinderでコード列だけを検索して該当行だけ読む
+ * (店舗が一致するまでコードの一致行を順に確認する。コードは店舗内でのみ一意な想定)。
+ */
 function lookupProduct_(store, code) {
   if (!store || !code) return null;
   var sheet = getSheet_(SHEET_PRODUCTS);
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === store && String(data[i][1]) === String(code)) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var finder = sheet.getRange(2, 2, lastRow - 1, 1).createTextFinder(String(code)).matchEntireCell(true);
+  var match = finder.findNext();
+  while (match) {
+    var row = match.getRow();
+    if (sheet.getRange(row, 1).getValue() === store) {
+      var v = sheet.getRange(row, 1, 1, 11).getValues()[0];
       return {
-        store: data[i][0],
-        code: data[i][1],
-        name: data[i][2],
-        brand: data[i][3],
-        category: data[i][4],
-        maker: data[i][5],
-        unit: data[i][6],
-        colorNo: data[i][9],
-        itemNumber: data[i][10]
+        store: v[0],
+        code: v[1],
+        name: v[2],
+        brand: v[3],
+        category: v[4],
+        maker: v[5],
+        unit: v[6],
+        colorNo: v[9],
+        itemNumber: v[10]
       };
     }
+    match = finder.findNext();
   }
   return null;
 }
@@ -210,6 +221,10 @@ function registerProduct_(session, p) {
     store, code, p.name, p.brand || '', p.category || '', p.maker || '',
     p.unit || '本', p.memo || '', new Date(), p.colorNo || '', p.itemNumber || ''
   ]);
+  // コードが「0」から始まる数字だけのバーコードだと、スプレッドシート側が数値として
+  // 解釈して先頭の0を消してしまうことがある(以降このコードでlookupProduct_/入荷登録が
+  // 一致しなくなる不具合の原因になっていた)。コード列だけ文字列として書き直して固定する。
+  sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@').setValue(code);
   return { store: store, code: code, name: p.name, brand: p.brand || '', colorNo: p.colorNo || '' };
 }
 
@@ -238,7 +253,8 @@ function updateProduct_(session, p) {
         if (lookupProduct_(p.store, newCode)) {
           throw new Error('このコードは既に登録されています');
         }
-        sheet.getRange(row, 2).setValue(newCode);
+        // registerProduct_と同じ理由で、コード列は数値化されないよう文字列として固定する
+        sheet.getRange(row, 2).setNumberFormat('@').setValue(newCode);
       }
       sheet.getRange(row, 3).setValue(p.name || '');
       sheet.getRange(row, 4).setValue(p.brand || '');

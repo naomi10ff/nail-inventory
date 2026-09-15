@@ -51,19 +51,26 @@ function createSession_(username, store, role) {
   return token;
 }
 
+/**
+ * セッションはAPI呼び出しのたびに毎回検証されるため、ログインが積み重なって増え続ける
+ * セッション表を全行読み込む「全読み+ループ」だと、使うほど全体が遅くなってしまう。
+ * TextFinderでトークン列だけを検索して該当行だけ読む方式にしている。
+ */
 function validateToken_(token) {
   if (!token) throw new Error('未ログインです');
   var sheet = getSheet_(SHEET_SESSIONS);
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === token) {
-      var issuedAt = new Date(data[i][4]).getTime();
-      var role = data[i][3];
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var match = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(token).matchEntireCell(true).findNext();
+    if (match) {
+      var v = sheet.getRange(match.getRow(), 1, 1, 5).getValues()[0];
+      var issuedAt = new Date(v[4]).getTime();
+      var role = v[3];
       var maxAge = role === 'hq' ? SESSION_MAX_AGE_MS_HQ : SESSION_MAX_AGE_MS_STORE;
       if (Date.now() - issuedAt > maxAge) {
         throw new Error('セッションの有効期限が切れました。再ログインしてください');
       }
-      return { username: data[i][1], store: data[i][2], role: role };
+      return { username: v[1], store: v[2], role: role };
     }
   }
   throw new Error('セッションが無効です。再ログインしてください');
