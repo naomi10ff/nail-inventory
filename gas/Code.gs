@@ -961,27 +961,37 @@ function getStocktakeReview_(session, storeParam, month) {
   var curCutoff = monthEndCutoff_(month);
   var prevCutoff = monthEndCutoff_(previousMonthString_(month));
 
-  var prevMap = {};
-  computeAllSummaryAsOf_(prevCutoff).forEach(function (e) {
-    if (e.store === store) prevMap[e.code] = e.current;
-  });
-  var curMap = {};
-  computeAllSummaryAsOf_(curCutoff).forEach(function (e) {
-    if (e.store === store) curMap[e.code] = e.current;
-  });
-
+  // 以前はcomputeAllSummaryAsOf_を2回(前月末・今月末それぞれ)呼んだうえ、今月分の
+  // 入荷・廃棄・棚卸イベント集計のために取引ログをもう一度読み直しており、同じ
+  // (全店舗・全期間分の)取引ログを合計3回読んでいた。この店舗の行だけを見ながら
+  // 1回の読み込みで全部まとめて計算する。
+  var prevMap = {}, curMap = {};
   var incomingMap = {}, disposalMap = {};
   // 棚卸は1回の送信で複数商品を記録するが、appendLog_で送信内の全行に同じ時刻を
   // 持たせているため、時刻をキーにまとめれば「1回の送信」単位のイベントに戻せる。
   var stocktakeEventMap = {};
   var logSheet = getSheet_(SHEET_LOG);
   var logData = logSheet.getDataRange().getValues();
+  var prevCutoffMs = prevCutoff.getTime(), curCutoffMs = curCutoff.getTime();
   for (var i = 1; i < logData.length; i++) {
     var row = logData[i];
     if (row[1] !== store) continue;
     var ts = new Date(row[0]).getTime();
-    if (ts < prevCutoff.getTime() || ts >= curCutoff.getTime()) continue;
+    if (ts >= curCutoffMs) continue; // 今月より後の記録は集計に関係ない
     var code = row[3], type = row[6], qty = Number(row[7]) || 0;
+
+    // 前月末・今月末それぞれの時点までの状態を、computeAllSummaryAsOf_と同じ規則
+    // (棚卸/調整は絶対値としてセット、入荷/廃棄は加減算)でその場で更新する。
+    if (ts < prevCutoffMs) {
+      if (type === '棚卸' || type === '調整') prevMap[code] = qty;
+      else if (type === '入荷') prevMap[code] = (prevMap[code] || 0) + qty;
+      else if (type === '廃棄') prevMap[code] = (prevMap[code] || 0) - qty;
+    }
+    if (type === '棚卸' || type === '調整') curMap[code] = qty;
+    else if (type === '入荷') curMap[code] = (curMap[code] || 0) + qty;
+    else if (type === '廃棄') curMap[code] = (curMap[code] || 0) - qty;
+
+    if (ts < prevCutoffMs) continue; // ここから先は「今月」の差異表示専用の集計
     if (type === '入荷') {
       incomingMap[code] = (incomingMap[code] || 0) + qty;
     } else if (type === '廃棄') {
@@ -1016,14 +1026,34 @@ function getStocktakeReview_(session, storeParam, month) {
     };
   });
 
+  // getMonthlyStocktakeStatus_を呼ぶと内部でgetLatestStocktakeDateThisMonth_が取引ログを
+  // また全部読み直してしまう。上のループで作ったstocktakeEvents(最新が最後尾)から
+  // 同じ「実施日」が分かるので、それを使ってその場で組み立てる。
+  var approval = getApprovalStatus_(store, month);
+  var implementedDate = stocktakeEvents.length ? stocktakeEvents[stocktakeEvents.length - 1].timestamp : null;
+  var monthlyStatus = (approval.status === '承認済み' || approval.status === '差し戻し')
+    ? {
+        status: approval.status,
+        implementedDate: implementedDate,
+        approver: approval.approver || '',
+        approvedAt: approval.approvedAt || null,
+        rejectedReason: approval.rejectedReason || '',
+        rejectedAt: approval.rejectedAt || null
+      }
+    : {
+        status: implementedDate ? '承認待ち' : '未実施',
+        implementedDate: implementedDate,
+        approver: '', approvedAt: null, rejectedReason: '', rejectedAt: null
+      };
+
   return {
     store: store,
     month: month,
     previousMonth: previousMonthString_(month),
     items: items,
     stocktakeEvents: stocktakeEvents,
-    approval: getApprovalStatus_(store, month),
-    monthlyStatus: getMonthlyStocktakeStatus_(store, month)
+    approval: approval,
+    monthlyStatus: monthlyStatus
   };
 }
 
