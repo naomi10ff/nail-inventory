@@ -836,15 +836,20 @@ function lookupCurrentStock_(session, p) {
   var product = lookupProduct_(store, p.code);
   if (!product) return { found: false };
 
-  var all = computeAllSummary_();
-  var entry = null;
-  for (var i = 0; i < all.length; i++) {
-    if (all[i].store === store && String(all[i].code) === String(p.code)) {
-      entry = all[i];
-      break;
-    }
+  // computeAllSummary_()は全店舗・全商品分の状態をまとめて計算するが、ここでは
+  // この1商品の現在庫だけが必要なので、該当する行だけを見ながら直接計算する
+  // (取引ログを読むこと自体は避けられないが、他の商品分の集計を作らずに済む)。
+  var logSheet = getSheet_(SHEET_LOG);
+  var logData = logSheet.getDataRange().getValues();
+  var currentStock = 0;
+  for (var i = 1; i < logData.length; i++) {
+    var row = logData[i];
+    if (row[1] !== store || String(row[3]) !== String(p.code)) continue;
+    var type = row[6], qty = Number(row[7]) || 0;
+    if (type === '棚卸' || type === '調整') currentStock = qty;
+    else if (type === '入荷') currentStock += qty;
+    else if (type === '廃棄') currentStock -= qty;
   }
-  var currentStock = entry ? entry.current : 0;
   return {
     found: true,
     store: store,
@@ -1132,7 +1137,9 @@ function adjustProductStock_(session, p) {
   if (!product) throw new Error('商品が見つかりません');
 
   appendLog_(p.store, session.username, product, '調整', newStock, p.memo || '本社による在庫調整');
-  refreshSummary_();
+  // refreshSummary_()は呼ばない。recordIncoming_と同じ理由で、この操作は
+  // パスワード確認をやめてから使う頻度が上がったため、取引ログが増えるほど
+  // refreshSummary_()が遅くなるのを避ける(現在庫サマリは画面表示に使っていない参考シート)。
   return { store: p.store, code: p.code, newStock: newStock };
 }
 
