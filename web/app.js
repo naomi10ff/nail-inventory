@@ -1651,6 +1651,9 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
       const holder = document.getElementById('hq-incoming-qr-canvas-holder');
       holder.innerHTML = '';
       new QRCode(holder, { text: String(generatedCode), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
+      // QRコードが汚れて読めなくなった場合や、貼る前に手元で確認するときのために、
+      // コード自体も文字で見えるようにしておく(印刷にも一緒に含まれる)。
+      document.getElementById('hq-incoming-qr-code-label').textContent = generatedCode;
       document.getElementById('hq-incoming-qr-result').style.display = 'block';
       document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
       setHqIncomingStatus(
@@ -2405,10 +2408,19 @@ function renderAoneSheets() {
       qrHolder.className = 'aone-qr';
       cell.appendChild(qrHolder);
       new QRCode(qrHolder, { text: String(p.code), width: 80, height: 80, correctLevel: QRCode.CorrectLevel.H });
+      const info = document.createElement('div');
+      info.className = 'aone-info';
+      // QRコードが汚れて読めなくなったときに手入力できるよう、コード自体も文字で
+      // 印刷しておく(商品一覧からの再印刷 showQrViewModal では既に表示している)。
+      const codeText = document.createElement('div');
+      codeText.className = 'aone-code';
+      codeText.textContent = p.code;
+      info.appendChild(codeText);
       const text = document.createElement('div');
       text.className = 'aone-text';
       text.textContent = (p.brand ? p.brand + ' ' : '') + p.name;
-      cell.appendChild(text);
+      info.appendChild(text);
+      cell.appendChild(info);
       sheet.appendChild(cell);
     });
 

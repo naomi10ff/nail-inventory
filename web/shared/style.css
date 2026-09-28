@@ -350,6 +350,16 @@ body.hq-mode .screen.hq-screen.active {
 }
 .aone-cell .aone-qr { width: 7.5mm; height: 7.5mm; flex-shrink: 0; }
 .aone-cell .aone-qr canvas, .aone-cell .aone-qr img { width: 100%; height: 100%; }
+.aone-cell .aone-info { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+/* QRコードが汚れて読めなくなったときに手入力できるよう、コードも小さく印刷しておく */
+.aone-cell .aone-code {
+  font-size: 5pt;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #555;
+}
 .aone-cell .aone-text {
   font-size: 6pt;
   line-height: 1.15;
