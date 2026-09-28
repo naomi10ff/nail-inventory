@@ -1788,13 +1788,16 @@ async function loadDashboard() {
     tableContainer.appendChild(table);
   }
 
-  const outOfStock = await apiCall('getOutOfStock', {});
+  // 欠品一覧はsummaryAll(直前に取得済み)から絞り込むだけにする。以前はここで
+  // apiCall('getOutOfStock')をもう一度呼んでおり、全店舗・全商品分の重い在庫計算を
+  // ログイン直後に2回連続で行っていたため、ダッシュボード表示が余計に遅くなっていた。
+  const outOfStockItems = (summaryAll.items || []).filter((item) => item.outOfStock);
   const oosEl = document.getElementById('out-of-stock-container');
   oosEl.innerHTML = '';
-  if (!outOfStock.items.length) {
+  if (!outOfStockItems.length) {
     oosEl.textContent = '欠品はありません';
   } else {
-    outOfStock.items.forEach((item) => {
+    outOfStockItems.forEach((item) => {
       const p = document.createElement('p');
       p.textContent = `${item.store} / ${item.brand || ''} ${item.name}`;
       oosEl.appendChild(p);
