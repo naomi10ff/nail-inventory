@@ -1016,3 +1016,229 @@ function bulkImportHoraiProducts() {
   }
   Logger.log("西大寺宝来店: " + rows.length + "件登録、" + skipped + "件は既存のためスキップ");
 }
+
+// ---- 木津店: 9/28の棚卸を在庫の基準にする(一回限り) ----
+// 木津店は元のスプレッドシートの在庫数が不正確だったため、9/28の棚卸を「最初の基準」とし、
+// それより前の木津店の取引ログをすべて削除する。9/28に数えた商品はその数、数えていない
+// 商品は記録が無くなるので0になる。必ず previewKizuRebase() で件数を確認してから
+// rebaseKizuInventoryTo0928() を実行する。どちらもApps Scriptエディタから手動で実行する。
+var KIZU_REBASE_STORE = '木津店';
+var KIZU_REBASE_DATE = '2026-09-28';
+
+/** 取引ログを読み、削除対象・残す行・9/28の棚卸の内訳を集計する(シートは変更しない)。 */
+function analyzeKizuRebase_() {
+  var store = KIZU_REBASE_STORE;
+  var data = getSheet_(SHEET_LOG).getDataRange().getValues();
+  var keepRows = [data[0]];
+  var deleteCount = 0, deleteByType = {};
+  var otherKeptRows = []; // 9/28以降に残る、棚卸以外の記録(入荷・廃棄など)
+  var submissions = {};   // 9/28の棚卸の送信単位(時刻+スタッフ)
+  var countsByCode = {};  // 商品ごとの9/28の棚卸記録(送信順)
+
+  var beforeStock = {}; // 反映前のシステム在庫(取引ログの全記録から計算)
+  var afterStock = {};  // 反映後の在庫(残る記録だけから計算)
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (row[1] !== store) { keepRows.push(row); continue; }
+    applyLogRowToStock_(beforeStock, row);
+    var day = Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'yyyy-MM-dd');
+    if (day < KIZU_REBASE_DATE) {
+      deleteCount++;
+      deleteByType[row[6]] = (deleteByType[row[6]] || 0) + 1;
+      continue;
+    }
+    keepRows.push(row);
+    applyLogRowToStock_(afterStock, row);
+    if (row[6] === '棚卸' && day === KIZU_REBASE_DATE) {
+      var ts = new Date(row[0]).getTime();
+      submissions[ts + '||' + row[2]] = true;
+      var code = String(row[3]);
+      if (!countsByCode[code]) countsByCode[code] = { name: row[4], brand: row[5], records: [] };
+      countsByCode[code].records.push({ ts: ts, qty: Number(row[7]) || 0 });
+    } else {
+      otherKeptRows.push(row);
+    }
+  }
+
+  // 同じ商品が複数回の送信に分かれて記録されている場合、最後の送信の数が在庫になる。
+  // 「上書き」モードで別々の棚の分を送っていると合計されず少なくなるため、一覧で確認する。
+  var multiSubmitted = [];
+  Object.keys(countsByCode).forEach(function (code) {
+    var c = countsByCode[code];
+    if (c.records.length < 2) return;
+    c.records.sort(function (a, b) { return a.ts - b.ts; });
+    multiSubmitted.push({
+      code: code, brand: c.brand, name: c.name,
+      qtys: c.records.map(function (r) { return r.qty; }),
+      finalQty: c.records[c.records.length - 1].qty
+    });
+  });
+
+  // 9/28当日の入荷などは、同じ商品をその後の棚卸で数えていれば上書きされて影響しないが、
+  // 棚卸より後の記録(または数えていない商品の記録)は、数えた数に加算・減算される。
+  var otherKept = otherKeptRows.map(function (row) {
+    var ts = new Date(row[0]).getTime();
+    var c = countsByCode[String(row[3])];
+    var overridden = !!c && c.records.some(function (rec) { return rec.ts > ts; });
+    return { row: row, overridden: overridden };
+  });
+
+  var productMap = getProductMap_(store);
+  var uncounted = Object.keys(productMap).filter(function (code) { return !countsByCode[code]; })
+    .map(function (code) {
+      var p = productMap[code];
+      return { code: code, brand: p.brand, name: p.name, before: beforeStock[code] || 0, after: afterStock[code] || 0 };
+    });
+
+  return {
+    keepRows: keepRows,
+    deleteCount: deleteCount,
+    deleteByType: deleteByType,
+    otherKept: otherKept,
+    submissionCount: Object.keys(submissions).length,
+    countedCodes: Object.keys(countsByCode).length,
+    multiSubmitted: multiSubmitted,
+    productCount: Object.keys(productMap).length,
+    uncounted: uncounted
+  };
+}
+
+/** 取引ログ1行を在庫マップに反映する(棚卸/調整は数をそのままセット、入荷/廃棄は加減算)。 */
+function applyLogRowToStock_(stock, row) {
+  var code = String(row[3]), type = row[6], qty = Number(row[7]) || 0;
+  if (type === '棚卸' || type === '調整') stock[code] = qty;
+  else if (type === '入荷') stock[code] = (stock[code] || 0) + qty;
+  else if (type === '廃棄') stock[code] = (stock[code] || 0) - qty;
+}
+
+/** 9/28に数えていない商品の一覧を、店舗で確認できるよう別シートに書き出す(取引ログは変更しない)。 */
+function writeKizuUncountedSheet_(uncounted) {
+  var name = '木津店_9月28日に数えていない商品';
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  sheet.clearContents();
+  var rows = [['ブランド', '商品名', 'コード', '今のシステム在庫(反映前)', '反映後の在庫']];
+  uncounted
+    .sort(function (a, b) { return String(a.brand).localeCompare(String(b.brand)) || String(a.name).localeCompare(String(b.name)); })
+    .forEach(function (u) { rows.push([u.brand, u.name, u.code, u.before, u.after]); });
+  sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  return name;
+}
+
+function logKizuRebaseReport_(r) {
+  Logger.log('【' + KIZU_REBASE_STORE + '】' + KIZU_REBASE_DATE + 'より前の取引ログ: ' + r.deleteCount + '件を削除対象 ' + JSON.stringify(r.deleteByType));
+  Logger.log(KIZU_REBASE_DATE + 'の棚卸: 送信' + r.submissionCount + '回 / 数えた商品 ' + r.countedCodes + '品目');
+  var uncountedWithStock = r.uncounted.filter(function (u) { return u.before > 0; }).length;
+  Logger.log('商品マスタの登録商品: ' + r.productCount + '品目 → うち9/28に数えていない商品: ' + r.uncounted.length + '品目(そのうち今のシステム在庫が1以上: ' + uncountedWithStock + '品目)');
+  var affecting = r.otherKept.filter(function (o) { return !o.overridden; });
+  Logger.log(KIZU_REBASE_DATE + '以降に残る棚卸以外の記録: ' + r.otherKept.length + '件(その後の棚卸で上書き済み: ' + (r.otherKept.length - affecting.length) + '件 / 数えた数に加算・減算される: ' + affecting.length + '件)');
+  affecting.forEach(function (o) {
+    var row = o.row;
+    Logger.log('  [加算される] ' + Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'MM/dd HH:mm') + ' ' + row[6] + ' ' + row[5] + ' ' + row[4] + ' 数量' + row[7]);
+  });
+  Logger.log('複数回の送信に分かれて記録された商品(最後の数が在庫になる): ' + r.multiSubmitted.length + '品目');
+  r.multiSubmitted.forEach(function (m) {
+    Logger.log('  ' + m.brand + ' ' + m.name + ' [' + m.code + '] 記録: ' + m.qtys.join(' → ') + ' → 在庫 ' + m.finalQty);
+  });
+}
+
+/** 確認用。シートは一切変更せず、実行した場合に何がどうなるかをログに出すだけ。 */
+function previewKizuRebase() {
+  var r = analyzeKizuRebase_();
+  logKizuRebaseReport_(r);
+  var sheetName = writeKizuUncountedSheet_(r.uncounted);
+  Logger.log('9/28に数えていない商品の一覧をシート「' + sheetName + '」に書き出しました。');
+  Logger.log('※確認のみです。在庫・取引ログは変更していません。');
+}
+
+/**
+ * 実行用(取り消しは画面からできない)。変更する取引ログ・棚卸承認シートのコピーを
+ * 同じスプレッドシート内に残してから、木津店の9/28より前の取引ログと、木津店の棚卸承認記録を削除する。
+ * (backupSpreadsheet()はこのプロジェクトの権限(drive.file)ではドライブのフォルダを
+ * 探せずエラーになるため、ここではシートのコピーでバックアップする)
+ */
+function rebaseKizuInventoryTo0928() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmm');
+  [SHEET_LOG, SHEET_APPROVALS].forEach(function (name) {
+    getSheet_(name).copyTo(ss).setName(name + '_バックアップ_' + stamp);
+  });
+  Logger.log('バックアップ: 「' + SHEET_LOG + '」「' + SHEET_APPROVALS + '」のコピーを「…_バックアップ_' + stamp + '」として作成しました。');
+  var r = analyzeKizuRebase_();
+  logKizuRebaseReport_(r);
+
+  // 行ごとにdeleteRowすると件数分だけ非常に遅くなるため、残す行だけで書き直す。
+  var sheet = getSheet_(SHEET_LOG);
+  var lastRow = sheet.getLastRow();
+  var width = r.keepRows[0].length;
+  sheet.getRange(1, 1, lastRow, width).clearContent();
+  sheet.getRange(1, 1, r.keepRows.length, width).setValues(r.keepRows);
+
+  var approvalSheet = getSheet_(SHEET_APPROVALS);
+  var approvalData = approvalSheet.getDataRange().getValues();
+  for (var j = approvalData.length - 1; j >= 1; j--) {
+    if (approvalData[j][0] === KIZU_REBASE_STORE) approvalSheet.deleteRow(j + 1);
+  }
+
+  refreshSummary_();
+  Logger.log('完了: ' + r.deleteCount + '件を削除し、' + KIZU_REBASE_DATE + 'の棚卸を' + KIZU_REBASE_STORE + 'の在庫の基準にしました。');
+}
+
+/**
+ * 「木津店_9月28日に数えていない商品」シートのF列(実際の数)に店舗で数えた数を入力して
+ * 実行すると、その数を種別「調整」として取引ログに記録し、木津店の在庫に反映する。
+ * 9/28の棚卸の数え漏れを補う記録なので、時刻は9/28 23:59にして9月分(基準)に含め、
+ * 取引ログの時系列が崩れないよう、その時刻の位置に行を差し込む(在庫は上の行から順に
+ * 計算されるため、末尾に足すと10月以降の入荷などを上書きしてしまう)。
+ * 反映した行にはG列に「反映済み」と書くので、何度実行しても二重には記録されない。
+ * 初回はF列・G列の見出しを追加するだけで終わる。
+ */
+function applyKizuActualCounts() {
+  var store = KIZU_REBASE_STORE;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('木津店_9月28日に数えていない商品');
+  if (!sheet) throw new Error('シート「木津店_9月28日に数えていない商品」が見つかりません');
+
+  if (sheet.getRange(1, 6).getValue() !== '実際の数') {
+    sheet.getRange(1, 6, 1, 2).setValues([['実際の数', '反映結果']]);
+    Logger.log('F列「実際の数」・G列「反映結果」を追加しました。F列に店舗で数えた数を入力してから、もう一度実行してください。');
+    return;
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var productMap = getProductMap_(store);
+  var ts = new Date(KIZU_REBASE_DATE + 'T23:59:00+09:00');
+  var logRows = [], resultCells = [], errors = [];
+  for (var i = 1; i < data.length; i++) {
+    var input = data[i][5], done = String(data[i][6]).indexOf('反映済み') === 0;
+    if (input === '' || input === null || done) continue;
+    var qty = Number(input);
+    var product = productMap[String(data[i][2])];
+    if (isNaN(qty) || qty < 0 || Math.floor(qty) !== qty) {
+      errors.push((i + 1) + '行目: 「' + input + '」は数として読めません');
+      continue;
+    }
+    if (!product) {
+      errors.push((i + 1) + '行目: 商品マスタに見つかりません(コード ' + data[i][2] + ')');
+      continue;
+    }
+    logRows.push([ts, store, 'スプレッドシート一括入力', product.code, product.name, product.brand, '調整', qty, '9/28棚卸の数え漏れを店舗で確認']);
+    resultCells.push(i + 1);
+  }
+
+  if (logRows.length) {
+    var logSheet = getSheet_(SHEET_LOG);
+    var logData = logSheet.getDataRange().getValues();
+    var insertAfter = logData.length; // 9/28 23:59より後の記録が無ければ末尾
+    while (insertAfter > 1 && new Date(logData[insertAfter - 1][0]).getTime() > ts.getTime()) insertAfter--;
+    logSheet.insertRowsAfter(insertAfter, logRows.length);
+    logSheet.getRange(insertAfter + 1, 1, logRows.length, logRows[0].length).setValues(logRows);
+    revokeApprovalIfStale_(store, ts);
+
+    var stamp = '反映済み ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'MM/dd HH:mm');
+    resultCells.forEach(function (row) { sheet.getRange(row, 7).setValue(stamp); });
+  }
+  errors.forEach(function (e) { sheet.getRange(Number(e.split('行目')[0]), 7).setValue('エラー: ' + e.split(': ')[1]); });
+
+  Logger.log(logRows.length + '品目を' + store + 'の在庫に反映しました。' + (errors.length ? ' 反映できなかった行: ' + errors.length + '件' : ''));
+  errors.forEach(function (e) { Logger.log('  ' + e); });
+}
