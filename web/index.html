@@ -391,6 +391,15 @@
     <option value="">全ブランド</option>
   </select>
   <button type="button" class="secondary" id="btn-export-products">CSVエクスポート(ブランド・品名・カラーNO・商品コード)</button>
+  <!-- バーコードの無い商品(コードが「QR-」で始まる)だけに絞ってまとめて選べるようにする。
+       1件ずつチェックを入れるのが手間だという指摘への対応。 -->
+  <label for="product-code-filter">コードの種類で絞り込み</label>
+  <select id="product-code-filter">
+    <option value="">すべて</option>
+    <option value="qr">QRコードの商品だけ(バーコードなし)</option>
+    <option value="barcode">バーコードの商品だけ</option>
+  </select>
+  <button type="button" class="secondary" id="btn-select-all-shown-qr">表示中の商品をすべて選択</button>
   <button type="button" class="primary" id="btn-print-selected-qr">選択した商品のQRコードをまとめて発行・印刷</button>
   <button type="button" class="secondary" id="btn-clear-selected-qr">選択を全て解除</button>
   <div id="products-table"></div>
@@ -617,6 +626,6 @@
   </div>
 </div>
 
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>

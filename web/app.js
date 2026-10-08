@@ -1231,11 +1231,13 @@ document.getElementById('nav-products').addEventListener('click', async () => {
   showScreen('screen-products');
   cancelEditProduct();
   document.getElementById('product-brand-filter').value = '';
+  document.getElementById('product-code-filter').value = '';
   await Promise.all([loadHqBrandOptions(), loadHqCategoryOptions(), loadProducts()]);
 });
 document.getElementById('product-store-select').addEventListener('change', async () => {
   cancelEditProduct();
   document.getElementById('product-brand-filter').value = '';
+  document.getElementById('product-code-filter').value = '';
   await Promise.all([loadHqBrandOptions(), loadHqCategoryOptions(), loadProducts()]);
 });
 
@@ -2146,6 +2148,7 @@ async function loadProducts() {
   const store = document.getElementById('product-store-select').value;
   const container = document.getElementById('products-table');
   selectedQrProducts.clear(); // 店舗を切り替えたら商品データ自体が別物になるので選択もリセットする
+  updateSelectedQrCount();
   if (!store) {
     currentProductList = [];
     container.textContent = '店舗を選択してください';
@@ -2176,6 +2179,23 @@ function updateProductBrandFilterOptions() {
 document.getElementById('product-brand-filter').addEventListener('change', () => {
   renderProductsTable();
 });
+document.getElementById('product-code-filter').addEventListener('change', () => {
+  renderProductsTable();
+});
+
+/** いま一覧に表示している商品(ブランド・コードの種類で絞り込んだ結果)を、まとめてQR発行対象にする。 */
+document.getElementById('btn-select-all-shown-qr').addEventListener('click', () => {
+  if (!productsFilteredForExport.length) return;
+  productsFilteredForExport.forEach((p) => selectedQrProducts.add(p));
+  renderProductsTable();
+});
+
+/** 何件選んでいるか分かるよう、発行ボタンの文言に選択件数を出す。 */
+function updateSelectedQrCount() {
+  const n = selectedQrProducts.size;
+  document.getElementById('btn-print-selected-qr').textContent =
+    '選択した商品のQRコードをまとめて発行・印刷' + (n ? `(${n}件)` : '');
+}
 
 function renderProductsTable() {
   const store = document.getElementById('product-store-select').value;
@@ -2187,8 +2207,16 @@ function renderProductsTable() {
   }
 
   const brandFilter = document.getElementById('product-brand-filter').value;
-  const filtered = brandFilter ? currentProductList.filter((p) => p.brand === brandFilter) : currentProductList;
+  const codeFilter = document.getElementById('product-code-filter').value;
+  const filtered = currentProductList.filter((p) => {
+    if (brandFilter && p.brand !== brandFilter) return false;
+    const isQr = String(p.code).indexOf('QR-') === 0;
+    if (codeFilter === 'qr' && !isQr) return false;
+    if (codeFilter === 'barcode' && isQr) return false;
+    return true;
+  });
   productsFilteredForExport = filtered;
+  updateSelectedQrCount();
 
   if (!filtered.length) {
     container.textContent = '該当する商品が見つかりません';
@@ -2213,6 +2241,7 @@ function renderProductsTable() {
     checkbox.addEventListener('change', () => {
       if (checkbox.checked) selectedQrProducts.add(p);
       else selectedQrProducts.delete(p);
+      updateSelectedQrCount();
     });
     checkTd.appendChild(checkbox);
     tr.appendChild(checkTd);
@@ -2449,6 +2478,7 @@ document.getElementById('btn-clear-selected-qr').addEventListener('click', () =>
   if (!selectedQrProducts.size) return;
   selectedQrProducts.clear();
   renderProductsTable();
+  updateSelectedQrCount(); // 商品が0件で一覧を描かない場合もボタンの件数表示を戻す
 });
 
 document.getElementById('btn-aone-apply-margin').addEventListener('click', () => {
@@ -2661,6 +2691,7 @@ function renderNameDuplicates(store, products) {
       editBtn.addEventListener('click', async () => {
         document.getElementById('product-store-select').value = store;
         document.getElementById('product-brand-filter').value = '';
+        document.getElementById('product-code-filter').value = '';
         showScreen('screen-products');
         await loadHqBrandOptions();
         await loadHqCategoryOptions();
