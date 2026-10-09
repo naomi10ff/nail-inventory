@@ -1242,3 +1242,57 @@ function applyKizuActualCounts() {
   Logger.log(logRows.length + '品目を' + store + 'の在庫に反映しました。' + (errors.length ? ' 反映できなかった行: ' + errors.length + '件' : ''));
   errors.forEach(function (e) { Logger.log('  ' + e); });
 }
+
+// ---- 宝来店: 元の在庫表で在庫があるのに、まだバーコードが紐づいていない商品の一覧 ----
+var HORAI_SOURCE_SPREADSHEET_ID = '1Y0XBj4Mxy6qXFC7brPVbYf8oFlikMygzZKkEiLOif9I'; // 宝来：棚卸　2026
+var HORAI_SOURCE_SHEET_GID = 2059209377;
+
+/**
+ * 宝来店の元の在庫表(宝来：棚卸　2026)で、いちばん新しい月の在庫が1以上の商品のうち、
+ * 商品マスタのコードがまだ「QR-」(=バーコード未登録)のものを、シート
+ * 「宝来店_在庫ありでバーコード未登録」に書き出す。元の表の商品はbulkImportHoraiProducts()で
+ * ブランド+商品名をそのまま登録しているので、同じ組み合わせで突き合わせる。
+ * 商品マスタに同じ名前が見つからない商品(登録時に名前を直した等)も、下に参考として並べる。
+ */
+function listHoraiInStockWithoutBarcode() {
+  var store = '西大寺宝来店';
+  var source = SpreadsheetApp.openById(HORAI_SOURCE_SPREADSHEET_ID).getSheets()
+    .filter(function (s) { return s.getSheetId() === HORAI_SOURCE_SHEET_GID; })[0];
+  if (!source) throw new Error('元の在庫表のシートが見つかりません');
+  var rows = source.getDataRange().getValues();
+  var monthHeader = rows[0]; // D列以降に「2026/01」…の月が並んでいる
+
+  var masterByKey = {};
+  var master = getSheet_(SHEET_PRODUCTS).getDataRange().getValues();
+  for (var i = 1; i < master.length; i++) {
+    if (master[i][0] !== store) continue;
+    masterByKey[String(master[i][3]).trim() + '||' + String(master[i][2]).trim()] = String(master[i][1]);
+  }
+
+  var unregistered = [], notFound = [];
+  for (var r = 6; r < rows.length; r++) {
+    var brand = String(rows[r][1]).trim(), name = String(rows[r][2]).trim();
+    if (!brand && !name) continue;
+    var lastQty = null, lastMonth = '';
+    for (var c = 3; c < rows[r].length; c++) {
+      if (rows[r][c] !== '' && rows[r][c] !== null) { lastQty = Number(rows[r][c]); lastMonth = monthHeader[c]; }
+    }
+    if (!(lastQty > 0)) continue;
+    if (lastMonth instanceof Date) lastMonth = Utilities.formatDate(lastMonth, 'Asia/Tokyo', 'yyyy/MM');
+    var code = masterByKey[brand + '||' + name];
+    if (code === undefined) notFound.push([brand, name, '', lastQty, lastMonth, '商品マスタに同じ名前が見つかりません']);
+    else if (code.indexOf('QR-') === 0) unregistered.push([brand, name, code, lastQty, lastMonth, '']);
+  }
+
+  var byBrand = function (a, b) { return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]); };
+  unregistered.sort(byBrand);
+  notFound.sort(byBrand);
+  var out = [['ブランド', '商品名', 'コード', '元の表の最終在庫', 'その月', '備考']].concat(unregistered, notFound);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var name = '宝来店_在庫ありでバーコード未登録';
+  var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  sheet.clearContents();
+  sheet.getRange(1, 1, out.length, out[0].length).setValues(out);
+  Logger.log('在庫ありでバーコード未登録: ' + unregistered.length + '品目 / 商品マスタに名前が見つからない: ' + notFound.length + '品目 → シート「' + name + '」に書き出しました。');
+}
