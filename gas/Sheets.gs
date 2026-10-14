@@ -1296,3 +1296,42 @@ function listHoraiInStockWithoutBarcode() {
   sheet.getRange(1, 1, out.length, out[0].length).setValues(out);
   Logger.log('在庫ありでバーコード未登録: ' + unregistered.length + '品目 / 商品マスタに名前が見つからない: ' + notFound.length + '品目 → シート「' + name + '」に書き出しました。');
 }
+
+/**
+ * 宝来店で入荷登録時にテレコになった ICE GEL 1823 と my&bee RE-011G のバーコードを正しく入れ替える(一回限り)。
+ * 正しい組み合わせ: ICE GEL(4573571…)=4573571101998、my&bee(4570131…)=4570131795961。
+ * 2つのコードを持つ行を探し、ブランドが逆になっていれば入れ替える。それ以外の状態なら何も変えずにログだけ出す。
+ * 取引ログはコードで在庫を計算しているため、入れ替え後はそれぞれの商品の在庫として正しく数えられる。
+ */
+function fixHoraiSwappedIceGelMyBee() {
+  var store = '西大寺宝来店';
+  var ICE = '4573571101998', MYBEE = '4570131795961';
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var rowIce = -1, rowMyBee = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] !== store) continue;
+    var code = String(data[i][1]);
+    if (code === ICE || code === MYBEE || /1823|RE-?011/i.test(String(data[i][2]))) {
+      Logger.log((i + 1) + '行目: ' + data[i][3] + ' / ' + data[i][2] + ' / コード ' + code);
+    }
+    if (code === ICE) rowIce = i;
+    if (code === MYBEE) rowMyBee = i;
+  }
+  if (rowIce === -1 || rowMyBee === -1) {
+    Logger.log('2つのコードのどちらかが見つからないため、何も変更していません。上の行の内容をClaudeに送ってください。');
+    return;
+  }
+  var iceRowBrand = String(data[rowIce][3]), myBeeRowBrand = String(data[rowMyBee][3]);
+  if (/ICE/i.test(iceRowBrand) && /bee/i.test(myBeeRowBrand)) {
+    Logger.log('すでに正しい組み合わせです。何も変更していません。');
+    return;
+  }
+  if (!(/bee/i.test(iceRowBrand) && /ICE/i.test(myBeeRowBrand))) {
+    Logger.log('想定と違う組み合わせのため、何も変更していません。上の行の内容をClaudeに送ってください。');
+    return;
+  }
+  sheet.getRange(rowIce + 1, 2).setNumberFormat('@').setValue(MYBEE);
+  sheet.getRange(rowMyBee + 1, 2).setNumberFormat('@').setValue(ICE);
+  Logger.log('入れ替えました: ' + data[rowIce][3] + ' ' + data[rowIce][2] + ' → ' + MYBEE + ' / ' + data[rowMyBee][3] + ' ' + data[rowMyBee][2] + ' → ' + ICE);
+}
