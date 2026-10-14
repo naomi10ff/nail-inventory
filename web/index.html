@@ -295,6 +295,9 @@
 
   <div id="hq-incoming-unknown" class="card" style="display:none;">
     <p class="hint" id="hq-incoming-unknown-hint">このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。</p>
+    <!-- 隣に置いた別の商品のバーコードをカメラが拾っても気づけるよう、読み取った数字を必ず見せる
+         (宝来店で、続けて登録した2商品のバーコードが入れ違う事例があったため) -->
+    <p id="hq-incoming-scanned-code" style="display:none; font-weight:bold;"></p>
     <label for="hq-incoming-new-brand-select">ブランド</label>
     <select id="hq-incoming-new-brand-select"></select>
     <button class="link" type="button" id="btn-new-brand-toggle-incoming">リストにないブランドはこちら</button>
@@ -626,6 +629,6 @@
   </div>
 </div>
 
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 </body>
 </html>

@@ -1498,6 +1498,7 @@ function resetHqIncomingScreen() {
   document.getElementById('hq-incoming-unknown-hint').textContent =
     'このコードは選択した店舗の商品マスタに未登録です。事前登録済みの商品ならブランド→品名を選ぶだけでバーコードを紐づけられます。無ければ「リストにない商品名はこちら」から新規登録してください。';
   document.getElementById('btn-rescan-hq-incoming').style.display = 'none';
+  document.getElementById('hq-incoming-scanned-code').style.display = 'none';
   setHqIncomingStatus('', false);
   resetHqIncomingBrandNewForm();
   document.getElementById('hq-incoming-new-brand-select').selectedIndex = 0;
@@ -1510,8 +1511,18 @@ function resetHqIncomingScreen() {
 }
 
 let hqIncomingScannedCode = null;
+// 「登録」を押してから処理が終わるまでの数秒の間に次のスキャン(手入力・読み直し含む)が
+// 入ると、hqIncomingScannedCodeが次の商品のコードに書き換わり、登録中の商品に次の商品の
+// バーコードが付いてしまう(宝来店で2商品のバーコードが入れ違った)。登録中は次のスキャンを
+// 受け付けず、登録処理はボタンを押した時点のコードだけを使う。
+let hqIncomingRegistering = false;
+// 商品の問い合わせ(lookupProduct)の返事を待っている間に次のスキャンが入った場合、
+// 古いスキャンの結果で画面を上書きしないよう、何回目のスキャンかを覚えておく
+let hqIncomingScanSeq = 0;
 
 async function onHqIncomingScan(code) {
+  if (hqIncomingRegistering) return;
+  const seq = ++hqIncomingScanSeq;
   hqIncomingScannedCode = code;
   const store = document.getElementById('hq-incoming-store-select').value;
   try {
@@ -1524,6 +1535,7 @@ async function onHqIncomingScan(code) {
     if (!product) {
       product = await apiCall('lookupProduct', { store, code });
     }
+    if (seq !== hqIncomingScanSeq) return; // 待っている間に別のコードが読まれた
     resetHqIncomingScreen();
     if (product) {
       // 見つかった商品は、確認画面を挟まず個数1でその場ですぐ入荷登録する。実運用では
@@ -1540,6 +1552,9 @@ async function onHqIncomingScan(code) {
       return;
     } else {
       document.getElementById('hq-incoming-unknown').style.display = 'block';
+      const scannedLine = document.getElementById('hq-incoming-scanned-code');
+      scannedLine.textContent = '読み取ったバーコード: ' + code + '(手元の商品のバーコードの数字と同じか確認してから登録してください)';
+      scannedLine.style.display = 'block';
     }
     document.getElementById('btn-rescan-hq-incoming').style.display = 'block';
   } catch (e) {
@@ -1555,6 +1570,7 @@ document.getElementById('btn-manual-add-hq-incoming').addEventListener('click', 
 });
 
 document.getElementById('btn-rescan-hq-incoming').addEventListener('click', () => {
+  if (hqIncomingRegistering) return;
   resetHqIncomingScreen();
   rearmGate(hqIncomingGate);
 });
@@ -1566,6 +1582,7 @@ document.getElementById('btn-new-product-no-barcode').addEventListener('click', 
     setHqIncomingStatus('店舗を選択してください', false);
     return;
   }
+  if (hqIncomingRegistering) return;
   resetHqIncomingScreen();
   hqIncomingScannedCode = null;
   document.getElementById('hq-incoming-unknown-hint').textContent =
@@ -1587,6 +1604,9 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     return;
   }
 
+  // ボタンを押した時点のコードで最後まで処理する(登録中に次のスキャンが入っても混ざらないように)
+  let scannedCode = hqIncomingScannedCode;
+  hqIncomingRegistering = true;
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
     let name;
@@ -1595,23 +1615,24 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
       // 新規商品として登録。コードが空欄(バーコード無しの新規登録)だった場合は
       // 自動発行されたQRコードが返ってくるので、以降の入荷登録にはそちらを使う
       name = selection.name;
-      const wasBlank = !hqIncomingScannedCode;
+      const wasBlank = !scannedCode;
       const result = await apiCall('registerProduct', {
-        store, code: hqIncomingScannedCode, brand, name, colorNo, itemNumber, category
+        store, code: scannedCode, brand, name, colorNo, itemNumber, category
       });
+      scannedCode = result.code;
       hqIncomingScannedCode = result.code;
       if (wasBlank) generatedCode = result.code;
     } else {
       // 事前登録済みの商品に、いまスキャンしたバーコードを紐づける(新規登録はしない)
       name = selection.product.name;
       await apiCall('updateProduct', {
-        store, code: selection.code, newCode: hqIncomingScannedCode,
+        store, code: selection.code, newCode: scannedCode,
         brand, name, colorNo, itemNumber, category, memo: selection.product.memo || ''
       });
     }
     // 登録・紐づけと同じひと手間で入荷本数1も一緒に記録する。以前はこのあと改めて
     // 「入荷を登録」を押す必要があり、処理待ち(処理中...)が2回になっていたため。
-    await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity: 1 });
+    await apiCall('recordIncoming', { store, code: scannedCode, quantity: 1 });
 
     // ローカルキャッシュ(ブランドの選択肢・hqIncomingProductList)を、サーバーから
     // 丸ごと読み直さずその場で更新する。以前はloadHqIncomingBrandOptions()・
@@ -1625,13 +1646,13 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
       brandSelect.appendChild(opt);
     }
     const updatedProduct = {
-      code: hqIncomingScannedCode, name, brand, category,
+      code: scannedCode, name, brand, category,
       maker: selection.isNew ? '' : selection.product.maker,
       unit: selection.isNew ? '本' : selection.product.unit,
       memo: selection.isNew ? '' : (selection.product.memo || ''),
       colorNo, itemNumber
     };
-    const oldCode = selection.isNew ? hqIncomingScannedCode : selection.code;
+    const oldCode = selection.isNew ? scannedCode : selection.code;
     const existingIndex = hqIncomingProductList.findIndex((p) => String(p.code) === String(oldCode));
     if (existingIndex >= 0) {
       hqIncomingProductList[existingIndex] = updatedProduct;
@@ -1670,6 +1691,8 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     }
   } catch (e) {
     setHqIncomingStatus(e.message, false);
+  } finally {
+    hqIncomingRegistering = false;
   }
   });
 });
@@ -2531,6 +2554,7 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
   const statusEl = document.getElementById('product-status');
   const store = document.getElementById('product-store-select').value;
   if (!store || !editingProductCode) return;
+  const editingProductCodeBeforeSave = editingProductCode; // cancelEditProduct()で消えるため控えておく
   const codeInput = document.getElementById('p-code').value.trim();
   const payload = {
     store,
@@ -2547,8 +2571,12 @@ document.getElementById('btn-add-product').addEventListener('click', async (e) =
     statusEl.textContent = '更新しました';
     cancelEditProduct();
     await loadProducts();
+    // product-statusは閉じた編集フォームの中にあり見えなくなるため、保存できたことをはっきり伝える
+    // (宝来店で「何度入れても処理できたかわからない」という指摘があった)
+    alert('更新しました' + (codeInput && codeInput !== String(editingProductCodeBeforeSave) ? '(コード: ' + codeInput + ')' : ''));
   } catch (e) {
     statusEl.textContent = e.message;
+    alert('更新できませんでした: ' + e.message);
   }
   });
 });
