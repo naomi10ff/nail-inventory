@@ -1335,3 +1335,69 @@ function fixHoraiSwappedIceGelMyBee() {
   sheet.getRange(rowMyBee + 1, 2).setNumberFormat('@').setValue(ICE);
   Logger.log('入れ替えました: ' + data[rowIce][3] + ' ' + data[rowIce][2] + ' → ' + MYBEE + ' / ' + data[rowMyBee][3] + ' ' + data[rowMyBee][2] + ' → ' + ICE);
 }
+
+/** 確認用(何も変更しない): 宝来店の今日の取引ログと、my&bee・ICE GEL 1823まわりの商品マスタをログに出す。 */
+function diagnoseHoraiToday() {
+  var store = '西大寺宝来店';
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var log = getSheet_(SHEET_LOG).getDataRange().getValues();
+  Logger.log('--- 今日の宝来店の取引ログ ---');
+  for (var i = 1; i < log.length; i++) {
+    if (log[i][1] !== store) continue;
+    if (Utilities.formatDate(new Date(log[i][0]), 'Asia/Tokyo', 'yyyy-MM-dd') !== today) continue;
+    Logger.log(Utilities.formatDate(new Date(log[i][0]), 'Asia/Tokyo', 'HH:mm:ss') + ' ' + log[i][6] + ' ' + log[i][5] + ' / ' + log[i][4] + ' / ' + log[i][3]);
+  }
+  Logger.log('--- 宝来店の商品マスタ(my&bee・1823) ---');
+  var master = getSheet_(SHEET_PRODUCTS).getDataRange().getValues();
+  for (var j = 1; j < master.length; j++) {
+    if (master[j][0] !== store) continue;
+    if (/bee/i.test(String(master[j][3])) || /1823/.test(String(master[j][2]))) {
+      Logger.log((j + 1) + '行目: ' + master[j][3] + ' / ' + master[j][2] + ' / ' + master[j][1] + ' / 登録日 ' + Utilities.formatDate(new Date(master[j][8]), 'Asia/Tokyo', 'MM/dd'));
+    }
+  }
+}
+
+/**
+ * 宝来店で10/14、my&bee RE-011G のバーコード(4570131795961)を読んだときに誤って「ICE GEL / 1823」として
+ * 新規登録され、その後コードを1文字違いの4573571101998に直された商品(ICE GEL 1823の本物は
+ * 「ｳｫｰﾀｰﾄﾞﾛｯﾌﾟ 1823」= 4573571181998で別に正しく登録済み)を、my&bee / RE-011G / 4570131795961 に直す。
+ * 取引ログ側も、この商品として記録された行のコード・商品名・ブランドを合わせる。
+ * 想定どおりの状態でないときは何も変えずにログだけ出す。
+ */
+function fixHoraiMyBeeRe011g() {
+  var store = '西大寺宝来店';
+  var WRONG = '4573571101998', MYBEE = '4570131795961';
+  var NEW_BRAND = 'my&bee', NEW_NAME = 'RE-011G';
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var target = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] !== store) continue;
+    var code = String(data[i][1]);
+    if (code === MYBEE) { Logger.log('4570131795961 はすでに ' + data[i][3] + ' / ' + data[i][2] + ' に付いています。何も変更していません。'); return; }
+    if (code === WRONG) target = i;
+  }
+  if (target === -1 || !/ICE/i.test(String(data[target][3])) || String(data[target][2]).trim() !== '1823') {
+    Logger.log('直す対象(ICE GEL / 1823 / 4573571101998)が見つからないため、何も変更していません。');
+    return;
+  }
+  sheet.getRange(target + 1, 2).setNumberFormat('@').setValue(MYBEE);
+  sheet.getRange(target + 1, 3).setValue(NEW_NAME);
+  sheet.getRange(target + 1, 4).setValue(NEW_BRAND);
+  ensureBrandExists_(store, NEW_BRAND);
+  Logger.log('商品マスタ ' + (target + 1) + '行目を ' + NEW_BRAND + ' / ' + NEW_NAME + ' / ' + MYBEE + ' に直しました。');
+
+  var logSheet = getSheet_(SHEET_LOG);
+  var log = logSheet.getDataRange().getValues();
+  var fixed = 0;
+  for (var j = 1; j < log.length; j++) {
+    if (log[j][1] !== store) continue;
+    var c = String(log[j][3]);
+    if ((c === MYBEE || c === WRONG) && /ICE/i.test(String(log[j][5]))) {
+      logSheet.getRange(j + 1, 4, 1, 3).setValues([[MYBEE, NEW_NAME, NEW_BRAND]]);
+      Logger.log('取引ログ ' + (j + 1) + '行目(' + log[j][6] + ' ' + log[j][7] + ')を my&bee RE-011G の記録に直しました。');
+      fixed++;
+    }
+  }
+  Logger.log('完了: 取引ログ ' + fixed + '件を直しました。');
+}
