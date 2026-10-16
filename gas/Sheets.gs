@@ -1401,3 +1401,48 @@ function fixHoraiMyBeeRe011g() {
   }
   Logger.log('完了: 取引ログ ' + fixed + '件を直しました。');
 }
+
+/**
+ * 木津店で店舗確認するための一覧を2枚のシートに書き出す(取引ログ・在庫は変更しない)。
+ * 「木津店_在庫一覧」: 全商品の 9/28の棚卸数 / 9/29以降の入荷・廃棄 / 今のシステム在庫。
+ * 「木津店_QRコード商品(在庫あり)」: コードがQR-(バーコードなし)で、今の在庫が1以上の商品
+ * (QRラベルを貼っておく必要があるもの)。
+ */
+function makeKizuStockSheets() {
+  var store = KIZU_REBASE_STORE;
+  var baseDay = KIZU_REBASE_DATE;
+  var stock = {}, baseCount = {}, inSince = {}, outSince = {};
+  var log = getSheet_(SHEET_LOG).getDataRange().getValues();
+  for (var i = 1; i < log.length; i++) {
+    var row = log[i];
+    if (row[1] !== store) continue;
+    var code = String(row[3]), type = row[6], qty = Number(row[7]) || 0;
+    applyLogRowToStock_(stock, row);
+    var day = Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'yyyy-MM-dd');
+    if (day === baseDay && (type === '棚卸' || type === '調整')) baseCount[code] = qty;
+    if (day > baseDay && type === '入荷') inSince[code] = (inSince[code] || 0) + qty;
+    if (day > baseDay && type === '廃棄') outSince[code] = (outSince[code] || 0) + qty;
+  }
+
+  var productMap = getProductMap_(store);
+  var all = Object.keys(productMap).map(function (code) {
+    var p = productMap[code];
+    var isQr = code.indexOf('QR-') === 0;
+    return [p.brand, p.name, code, isQr ? 'QR(バーコードなし)' : '',
+      hasKey_(baseCount, code) ? baseCount[code] : '', inSince[code] || 0, outSince[code] || 0, stock[code] || 0];
+  }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])); });
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  function write(name, header, rows) {
+    var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+    sheet.clearContents();
+    var out = [header].concat(rows);
+    sheet.getRange(1, 1, out.length, header.length).setValues(out);
+  }
+  write('木津店_在庫一覧',
+    ['ブランド', '商品名', 'コード', 'コードの種類', '9/28の棚卸数', '9/29以降の入荷', '9/29以降の廃棄', '今のシステム在庫'], all);
+  var qrInStock = all.filter(function (r) { return r[3] && r[7] > 0; })
+    .map(function (r) { return [r[0], r[1], r[2], r[7], '']; });
+  write('木津店_QRコード商品(在庫あり)', ['ブランド', '商品名', 'コード', '今のシステム在庫', 'QRを貼った(チェック用)'], qrInStock);
+  Logger.log('木津店_在庫一覧: ' + all.length + '品目 / 木津店_QRコード商品(在庫あり): ' + qrInStock.length + '品目 を書き出しました。');
+}
