@@ -2459,12 +2459,52 @@ function getAoneMargins() {
   };
 }
 
+// 商品ごとのラベル枚数(同じジェルが5本ある、など)。商品コード -> 枚数。印刷画面を開いている間だけ使う。
+const qrCopies = new Map();
+
+/** 印刷画面の「商品ごとの枚数」欄を作る。枚数を変えるとプレビューを作り直す。 */
+function renderQrCopiesList() {
+  const box = document.getElementById('qr-bulk-copies');
+  box.innerHTML = '';
+  Array.from(selectedQrProducts).forEach((p) => {
+    const key = String(p.code);
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid #f3f4f6; font-size:13px;';
+    const name = document.createElement('span');
+    name.style.cssText = 'flex:1; min-width:0;';
+    name.textContent = (p.brand ? p.brand + ' ' : '') + p.name;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = String(AONE_PER_PAGE);
+    input.value = String(qrCopies.get(key) || 1);
+    input.style.cssText = 'width:64px; margin:0;';
+    input.addEventListener('change', () => {
+      const n = Math.max(1, Math.min(AONE_PER_PAGE, Math.floor(Number(input.value)) || 1));
+      input.value = String(n);
+      qrCopies.set(key, n);
+      renderAoneSheets();
+    });
+    const unit = document.createElement('span');
+    unit.textContent = '枚';
+    row.appendChild(name);
+    row.appendChild(input);
+    row.appendChild(unit);
+    box.appendChild(row);
+  });
+}
+
 function renderAoneSheets() {
   const margins = getAoneMargins();
   document.getElementById('aone-margin-top').value = margins.top;
   document.getElementById('aone-margin-left').value = margins.left;
 
-  const products = Array.from(selectedQrProducts);
+  // 枚数の分だけ同じ商品を並べる(5枚なら同じラベルが5つ続けて並ぶ)
+  const products = [];
+  Array.from(selectedQrProducts).forEach((p) => {
+    const n = qrCopies.get(String(p.code)) || 1;
+    for (let i = 0; i < n; i++) products.push(p);
+  });
   const container = document.getElementById('qr-bulk-sheets');
   container.innerHTML = '';
 
@@ -2520,6 +2560,8 @@ document.getElementById('btn-print-selected-qr').addEventListener('click', () =>
     return;
   }
   try {
+    qrCopies.clear(); // 開くたびに全部1枚から始める
+    renderQrCopiesList();
     renderAoneSheets();
   } catch (e) {
     alert('QRコードの作成に失敗しました: ' + e.message);

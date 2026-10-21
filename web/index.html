@@ -623,6 +623,12 @@
       </div>
       <button type="button" class="secondary" id="btn-aone-apply-margin" style="width:auto; margin-top:14px;">反映する</button>
     </div>
+    <!-- 同じ商品が何本もあるとき(例：同じジェルが5本)に、商品ごとにラベルの枚数を選べるようにする。
+         aone-controls クラスなので印刷には出ない -->
+    <div class="aone-controls" style="margin-top:12px;">
+      <p style="margin:0 0 6px; font-weight:bold;">商品ごとの枚数（同じ商品が何本もあるとき）</p>
+      <div id="qr-bulk-copies" style="max-height:180px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px; padding:4px 8px;"></div>
+    </div>
     <div id="qr-bulk-preview-wrap">
       <div id="qr-bulk-sheets"></div>
     </div>
@@ -631,6 +637,6 @@
   </div>
 </div>
 
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>
