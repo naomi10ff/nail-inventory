@@ -462,11 +462,14 @@ async function onScan(code) {
   if (!p) {
     try { p = await api('lookupProduct', { code }); } catch (e) { p = null; }
   }
+  if (!p) { renderUnknown(code); return; }
+  showCounted(code, p);
+}
+
+/** 数えた商品の緑のカード(数の−/＋と「次の商品へ」)を出す。 */
+function showCounted(code, p) {
   const wrap = $('scan-card-wrap');
-  if (!p) {
-    wrap.innerHTML = '<div class="scan-card ng"><div><div class="scan-name">登録されていないコードです</div><div class="hint">読み取ったコード：' + esc(code) + '<br>本社に連絡して、入荷登録で登録してもらってください。登録が終わったら、あとで読み直せます。</div></div>' +
-      '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
-  } else {
+  {
     if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
     S.tally[code].count += 1;
     saveDraft();
@@ -484,6 +487,91 @@ async function onScan(code) {
       setCount(code, S.tally[code].count + 1); refresh();
     });
   }
+  $('btn-next').addEventListener('click', () => {
+    $('scan-card-wrap').innerHTML = '';
+    resumeCameraIgnoring(code);
+  });
+}
+
+/**
+ * 商品リストにないコードを読んだとき、その場で登録して数えられるようにする
+ * (入荷登録と同じく、リストにある「QR-」の商品にバーコードを付けるか、新しい商品として登録)。
+ * 隣の商品のバーコードを拾っていないか確かめられるよう、読み取った数字を大きく見せる。
+ */
+function renderUnknown(code) {
+  const wrap = $('scan-card-wrap');
+  const brands = Array.from(new Set(S.products.map((x) => x.brand).filter(Boolean)))
+    .sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
+  wrap.innerHTML = '<div class="scan-card ng">' +
+    '<div><div class="scan-name">商品リストにないコードです</div>' +
+    '<div class="hint" style="margin-top:6px">読み取ったコード</div>' +
+    '<div style="font-size:22px; font-weight:700; letter-spacing:1px">' + esc(code) + '</div>' +
+    '<div class="hint">手元の商品のバーコードの数字と同じか確かめてください</div></div>' +
+    '<div class="choice-list">' +
+    '<label class="choice"><input type="radio" name="unk" value="link" checked><div><div class="choice-title">リストにある商品に付ける</div><div class="choice-text">商品リストにあって、まだバーコードがない商品（QRコードの商品）</div></div></label>' +
+    '<label class="choice"><input type="radio" name="unk" value="new"><div><div class="choice-title">新しい商品として登録</div><div class="choice-text">商品リストにない商品</div></div></label>' +
+    '</div>' +
+    '<label class="field">ブランド<select class="input" id="unk-brand"><option value="">選んでください</option>' +
+    brands.map((b) => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('') + '</select></label>' +
+    '<div id="unk-link-area"><label class="field">商品<select class="input" id="unk-product"><option value="">先にブランドを選んでください</option></select></label></div>' +
+    '<div id="unk-new-area" style="display:none; flex-direction:column; gap:10px">' +
+    '<label class="field">新しいブランド名（上のリストにないときだけ）<input class="input" id="unk-brand-new"></label>' +
+    '<label class="field">商品名<input class="input" id="unk-name"></label>' +
+    '<label class="field">カラー番号（あれば）<input class="input" id="unk-color"></label></div>' +
+    '<div class="error" id="unk-error"></div>' +
+    '<button class="btn btn-primary" id="unk-save">登録して数える</button>' +
+    '<button class="btn btn-ghost" id="btn-next">登録しないで次へ</button></div>';
+
+  const mode = () => document.querySelector('input[name="unk"]:checked').value;
+  const fillProducts = () => {
+    const brand = $('unk-brand').value;
+    const sel = $('unk-product');
+    if (!brand) { sel.innerHTML = '<option value="">先にブランドを選んでください</option>'; return; }
+    const cands = S.products.filter((x) => x.brand === brand && String(x.code).indexOf('QR-') === 0)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ja'));
+    sel.innerHTML = cands.length
+      ? '<option value="">選んでください</option>' + cands.map((x) => '<option value="' + esc(x.code) + '">' + esc(x.name) + (x.colorNo ? '（' + esc(x.colorNo) + '）' : '') + '</option>').join('')
+      : '<option value="">このブランドに、バーコードのない商品はありません</option>';
+  };
+  document.querySelectorAll('input[name="unk"]').forEach((r) => r.addEventListener('change', () => {
+    const isLink = mode() === 'link';
+    $('unk-link-area').style.display = isLink ? 'block' : 'none';
+    $('unk-new-area').style.display = isLink ? 'none' : 'flex';
+    $('unk-error').textContent = '';
+  }));
+  $('unk-brand').addEventListener('change', fillProducts);
+
+  $('unk-save').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    $('unk-error').textContent = '';
+    let product;
+    try {
+      if (mode() === 'link') {
+        const qrCode = $('unk-product').value;
+        if (!qrCode) { $('unk-error').textContent = '商品を選んでください'; return; }
+        const target = S.products.find((x) => String(x.code) === qrCode);
+        if (!confirm('「' + (target ? target.name : '') + '」に、バーコード ' + code + ' を付けます。よろしいですか？')) return;
+        btn.disabled = true; btn.textContent = '登録しています…';
+        await api('linkBarcode', { code: qrCode, newCode: code });
+        if (target) target.code = String(code);
+        product = target || { code: String(code), name: '', brand: $('unk-brand').value };
+      } else {
+        const brand = $('unk-brand-new').value.trim() || $('unk-brand').value;
+        const name = $('unk-name').value.trim();
+        if (!brand) { $('unk-error').textContent = 'ブランドを選ぶか、新しいブランド名を入れてください'; return; }
+        if (!name) { $('unk-error').textContent = '商品名を入れてください'; return; }
+        btn.disabled = true; btn.textContent = '登録しています…';
+        const r = await api('registerProduct', { code: String(code), brand, name, colorNo: $('unk-color').value.trim() });
+        product = { code: String(r.code), name: r.name, brand: r.brand, colorNo: r.colorNo };
+        S.products.push(product);
+      }
+    } catch (e) {
+      $('unk-error').textContent = e.message;
+      btn.disabled = false; btn.textContent = '登録して数える';
+      return;
+    }
+    showCounted(String(code), product);
+  });
   $('btn-next').addEventListener('click', () => {
     $('scan-card-wrap').innerHTML = '';
     resumeCameraIgnoring(code);
