@@ -74,7 +74,8 @@ function showScreen(id) {
   target.classList.add('active');
   // 本社側の画面(hq-screen)を表示している間だけ、bodyにhq-modeを付けて
   // サイドバー(#hq-sidebar)を表示する。店舗側の画面ではこれまで通り非表示のまま。
-  document.body.classList.toggle('hq-mode', target.classList.contains('hq-screen'));
+  // 入荷登録・破棄登録の画面は店舗アカウントも使うため、本社でログインしているときだけに限る。
+  document.body.classList.toggle('hq-mode', target.classList.contains('hq-screen') && state.role === 'hq');
   closeHqSidebar();
 }
 
@@ -1458,11 +1459,36 @@ document.getElementById('btn-back-logs').addEventListener('click', () => showScr
 document.getElementById('btn-back-hq-review').addEventListener('click', () => showScreen('screen-dashboard'));
 document.getElementById('btn-back-hq-incoming').addEventListener('click', async () => {
   await stopScanner(scannerHqIncoming);
-  showScreen('screen-dashboard');
+  showScreen(state.role === 'hq' ? 'screen-dashboard' : 'screen-menu');
 });
 document.getElementById('btn-back-hq-disposal').addEventListener('click', async () => {
   await stopScanner(scannerHqDisposal);
-  showScreen('screen-dashboard');
+  showScreen(state.role === 'hq' ? 'screen-dashboard' : 'screen-menu');
+});
+
+// ---- 店舗アカウントの入荷登録・破棄登録(2026-10-21〜) ----
+// 本社用の画面をそのまま使い、店舗の選択欄を自店だけに固定して隠す。初めての商品はその場で
+// 登録できる(既存商品の修正・削除は本社のみ)。戻るボタンは店舗のメニューへ戻す。
+function lockStoreSelectToOwnStore(selectId, backButtonId) {
+  const select = document.getElementById(selectId);
+  select.innerHTML = '';
+  const opt = document.createElement('option');
+  opt.value = state.store;
+  opt.textContent = state.store;
+  select.appendChild(opt);
+  select.value = state.store;
+  select.style.display = 'none';
+  document.querySelector(`label[for="${selectId}"]`).style.display = 'none';
+  document.getElementById(backButtonId).textContent = '< メニューへ戻る';
+}
+
+document.getElementById('btn-nav-incoming').addEventListener('click', () => {
+  lockStoreSelectToOwnStore('hq-incoming-store-select', 'btn-back-hq-incoming');
+  document.getElementById('nav-hq-incoming').click();
+});
+document.getElementById('btn-nav-disposal').addEventListener('click', () => {
+  lockStoreSelectToOwnStore('hq-disposal-store-select', 'btn-back-hq-disposal');
+  document.getElementById('nav-hq-disposal').click();
 });
 
 // ---- 入荷登録(本社が店舗を選び、その店舗への納品を登録する) ----
@@ -1541,7 +1567,7 @@ async function onHqIncomingScan(code) {
       // 見つかった商品は、確認画面を挟まず個数1でその場ですぐ入荷登録する。実運用では
       // 1個ずつ入荷本数を毎回変えることはほぼ無いため、確認ボタンを1回減らして
       // 連続スキャンの速度を上げている(個数を変えたい場合は取引ログの編集で対応)。
-      await apiCall('recordIncoming', { store, code, quantity: 1 });
+      await apiCall('recordIncoming', { store, code, quantity: 1, staffName: state.staffName });
       setHqIncomingStatus(
         '✓ ' + product.name + (product.brand ? '(' + product.brand + ')' : '') + ' を入荷登録しました',
         true
@@ -1625,14 +1651,19 @@ document.getElementById('btn-register-new-from-incoming').addEventListener('clic
     } else {
       // 事前登録済みの商品に、いまスキャンしたバーコードを紐づける(新規登録はしない)
       name = selection.product.name;
-      await apiCall('updateProduct', {
-        store, code: selection.code, newCode: scannedCode,
-        brand, name, colorNo, itemNumber, category, memo: selection.product.memo || ''
-      });
+      if (state.role === 'hq') {
+        await apiCall('updateProduct', {
+          store, code: selection.code, newCode: scannedCode,
+          brand, name, colorNo, itemNumber, category, memo: selection.product.memo || ''
+        });
+      } else {
+        // 店舗は商品の修正ができないため、バーコードの紐づけだけを行う(品名などは本社の登録のまま)
+        await apiCall('linkBarcode', { code: selection.code, newCode: scannedCode });
+      }
     }
     // 登録・紐づけと同じひと手間で入荷本数1も一緒に記録する。以前はこのあと改めて
     // 「入荷を登録」を押す必要があり、処理待ち(処理中...)が2回になっていたため。
-    await apiCall('recordIncoming', { store, code: scannedCode, quantity: 1 });
+    await apiCall('recordIncoming', { store, code: scannedCode, quantity: 1, staffName: state.staffName });
 
     // ローカルキャッシュ(ブランドの選択肢・hqIncomingProductList)を、サーバーから
     // 丸ごと読み直さずその場で更新する。以前はloadHqIncomingBrandOptions()・
@@ -1704,7 +1735,7 @@ document.getElementById('btn-submit-hq-incoming').addEventListener('click', asyn
   const quantity = Number(document.getElementById('hq-incoming-quantity').value) || 1;
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
-    await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity });
+    await apiCall('recordIncoming', { store, code: hqIncomingScannedCode, quantity, staffName: state.staffName });
     resetHqIncomingScreen();
     document.getElementById('hq-incoming-status').textContent = '入荷を登録しました';
     // すぐに再開すると、登録した現物がまだカメラに映ったままの場合に同じ商品を
@@ -1768,7 +1799,7 @@ document.getElementById('btn-submit-hq-disposal').addEventListener('click', asyn
   const quantity = Number(document.getElementById('hq-disposal-quantity').value) || 1;
   await withButtonBusy(e.currentTarget, '処理中...', async () => {
   try {
-    await apiCall('recordDisposal', { store, code: hqDisposalScannedCode, quantity });
+    await apiCall('recordDisposal', { store, code: hqDisposalScannedCode, quantity, staffName: state.staffName });
     resetHqDisposalScreen();
     document.getElementById('hq-disposal-status').textContent = '廃棄を登録しました';
     // 入荷登録と同じ理由で、現物が画面から外れてから次を受け付けるようにする

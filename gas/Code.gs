@@ -78,6 +78,8 @@ function routeAction_(action, p) {
       return resetPassword_(validateToken_(p.token), p);
     case 'updateProduct':
       return updateProduct_(validateToken_(p.token), p);
+    case 'linkBarcode':
+      return linkBarcode_(validateToken_(p.token), p);
     case 'getBrandList':
       return getBrandList_(validateToken_(p.token), p.store);
     case 'addBrand':
@@ -194,16 +196,17 @@ function lookupProductForClient_(session, p) {
 }
 
 /**
- * 新規商品登録。本社アカウントのみ呼べる(商品マスタは本社が店舗を選んで管理する)。
+ * 新規商品登録。本社は店舗を選んで、店舗アカウントは自店にだけ登録できる(店舗でも入荷登録の
+ * 流れの中で初めての商品をその場で登録できるようにするため。既存商品の修正・削除は本社のみ)。
  * バーコードがある商品はそのコードで、ない商品は code を空にして呼ぶと自前QRコードを
  * 発行する。既存商品の上書きはできない(店舗+コードが重複していればエラーになる)。
  * 既存商品の修正は updateProduct_ を使う。ブランドは新しい名前ならその店舗の
  * ブランドマスタに自動登録される。
  */
 function registerProduct_(session, p) {
-  requireRole_(session, ['hq']);
+  requireRole_(session, ['hq', 'store']);
   if (!p.name) throw new Error('品名を入力してください');
-  var store = p.store;
+  var store = session.role === 'hq' ? p.store : session.store;
   if (!store) throw new Error('店舗を指定してください');
 
   var code = p.code;
@@ -281,6 +284,41 @@ function updateProduct_(session, p) {
   // 直結してしまう。「現在庫サマリ」は画面表示では使っておらず参考シートのため、
   // 最新化したい場合はApps ScriptエディタからrefreshCurrentStockSummary()を手動実行する。
   return { store: p.store, code: newCode || p.code };
+}
+
+/**
+ * 入荷登録で、事前登録済み(まだバーコードが無く「QR-」で始まる仮コードの)商品に、いま
+ * スキャンしたバーコードを紐づける。店舗アカウントは自店のみ。品名などは変えない(修正は
+ * 本社のみ)。すでに実物のバーコードが付いている商品の付け替えは、取り違えを防ぐため本社に任せる。
+ */
+function linkBarcode_(session, p) {
+  requireRole_(session, ['hq', 'store']);
+  var store = session.role === 'hq' ? p.store : session.store;
+  if (!store || !p.code || !p.newCode) throw new Error('店舗・商品・バーコードを指定してください');
+  if (String(p.code).indexOf('QR-') !== 0) {
+    throw new Error('この商品にはすでに別のバーコードが登録されています。本社に連絡してください');
+  }
+  var row = findProductRow_(store, p.code);
+  if (row === -1) throw new Error('商品が見つかりません');
+  var newCode = String(p.newCode).trim();
+  if (lookupProduct_(store, newCode)) throw new Error('このコードは既に登録されています');
+  // registerProduct_と同じ理由で、コード列は数値化されないよう文字列として固定する
+  getSheet_(SHEET_PRODUCTS).getRange(row, 2).setNumberFormat('@').setValue(newCode);
+  return { store: store, code: newCode };
+}
+
+/** 店舗+コードで商品マスタの行番号を探す(見つからなければ-1)。lookupProduct_と同じくTextFinderで探す。 */
+function findProductRow_(store, code) {
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var finder = sheet.getRange(2, 2, lastRow - 1, 1).createTextFinder(String(code)).matchEntireCell(true);
+  var match = finder.findNext();
+  while (match) {
+    if (sheet.getRange(match.getRow(), 1).getValue() === store) return match.getRow();
+    match = finder.findNext();
+  }
+  return -1;
 }
 
 /** 指定した店舗の商品マスタ一覧。本社は店舗を指定して閲覧する。 */
@@ -429,8 +467,8 @@ function ensureCategoryExists_(name) {
 }
 
 // ---- 取引ログ(入荷・廃棄・棚卸) ----
-// 入荷登録・破棄登録はいずれも本社アカウントが店舗を選んで行う(本社が全店舗の納品・廃棄を
-// 一元管理する運用のため)。店舗アカウントは棚卸のみ自分で記録する。
+// 入荷登録・破棄登録は、本社アカウントは店舗を選んで、店舗アカウントは自店の分を行う
+// (2026-10-21から店舗でも登録できるようにした)。記録者欄は、店舗なら選んだスタッフ名を残す。
 
 /**
  * timestampを省略すると現在時刻を使う。棚卸のように1回の送信で複数商品を記録する
@@ -461,8 +499,13 @@ function revokeApprovalIfStale_(store, timestamp) {
   }
 }
 
+/** 取引ログの記録者欄。本社はアカウント名、店舗は選んだスタッフ名(無ければアカウント名)。 */
+function recorderName_(session, p) {
+  return session.role === 'hq' ? session.username : (p.staffName || session.username);
+}
+
 /**
- * 本社が店舗を選んで納品(入荷)を登録する。
+ * 納品(入荷)を登録する。
  * refreshSummary_()(取引ログ全体を読み直して「現在庫サマリ」シートを書き直す処理)は
  * ここでは呼ばない。入荷登録はスキャンごとに何度も実行される操作で、取引ログが増えるほど
  * refreshSummary_()が遅くなり体感速度に直結するため。「現在庫サマリ」はアプリの画面表示
@@ -471,23 +514,25 @@ function revokeApprovalIfStale_(store, timestamp) {
  * refreshCurrentStockSummary() を手動実行する。
  */
 function recordIncoming_(session, p) {
-  requireRole_(session, ['hq']);
-  if (!p.store) throw new Error('店舗を指定してください');
-  var product = lookupProduct_(p.store, p.code);
+  requireRole_(session, ['hq', 'store']);
+  var store = session.role === 'hq' ? p.store : session.store;
+  if (!store) throw new Error('店舗を指定してください');
+  var product = lookupProduct_(store, p.code);
   if (!product) throw new Error('商品が見つかりません。先に商品マスタへ登録してください');
   var quantity = Number(p.quantity) || 1;
-  appendLog_(p.store, session.username, product, '入荷', quantity, p.memo);
+  appendLog_(store, recorderName_(session, p), product, '入荷', quantity, p.memo);
   return { product: product, quantity: quantity };
 }
 
 /** 本社が店舗を選んで廃棄(劣化・不良などによる在庫減)を登録する。refreshSummary_()を呼ばない理由はrecordIncoming_と同じ。 */
 function recordDisposal_(session, p) {
-  requireRole_(session, ['hq']);
-  if (!p.store) throw new Error('店舗を指定してください');
-  var product = lookupProduct_(p.store, p.code);
+  requireRole_(session, ['hq', 'store']);
+  var store = session.role === 'hq' ? p.store : session.store;
+  if (!store) throw new Error('店舗を指定してください');
+  var product = lookupProduct_(store, p.code);
   if (!product) throw new Error('商品が見つかりません');
   var quantity = Number(p.quantity) || 1;
-  appendLog_(p.store, session.username, product, '廃棄', quantity, p.memo);
+  appendLog_(store, recorderName_(session, p), product, '廃棄', quantity, p.memo);
   return { product: product, quantity: quantity };
 }
 
