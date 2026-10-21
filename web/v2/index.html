@@ -159,7 +159,9 @@
       </details>
       <div class="error" id="staff-error"></div>
       <div class="spacer"></div>
-      <button class="btn btn-primary" id="btn-staff-next">次へ</button>
+      <button class="btn btn-primary" id="btn-staff-next">次へ（棚卸）</button>
+      <a class="btn btn-ghost" href="../index.html" style="display:flex; align-items:center; justify-content:center; text-decoration:none;">入荷登録・在庫を調べる など（今の画面へ）</a>
+      <p class="hint center" style="font-size:12px">この新しい画面は、今は「棚卸」だけです。ほかのメニューは今の画面で使えます（ログインはそのまま）</p>
       <button class="link-btn" id="btn-logout">ログアウト</button>
     </div>
   </section>
@@ -351,7 +353,7 @@ async function loadStaff() {
     list.innerHTML = staff.length ? staff.map((s) =>
       '<label class="choice"><input type="radio" name="staff" value="' + esc(s.name) + '"' + (remembered === s.name ? ' checked' : '') + '><div class="choice-title">' + esc(s.name) + '</div></label>').join('')
       : '<div class="empty">担当者が登録されていません。下の「＋ 担当者を追加する」から名前を入れてください</div>';
-    if (!staff.length) $('add-staff-box').open = true;
+    $('add-staff-box').open = !staff.length;
   } catch (e) {
     if (/ログイン|セッション/.test(e.message)) { show('s-login'); $('login-error').textContent = e.message; return; }
     list.innerHTML = '';
@@ -776,7 +778,7 @@ $('btn-send').addEventListener('click', async (ev) => {
     S.sending = false; btn.disabled = false; btn.textContent = '本社へ送信する';
   }
 });
-$('btn-done-home').addEventListener('click', toStart);
+$('btn-done-home').addEventListener('click', toStaff);
 
 // ---- はじめ ----
 (function init() {
