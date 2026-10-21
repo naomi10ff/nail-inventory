@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F5F7FB">
+<title>棚卸（新しい画面・テスト版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<!--
+  棚卸だけを新しいデザインにしたテスト版(2026-10-22 木津店の棚卸で使う)。
+  データのやり取りは今の棚卸しシステム(../index.html)と同じGASのAPIをそのまま使い、
+  ログイン情報(localStorageのtoken)と棚卸の途中データ(stocktakeDraft_店舗名)も
+  同じ形式で共有する。このため、こちらで困ったら今の画面に切り替えて続きから数えられる。
+-->
+<style>
+  :root {
+    --blue: #2563EB; --blue-dark: #1E40AF; --blue-bg: #EFF6FF;
+    --ink: #1F2937; --sub: #4B5563; --line: #E5E7EB; --bg: #F5F7FB;
+    --green: #059669; --green-bg: #ECFDF5; --amber-bg: #FFFBEB; --amber: #92400E;
+    --red: #B91C1C; --red-bg: #FEF2F2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: 'Noto Sans JP', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+  button, input, select { font-family: inherit; }
+  .app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; animation: screenIn .28s ease; }
+  @keyframes screenIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes scanLine { 0% { top: 20%; } 50% { top: 78%; } 100% { top: 20%; } }
+
+  .topbar { background: #fff; border-bottom: 1px solid var(--line); padding: 10px 12px 12px; position: sticky; top: 0; z-index: 5; }
+  .topbar-row { display: flex; align-items: center; gap: 6px; }
+  .icon-btn { width: 44px; height: 44px; border: none; background: transparent; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .topbar-title { font-size: 17px; font-weight: 700; }
+  .topbar-sub { margin-left: auto; font-size: 12px; color: var(--sub); text-align: right; line-height: 1.4; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .step-bar { height: 4px; border-radius: 2px; background: var(--line); }
+  .step.done .step-bar, .step.now .step-bar { background: var(--blue); }
+  .step-label { font-size: 11px; color: var(--sub); margin-top: 6px; }
+  .step.now .step-label { color: var(--blue-dark); font-weight: 700; }
+
+  .body { flex: 1; padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .h1 { font-size: 20px; font-weight: 700; margin: 0; }
+  .h2 { font-size: 17px; font-weight: 700; margin: 0; }
+  .hint { font-size: 13px; color: var(--sub); line-height: 1.7; margin: 0; }
+  .spacer { flex: 1; }
+
+  .btn { height: 54px; border-radius: 14px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:disabled { background: #93C5FD; }
+  .btn-ghost { background: #fff; color: var(--ink); border: 1px solid #D1D5DB; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-small { height: 44px; font-size: 14px; }
+  .link-btn { background: none; border: none; color: var(--blue); font-size: 14px; padding: 8px 0; cursor: pointer; text-align: left; }
+
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .note { border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.6; }
+  .note-amber { background: var(--amber-bg); border: 1px solid #FDE68A; color: var(--amber); }
+  .note-red { background: var(--red-bg); border: 1px solid #FECACA; color: #7F1D1D; }
+  .note-blue { background: var(--blue-bg); color: var(--blue-dark); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
+  .input { height: 50px; border-radius: 12px; border: 1px solid #D1D5DB; background: #fff; padding: 0 14px; font-size: 16px; color: var(--ink); }
+
+  .choice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 16px; background: #fff; border: 2px solid var(--line); cursor: pointer; }
+  .choice input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--blue); flex-shrink: 0; }
+  .choice:has(input:checked) { background: var(--blue-bg); border-color: var(--blue); }
+  .choice-title { font-size: 16px; font-weight: 700; }
+  .choice-text { font-size: 13px; color: var(--sub); line-height: 1.6; margin-top: 2px; }
+  .choice-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .camera { position: relative; height: 300px; border-radius: 20px; background: #111827; overflow: hidden; flex-shrink: 0; }
+  .camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .camera #fallback-reader { width: 100%; height: 100%; }
+  .cam-frame { position: absolute; left: 12%; right: 12%; top: 16%; bottom: 16%; border: 2px solid rgba(255,255,255,.9); border-radius: 16px; pointer-events: none; }
+  .cam-line { position: absolute; left: 14%; right: 14%; height: 2px; background: #60A5FA; animation: scanLine 2.4s ease-in-out infinite; pointer-events: none; }
+  .cam-msg { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 13px; color: #E5E7EB; pointer-events: none; }
+  .cam-paused { position: absolute; inset: 0; background: rgba(17,24,39,.55); display: none; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700; }
+  .camera.paused .cam-paused { display: flex; }
+  .camera.paused .cam-line { display: none; }
+
+  .scan-card { border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; animation: popIn .22s ease; }
+  .scan-card.ok { background: var(--green-bg); border: 1px solid #A7F3D0; }
+  .scan-card.ng { background: var(--amber-bg); border: 1px solid #FDE68A; }
+  .scan-name { font-size: 16px; font-weight: 700; line-height: 1.4; }
+  .scan-brand { font-size: 12px; color: #065F46; }
+  .stepper { display: flex; align-items: center; gap: 12px; }
+  .stepper button { width: 48px; height: 48px; border-radius: 24px; border: 1px solid #D1D5DB; background: #fff; font-size: 22px; cursor: pointer; }
+  .stepper .num { font-size: 26px; font-weight: 700; min-width: 40px; text-align: center; }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+  .stat-label { font-size: 12px; color: var(--sub); }
+  .stat-num { font-size: 22px; font-weight: 700; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--line); }
+  .seg button { height: 40px; border-radius: 9px; border: none; background: transparent; color: var(--sub); font-size: 14px; cursor: pointer; }
+  .seg button.on { background: #fff; color: var(--ink); font-weight: 700; }
+
+  .list { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .list-group { padding: 8px 14px 4px; font-size: 12px; font-weight: 700; color: var(--blue); background: #F9FAFB; border-top: 1px solid var(--line); }
+  .list-group:first-child { border-top: none; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid #F3F4F6; }
+  .row-name { flex: 1; min-width: 0; font-size: 14px; line-height: 1.4; }
+  .row .stepper { gap: 8px; }
+  .row .stepper button { width: 36px; height: 36px; border-radius: 18px; font-size: 18px; }
+  .row .stepper .num { font-size: 16px; min-width: 28px; }
+  .empty { padding: 20px; text-align: center; font-size: 14px; color: var(--sub); }
+
+  .check-line { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.6; cursor: pointer; }
+  .check-line input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--blue); flex-shrink: 0; }
+
+  .done-icon { width: 84px; height: 84px; border-radius: 42px; background: var(--green); display: flex; align-items: center; justify-content: center; margin: 24px auto 0; animation: popIn .35s ease; }
+  .center { text-align: center; }
+  .error { color: var(--red); font-size: 14px; min-height: 1em; }
+  .busy { opacity: .6; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ログイン -->
+  <section class="screen" id="s-login">
+    <div class="body" style="justify-content: center; gap: 22px;">
+      <div class="center">
+        <div style="width:72px;height:72px;border-radius:22px;background:var(--blue);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
+        </div>
+        <p class="h1">棚卸</p>
+        <p class="hint">新しい画面（テスト版）</p>
+      </div>
+      <label class="field">ユーザー名<input class="input" id="login-user" autocomplete="username" autocapitalize="off"></label>
+      <label class="field">パスワード<input class="input" id="login-pass" type="password" autocomplete="current-password"></label>
+      <div class="error" id="login-error"></div>
+      <button class="btn btn-primary" id="btn-login">ログイン</button>
+      <p class="hint center">今の棚卸しシステムと同じユーザー名・パスワードです</p>
+    </div>
+  </section>
+
+  <!-- 店舗・担当者 -->
+  <section class="screen" id="s-staff">
+    <div class="topbar"><div class="topbar-row"><div class="topbar-title" style="padding-left:8px">だれが数えますか？</div><div class="topbar-sub" id="staff-store-label"></div></div></div>
+    <div class="body">
+      <div id="store-pick-wrap" style="display:none; flex-direction:column; gap:10px;">
+        <p class="h2">店舗</p>
+        <div class="choice-list" id="store-list"></div>
+      </div>
+      <p class="h2">担当者</p>
+      <div class="choice-list" id="staff-list"><div class="empty">読み込み中…</div></div>
+      <div class="error" id="staff-error"></div>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btn-staff-next">次へ</button>
+      <button class="link-btn" id="btn-logout">ログアウト</button>
+    </div>
+  </section>
+
+  <!-- ステップ1 はじめ方 -->
+  <section class="screen" id="s-start">
+    <div class="topbar">
+      <div class="topbar-row">
+        <button class="icon-btn" id="btn-start-back" aria-label="担当者の選択に戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="topbar-title">棚卸</div><div class="topbar-sub who"></div>
+      </div>
+      <div class="steps" data-step="0"></div>
+    </div>
+    <div class="body" id="start-body">
+      <div class="empty">今月の状況を確認しています…</div>
+    </div>
+  </section>
+
+  <!-- ステップ2 数える -->
+  <section class="screen" id="s-scan">
+    <div class="topbar">
+      <div class="topbar-row">
+        <button class="icon-btn" id="btn-scan-back" aria-label="はじめ方に戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="topbar-title">棚卸</div><div class="topbar-sub who"></div>
+      </div>
+      <div class="steps" data-step="1"></div>
+    </div>
+    <div class="body">
+      <div class="camera" id="camera">
+        <video id="video" playsinline muted></video>
+        <div id="fallback-reader" style="display:none"></div>
+        <div class="cam-frame"></div><div class="cam-line"></div>
+        <div class="cam-msg" id="cam-msg">カメラを起動しています…</div>
+        <div class="cam-paused">「次の商品へ」を押すと読み取ります</div>
+      </div>
+      <div id="scan-card-wrap"></div>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">数えた品目</div><div class="stat-num" id="stat-items">0</div></div>
+        <div class="stat"><div class="stat-label">合計の個数</div><div class="stat-num" id="stat-total">0</div></div>
+      </div>
+      <details>
+        <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input" id="manual-code" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" id="btn-manual">追加</button>
+        </div>
+      </details>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btn-to-review">数え終わった → 確認へ</button>
+    </div>
+  </section>
+
+  <!-- ステップ3 確認・送信 -->
+  <section class="screen" id="s-review">
+    <div class="topbar">
+      <div class="topbar-row">
+        <button class="icon-btn" id="btn-review-back" aria-label="数える画面に戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="topbar-title">棚卸</div><div class="topbar-sub who"></div>
+      </div>
+      <div class="steps" data-step="2"></div>
+    </div>
+    <div class="body">
+      <div class="seg">
+        <button id="tab-scanned" class="on">数えた <span id="tab-scanned-n">0</span></button>
+        <button id="tab-unscanned">数えていない <span id="tab-unscanned-n">0</span></button>
+      </div>
+      <div class="list" id="review-list"></div>
+      <div id="zero-wrap" class="card" style="display:none; padding:14px;">
+        <label class="check-line"><input type="checkbox" id="zero-unscanned"><span><b>数えていない商品は、在庫0として送る</b><br><span class="hint">お店の商品を全部数えたときだけ✓してください。✓しないと、数えていない商品は今のシステムの数のまま残ります。</span></span></label>
+      </div>
+      <div class="error" id="review-error"></div>
+      <button class="btn btn-primary" id="btn-send">本社へ送信する</button>
+    </div>
+  </section>
+
+  <!-- 完了 -->
+  <section class="screen" id="s-done">
+    <div class="body" style="justify-content:center; gap:14px;">
+      <div class="done-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>
+      <p class="h1 center">送信しました</p>
+      <p class="hint center" id="done-text"></p>
+      <div class="spacer" style="flex:0 0 12px"></div>
+      <button class="btn btn-ghost" id="btn-done-home">最初の画面へ</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* eslint-disable no-console */
+// 今の棚卸しシステム(../app.js)と同じGASのWebアプリ
+const API_URL = 'https://script.google.com/macros/s/AKfycbwGwA8PfZjVi_IgDPvjcQkJIVSxdimPasRP1eej312KVBYG-S7q8mJBZS_3QOPrc4IY/exec';
+
+const S = {
+  token: localStorage.getItem('token') || null,
+  role: localStorage.getItem('role') || null,
+  store: localStorage.getItem('role') === 'hq' ? (localStorage.getItem('v2_hq_store') || null) : (localStorage.getItem('store') || null),
+  staff: null,
+  mode: 'overwrite',      // 'add'(続きから=今月の数に足す) / 'overwrite'(数えた数で置き換え)
+  tally: {},              // code -> { code, name, brand, count }
+  products: [],
+  productsLoaded: false,
+  lastCode: null,
+  sending: false
+};
+const STORES = ['木津店', '西大寺宝来店', '生駒店'];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function monthNow() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+
+// ---- API ----
+async function api(action, payload) {
+  const body = Object.assign({ token: S.token }, payload || {});
+  if (S.role === 'hq' && S.store && body.store === undefined) body.store = S.store; // 本社アカウントは店舗を指定して使う
+  const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload: body }) });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || '不明なエラーが発生しました');
+  return json.data;
+}
+
+// ---- 画面 ----
+function show(id) {
+  document.querySelectorAll('.screen').forEach((el) => el.classList.toggle('active', el.id === id));
+  window.scrollTo(0, 0);
+  if (id !== 's-scan') stopCamera();
+}
+function renderSteps() {
+  document.querySelectorAll('.steps').forEach((box) => {
+    const now = Number(box.dataset.step);
+    box.innerHTML = ['はじめ方', '数える', '確認・送信'].map((label, i) =>
+      '<div class="step ' + (i < now ? 'done' : i === now ? 'now' : '') + '"><div class="step-bar"></div><div class="step-label">' + label + '</div></div>').join('');
+  });
+  document.querySelectorAll('.who').forEach((el) => { el.innerHTML = esc(S.store || '') + '<br>' + esc(S.staff || ''); });
+}
+
+// ---- 途中データ(今の画面と同じ保存場所・形式) ----
+const draftKey = () => 'stocktakeDraft_' + (S.store || '');
+function saveDraft() { try { localStorage.setItem(draftKey(), JSON.stringify({ tally: S.tally, mode: S.mode })); } catch (e) { /* 続行 */ } }
+function loadDraft() { try { const r = localStorage.getItem(draftKey()); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) { /* 無視 */ } }
+
+// ---- ログイン ----
+$('btn-login').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  $('login-error').textContent = '';
+  btn.disabled = true; btn.textContent = 'ログイン中…';
+  try {
+    const d = await api('login', { username: $('login-user').value.trim(), password: $('login-pass').value });
+    S.token = d.token; S.role = d.role; S.store = d.role === 'hq' ? null : d.store;
+    localStorage.setItem('token', d.token); localStorage.setItem('store', d.store); localStorage.setItem('role', d.role);
+    await toStaff();
+  } catch (e) {
+    $('login-error').textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'ログイン';
+  }
+});
+$('btn-logout').addEventListener('click', () => {
+  ['token', 'store', 'role'].forEach((k) => localStorage.removeItem(k));
+  S.token = S.role = S.store = null;
+  show('s-login');
+});
+
+// ---- 店舗・担当者 ----
+async function toStaff() {
+  show('s-staff');
+  const isHq = S.role === 'hq';
+  $('store-pick-wrap').style.display = isHq ? 'flex' : 'none';
+  $('staff-store-label').textContent = isHq ? '本社' : (S.store || '');
+  if (isHq) {
+    $('store-list').innerHTML = STORES.map((s) =>
+      '<label class="choice"><input type="radio" name="store" value="' + esc(s) + '"' + (S.store === s ? ' checked' : '') + '><div class="choice-title">' + esc(s) + '</div></label>').join('');
+    $('store-list').querySelectorAll('input').forEach((r) => r.addEventListener('change', () => {
+      S.store = r.value; localStorage.setItem('v2_hq_store', r.value); loadStaff();
+    }));
+  }
+  await loadStaff();
+}
+async function loadStaff() {
+  const list = $('staff-list');
+  $('staff-error').textContent = '';
+  if (!S.store) { list.innerHTML = '<div class="empty">先に店舗を選んでください</div>'; return; }
+  list.innerHTML = '<div class="empty">読み込み中…</div>';
+  try {
+    const d = await api('getStaffList', {});
+    const remembered = localStorage.getItem('v2_staff_' + S.store);
+    const staff = d.staff.filter((s) => !s.store || s.store === S.store);
+    list.innerHTML = staff.length ? staff.map((s) =>
+      '<label class="choice"><input type="radio" name="staff" value="' + esc(s.name) + '"' + (remembered === s.name ? ' checked' : '') + '><div class="choice-title">' + esc(s.name) + '</div></label>').join('')
+      : '<div class="empty">担当者が登録されていません（今の画面の「スタッフを追加」から登録してください）</div>';
+  } catch (e) {
+    if (/ログイン|セッション/.test(e.message)) { show('s-login'); $('login-error').textContent = e.message; return; }
+    list.innerHTML = '';
+    $('staff-error').textContent = e.message;
+  }
+}
+$('btn-staff-next').addEventListener('click', () => {
+  const picked = document.querySelector('input[name="staff"]:checked');
+  if (!S.store) { $('staff-error').textContent = '店舗を選んでください'; return; }
+  if (!picked) { $('staff-error').textContent = '担当者を選んでください'; return; }
+  S.staff = picked.value;
+  localStorage.setItem('v2_staff_' + S.store, S.staff);
+  toStart();
+});
+
+// ---- ステップ1 はじめ方 ----
+$('btn-start-back').addEventListener('click', toStaff);
+async function toStart() {
+  renderSteps();
+  show('s-start');
+  const body = $('start-body');
+  body.innerHTML = '<div class="empty">今月の状況を確認しています…</div>';
+  loadProducts();
+  const draft = loadDraft();
+  const draftItems = draft ? Object.values(draft.tally || {}) : [];
+  let status;
+  try {
+    status = await api('getStocktakeStatus', { month: monthNow() });
+  } catch (e) {
+    body.innerHTML = '<div class="note note-red">' + esc(e.message) + '</div><button class="btn btn-ghost" id="retry-start">もう一度確認する</button>';
+    $('retry-start').addEventListener('click', toStart);
+    return;
+  }
+  if (status.status === '承認済み') {
+    body.innerHTML = '<p class="h2">今月の棚卸は承認されています</p><div class="note note-amber">本社が確認済みのため、今月はもう数えられません。直したいときは本社に「差し戻し」をお願いしてください。</div>';
+    return;
+  }
+  let html = '';
+  if (status.status === '差し戻し') {
+    html += '<div class="note note-red"><b>本社から差し戻されました</b><br>理由：' + esc(status.rejectedReason || '記載なし') + '</div>';
+  }
+  if (draftItems.length) {
+    const total = draftItems.reduce((n, t) => n + t.count, 0);
+    html += '<div class="note note-blue"><b>途中のデータがあります</b>（' + draftItems.length + '品目・' + total + '個）<br>前に数えていた続きから再開できます。</div>' +
+      '<button class="btn btn-primary" id="btn-resume">続きから再開する</button>' +
+      '<button class="btn btn-ghost" id="btn-discard">途中のデータを消して、はじめから</button>';
+    body.innerHTML = html;
+    $('btn-resume').addEventListener('click', () => { S.tally = draft.tally || {}; S.mode = draft.mode || 'overwrite'; toScan(); });
+    $('btn-discard').addEventListener('click', () => { if (confirm('途中のデータを消します。よろしいですか？')) { clearDraft(); toStart(); } });
+    return;
+  }
+  if (status.implementedDate) {
+    const dateStr = new Date(status.implementedDate).toLocaleDateString('ja-JP');
+    html += '<p class="h2">どちらで始めますか？</p><p class="hint">今月はすでに ' + esc(dateStr) + ' に送信されています</p>' +
+      '<div class="choice-list">' +
+      '<label class="choice"><input type="radio" name="mode" value="add" checked><div><div class="choice-title">続きから数える</div><div class="choice-text">これまで送った数に足していきます。棚ごとに分けて数えるときはこちら</div></div></label>' +
+      '<label class="choice"><input type="radio" name="mode" value="overwrite"><div><div class="choice-title">最初から数え直す</div><div class="choice-text" style="color:#B45309">今月送った棚卸の数はすべて消えます</div></div></label>' +
+      '</div><div class="spacer"></div><div class="error" id="start-error"></div><button class="btn btn-primary" id="btn-start">カメラを起動して始める</button>';
+    body.innerHTML = html;
+    $('btn-start').addEventListener('click', async (ev) => {
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      if (mode === 'overwrite') {
+        if (!confirm('今月送った棚卸の数をすべて消して、最初から数え直します。\nこの操作は取り消せません。よろしいですか？')) return;
+        const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '消しています…';
+        try { await api('resetStocktakeThisMonth', {}); } catch (e) { $('start-error').textContent = e.message; btn.disabled = false; btn.textContent = 'カメラを起動して始める'; return; }
+      }
+      S.tally = {}; S.mode = mode; toScan();
+    });
+    return;
+  }
+  html += '<p class="h2">今月はじめての棚卸です</p><p class="hint">お店の商品を、棚ごとに順番に読み取っていきます。<br>同じ商品がいくつかあるときは、1つ読んでから「＋」で数を合わせても大丈夫です。</p>' +
+    '<div class="spacer"></div><button class="btn btn-primary" id="btn-start">カメラを起動して始める</button>';
+  body.innerHTML = html;
+  $('btn-start').addEventListener('click', () => { S.tally = {}; S.mode = 'overwrite'; toScan(); });
+}
+
+async function loadProducts() {
+  if (S.productsLoaded && S.productsStore === S.store) return;
+  try {
+    const d = await api('listProducts', {});
+    S.products = d.products; S.productsLoaded = true; S.productsStore = S.store;
+  } catch (e) { console.error(e); }
+}
+
+// ---- ステップ2 数える ----
+$('btn-scan-back').addEventListener('click', () => {
+  if (Object.keys(S.tally).length && !confirm('はじめ方の画面に戻ります。数えた分は保存されているので、あとで続きから再開できます。')) return;
+  toStart();
+});
+function toScan() {
+  renderSteps();
+  show('s-scan');
+  updateStats();
+  $('scan-card-wrap').innerHTML = '';
+  startCamera();
+}
+function updateStats() {
+  const items = Object.values(S.tally);
+  $('stat-items').textContent = items.length;
+  $('stat-total').textContent = items.reduce((n, t) => n + t.count, 0);
+}
+function setCount(code, n) {
+  const t = S.tally[code];
+  if (!t) return;
+  const c = Math.max(0, Math.floor(n) || 0);
+  if (c === 0) delete S.tally[code]; else t.count = c;
+  saveDraft();
+  updateStats();
+}
+
+async function onScan(code) {
+  pauseCamera(true);
+  if (navigator.vibrate) navigator.vibrate(60);
+  S.lastCode = code;
+  let p = S.products.find((x) => String(x.code) === String(code)) || null;
+  if (!p) {
+    try { p = await api('lookupProduct', { code }); } catch (e) { p = null; }
+  }
+  const wrap = $('scan-card-wrap');
+  if (!p) {
+    wrap.innerHTML = '<div class="scan-card ng"><div><div class="scan-name">登録されていないコードです</div><div class="hint">読み取ったコード：' + esc(code) + '<br>本社に連絡して、入荷登録で登録してもらってください。登録が終わったら、あとで読み直せます。</div></div>' +
+      '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
+  } else {
+    if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
+    S.tally[code].count += 1;
+    saveDraft();
+    updateStats();
+    wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' +
+      '<div style="width:34px;height:34px;border-radius:17px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>' +
+      '<div style="flex:1;min-width:0"><div class="scan-name">' + esc(p.name) + (p.colorNo ? '（' + esc(p.colorNo) + '）' : '') + '</div><div class="scan-brand">' + esc(p.brand || '') + '</div></div></div>' +
+      '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">この商品の数</span>' +
+      '<div class="stepper"><button id="cnt-minus" aria-label="1つ減らす">−</button><span class="num" id="cnt-num">' + S.tally[code].count + '</span><button id="cnt-plus" aria-label="1つ増やす">＋</button></div></div>' +
+      '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
+    const refresh = () => { const t = S.tally[code]; $('cnt-num').textContent = t ? t.count : 0; };
+    $('cnt-minus').addEventListener('click', () => { if (S.tally[code]) setCount(code, S.tally[code].count - 1); refresh(); });
+    $('cnt-plus').addEventListener('click', () => {
+      if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
+      setCount(code, S.tally[code].count + 1); refresh();
+    });
+  }
+  $('btn-next').addEventListener('click', () => {
+    $('scan-card-wrap').innerHTML = '';
+    resumeCameraIgnoring(code);
+  });
+}
+
+$('btn-manual').addEventListener('click', () => {
+  const v = $('manual-code').value.trim();
+  if (!v) return;
+  $('manual-code').value = '';
+  onScan(v);
+});
+$('btn-to-review').addEventListener('click', toReview);
+
+// ---- カメラ ----
+// Androidはスマホに入っているバーコード読み取り機能(BarcodeDetector)を直接使う。
+// 向きに強く、写っているコードの位置もわかるので、いちばん大きく写っているもの
+// (=手に持っている商品)を選ぶ。使えない機種(iPhoneなど)だけhtml5-qrcodeに切り替える。
+const CAM = { stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
+const WANTED = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+
+async function startCamera() {
+  stopCamera();
+  CAM.running = true; CAM.paused = false; CAM.ignore = null;
+  $('camera').classList.remove('paused');
+  $('cam-msg').textContent = 'カメラを起動しています…';
+  try {
+    if ('BarcodeDetector' in window) {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      const formats = WANTED.filter((f) => supported.includes(f));
+      CAM.detector = new window.BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
+      CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      const video = $('video');
+      video.style.display = 'block'; $('fallback-reader').style.display = 'none';
+      video.srcObject = CAM.stream;
+      await video.play();
+      $('cam-msg').textContent = 'バーコード・QRを枠に入れてください';
+      tick();
+    } else {
+      await startFallback();
+    }
+  } catch (e) {
+    console.error(e);
+    $('cam-msg').textContent = 'カメラを起動できませんでした。下の「コードを手で入れる」も使えます';
+  }
+}
+async function tick() {
+  if (!CAM.running) return;
+  const video = $('video');
+  if (!CAM.paused && CAM.detector && video.readyState >= 2) {
+    try {
+      const found = await CAM.detector.detect(video);
+      handleFound(found.map((b) => ({ value: b.rawValue, area: b.boundingBox ? b.boundingBox.width * b.boundingBox.height : 0 })));
+    } catch (e) { /* 1フレーム読めないだけなので続ける */ }
+  }
+  CAM.timer = setTimeout(tick, 120);
+}
+function handleFound(list) {
+  if (CAM.paused || !CAM.running) return;
+  const now = Date.now();
+  if (CAM.ignore) {
+    // 直前に数えた商品がまだ写っている間は数えない(写らなくなって0.7秒たったら解除)。
+    // 別の商品のコードが写ったら、その場で数える。
+    if (list.some((x) => x.value === CAM.ignore)) CAM.ignoreSeen = now;
+    list = list.filter((x) => x.value !== CAM.ignore);
+    if (!list.length) { if (now - CAM.ignoreSeen > 700) CAM.ignore = null; return; }
+  }
+  if (!list.length) return;
+  list.sort((a, b) => b.area - a.area);
+  onScan(list[0].value);
+}
+function pauseCamera(p) {
+  CAM.paused = p;
+  $('camera').classList.toggle('paused', p);
+}
+function resumeCameraIgnoring(code) {
+  CAM.ignore = code; CAM.ignoreSeen = Date.now();
+  pauseCamera(false);
+}
+function stopCamera() {
+  CAM.running = false;
+  clearTimeout(CAM.timer);
+  if (CAM.stream) { CAM.stream.getTracks().forEach((t) => t.stop()); CAM.stream = null; }
+  if (CAM.fallback) { CAM.fallback.stop().catch(() => {}); CAM.fallback = null; }
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+}
+async function startFallback() {
+  if (!window.Html5Qrcode) await loadScript('https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js');
+  $('video').style.display = 'none';
+  const el = $('fallback-reader'); el.style.display = 'block'; el.innerHTML = '';
+  CAM.fallback = new window.Html5Qrcode('fallback-reader', { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  await CAM.fallback.start({ facingMode: 'environment' }, { fps: 10, qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.floor(h * 0.6) }) },
+    (text) => handleFound([{ value: text, area: 1 }]), () => {
+      if (CAM.ignore && Date.now() - CAM.ignoreSeen > 700) CAM.ignore = null;
+    });
+  $('cam-msg').textContent = 'バーコード・QRを枠に入れてください';
+}
+
+// ---- ステップ3 確認・送信 ----
+let reviewTab = 'scanned';
+$('btn-review-back').addEventListener('click', toScan);
+$('tab-scanned').addEventListener('click', () => { reviewTab = 'scanned'; renderReview(); });
+$('tab-unscanned').addEventListener('click', () => { reviewTab = 'unscanned'; renderReview(); });
+
+async function toReview() {
+  stopCamera();
+  renderSteps();
+  show('s-review');
+  $('review-error').textContent = '';
+  reviewTab = 'scanned';
+  $('zero-unscanned').checked = false;
+  $('zero-wrap').style.display = S.mode === 'overwrite' ? 'block' : 'none';
+  if (!S.productsLoaded) { $('review-list').innerHTML = '<div class="empty">商品の一覧を読み込んでいます…</div>'; await loadProducts(); }
+  renderReview();
+}
+const byBrand = (a, b) => String(a.brand).toLowerCase().localeCompare(String(b.brand).toLowerCase()) || String(a.name).localeCompare(String(b.name), 'ja');
+function groupHtml(items, rowFn) {
+  let html = '', current = null;
+  items.forEach((it) => {
+    if (it.brand !== current) { current = it.brand; html += '<div class="list-group">' + esc(current || '(ブランドなし)') + '</div>'; }
+    html += rowFn(it);
+  });
+  return html;
+}
+function renderReview() {
+  const scanned = Object.values(S.tally).sort(byBrand);
+  const unscanned = S.products.filter((p) => !S.tally[String(p.code)]).map((p) => ({ code: String(p.code), name: p.name + (p.colorNo ? '（' + p.colorNo + '）' : ''), brand: p.brand || '(ブランドなし)' })).sort(byBrand);
+  $('tab-scanned-n').textContent = scanned.length;
+  $('tab-unscanned-n').textContent = unscanned.length;
+  $('tab-scanned').classList.toggle('on', reviewTab === 'scanned');
+  $('tab-unscanned').classList.toggle('on', reviewTab !== 'scanned');
+  const list = $('review-list');
+  if (reviewTab === 'scanned') {
+    list.innerHTML = scanned.length ? groupHtml(scanned, (t) =>
+      '<div class="row"><div class="row-name">' + esc(t.name) + '</div><div class="stepper"><button data-code="' + esc(t.code) + '" data-d="-1" aria-label="1つ減らす">−</button><span class="num">' + t.count + '</span><button data-code="' + esc(t.code) + '" data-d="1" aria-label="1つ増やす">＋</button></div></div>')
+      : '<div class="empty">まだ何も数えていません</div>';
+    list.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', () => {
+      const t = S.tally[b.dataset.code]; if (!t) return;
+      setCount(b.dataset.code, t.count + Number(b.dataset.d)); renderReview();
+    }));
+  } else {
+    list.innerHTML = unscanned.length ? groupHtml(unscanned, (p) => '<div class="row"><div class="row-name">' + esc(p.name) + '</div></div>')
+      : '<div class="empty">全部の商品を数えました</div>';
+  }
+  $('btn-send').disabled = !scanned.length;
+}
+
+$('btn-send').addEventListener('click', async (ev) => {
+  if (S.sending) return;
+  const items = Object.values(S.tally).map((t) => ({ code: t.code, count: t.count }));
+  if (!items.length) return;
+  const zero = S.mode === 'overwrite' && $('zero-unscanned').checked;
+  const zeros = zero ? S.products.filter((p) => !S.tally[String(p.code)]).map((p) => ({ code: String(p.code), count: 0 })) : [];
+  const total = items.reduce((n, t) => n + t.count, 0);
+  const msg = items.length + '品目・' + total + '個を本社へ送信します。' + (zero ? '\n数えていない ' + zeros.length + '品目は在庫0として送ります。' : '') + '\nよろしいですか？';
+  if (!confirm(msg)) return;
+  const btn = ev.currentTarget;
+  S.sending = true; btn.disabled = true; btn.textContent = '送信中…';
+  $('review-error').textContent = '';
+  try {
+    const d = await api('submitStocktake', { staffName: S.staff, items: items.concat(zeros), mode: S.mode });
+    clearDraft();
+    $('done-text').innerHTML = esc(items.length) + '品目・' + esc(total) + '個を記録しました' +
+      (zero ? '<br>数えていない ' + esc(zeros.length) + '品目は0にしました' : '') +
+      (d.unknownCodes && d.unknownCodes.length ? '<br>登録されていないコード：' + esc(d.unknownCodes.join('、')) : '') +
+      '<br>本社の確認をお待ちください';
+    S.tally = {}; S.mode = 'add';
+    renderSteps();
+    show('s-done');
+  } catch (e) {
+    $('review-error').textContent = '送信できませんでした：' + e.message + '（数えた分は保存されています。もう一度押してください）';
+  } finally {
+    S.sending = false; btn.disabled = false; btn.textContent = '本社へ送信する';
+  }
+});
+$('btn-done-home').addEventListener('click', toStart);
+
+// ---- はじめ ----
+(function init() {
+  if (!S.token) { show('s-login'); return; }
+  toStaff();
+})();
+</script>
+</body>
+</html>
