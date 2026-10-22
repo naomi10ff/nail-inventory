@@ -1731,3 +1731,30 @@ function recordIncoming1022() {
   Logger.log('入荷を記録しました: ' + rows.length + '件' + (skipped.length ? ' / スキップ: ' + skipped.join(', ') : ''));
   rows.forEach(function (r) { Logger.log('  ' + r[1] + ' ' + r[5] + ' ' + r[4] + ' +1'); });
 }
+
+/**
+ * 木津店で10/22の棚卸に数えられなかった、QRの商品3つの在庫を実際の本数にする(一回限り)。
+ * 種別「調整」(数をそのまま置き換える)なので、何度実行しても本数はずれない。
+ */
+function adjustKizuUncounted1022() {
+  var store = '木津店';
+  var plan = [
+    { code: 'QR-70C4CE4B', qty: 5 }, // PREGEL ノンワイプクリア キャンジェル ノンヒート
+    { code: 'QR-F0EDD49A', qty: 1 }, // T-GEL D059 エナメルブルー
+    { code: 'QR-F1B7AEF9', qty: 1 }  // GELGRAPH 225G
+  ];
+  var products = getProductMap_(store);
+  var rows = [], ts = new Date();
+  plan.forEach(function (it) {
+    var p = products[it.code];
+    if (!p) { Logger.log('見つかりません: ' + it.code); return; }
+    rows.push([ts, store, '本社', it.code, p.name, p.brand, '調整', it.qty, '10/22 棚卸で数えられなかった分(QRなし)']);
+  });
+  if (rows.length) {
+    var sheet = getSheet_(SHEET_LOG);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    revokeApprovalIfStale_(store, ts);
+  }
+  rows.forEach(function (r) { Logger.log('  ' + r[5] + ' ' + r[4] + ' → 在庫 ' + r[7]); });
+  Logger.log('木津店の在庫を' + rows.length + '品目、実際の本数にしました。');
+}
