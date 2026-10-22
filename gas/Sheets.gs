@@ -1446,3 +1446,94 @@ function makeKizuStockSheets() {
   write('木津店_QRコード商品(在庫あり)', ['ブランド', '商品名', 'コード', '今のシステム在庫', 'QRを貼った(チェック用)'], qrInStock);
   Logger.log('木津店_在庫一覧: ' + all.length + '品目 / 木津店_QRコード商品(在庫あり): ' + qrInStock.length + '品目 を書き出しました。');
 }
+
+/**
+ * 木津店の、バーコードのない商品をQRコードの商品として一括登録する(2026-10-22、一回限り)。
+ * ・韓国ジェル CLODI 12色(新しく入荷)
+ * ・VETRO ワタガシ(リストにはバーコードの商品しかないが、お店の現物にはバーコードがないためQR用を別に登録。重複はあとで本社で整理)
+ * ・SHAREYDVA インク ホワイト(リストにない)
+ * 在庫の数は入れない(登録だけ)。QRを貼ったあと、棚卸の「続きから数える」で読んで数える。
+ * 同じブランド+商品名がすでにあればスキップするので、2回実行しても重複しない。
+ */
+function bulkRegisterQrItemsKizu1022() {
+  var store = '木津店';
+  var items = ['LC-03', 'LC-07', 'LC-08', 'LC-10', 'PB-03', 'PB-05', 'PB-06', 'LV-01', 'MG-07', 'DG-13', 'DG-18', 'DG-19']
+    .map(function (n) { return { brand: 'CLODI', name: n, category: 'カラー', memo: '韓国ジェル' }; })
+    .concat([
+      { brand: 'VETRO', name: 'アートクリア ワタガシ（QR）', category: '', memo: 'バーコードなしの現物用(10/22)。バーコードの商品と重複、あとで整理' },
+      { brand: 'SHAREYDVA', name: 'インク ホワイト', category: '', memo: '' }
+    ]);
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var existing = {};
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === store) existing[String(data[i][3]).trim() + '||' + String(data[i][2]).trim()] = data[i][1];
+  }
+  var rows = [], skipped = [];
+  items.forEach(function (it) {
+    var key = it.brand + '||' + it.name;
+    if (existing[key]) { skipped.push(it.brand + ' ' + it.name + '(' + existing[key] + ')'); return; }
+    ensureBrandExists_(store, it.brand);
+    var code = 'QR-' + Utilities.getUuid().split('-')[0].toUpperCase();
+    rows.push([store, code, it.name, it.brand, it.category, '', '本', it.memo, new Date(), '', '']);
+  });
+  if (rows.length) {
+    var start = sheet.getLastRow() + 1;
+    sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
+    sheet.getRange(start, 2, rows.length, 1).setNumberFormat('@');
+  }
+  Logger.log('木津店: ' + rows.length + '品目を登録しました。' + (skipped.length ? ' すでに登録済み: ' + skipped.join(', ') : ''));
+  rows.forEach(function (r) { Logger.log('  ' + r[3] + ' ' + r[2] + ' → ' + r[1]); });
+}
+
+/** 生駒店に入荷した韓国ジェル CLODI(バーコードなし)6色を、QRコードの商品として一括登録する(2026-10-22、一回限り)。 */
+function bulkRegisterClodiIkoma1022() {
+  var store = '生駒店';
+  var brand = 'CLODI';
+  var names = ['XO-01', 'XO-02', 'LC-04', 'LC-07', 'CS-10', 'PB-06'];
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var existing = {};
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === store) existing[String(data[i][3]).trim() + '||' + String(data[i][2]).trim()] = data[i][1];
+  }
+  ensureBrandExists_(store, brand);
+  var rows = [], skipped = [];
+  names.forEach(function (name) {
+    if (existing[brand + '||' + name]) { skipped.push(name); return; }
+    rows.push([store, 'QR-' + Utilities.getUuid().split('-')[0].toUpperCase(), name, brand, 'カラー', '', '本', '韓国ジェル', new Date(), '', '']);
+  });
+  if (rows.length) {
+    var start = sheet.getLastRow() + 1;
+    sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
+    sheet.getRange(start, 2, rows.length, 1).setNumberFormat('@');
+  }
+  Logger.log('生駒店 CLODI: ' + rows.length + '色を登録しました。' + (skipped.length ? ' すでに登録済み: ' + skipped.join(', ') : ''));
+  rows.forEach(function (r) { Logger.log('  ' + r[2] + ' → ' + r[1]); });
+}
+
+/** 西大寺宝来店に入荷した韓国ジェル CLODI(バーコードなし)9色を、QRコードの商品として一括登録する(2026-10-22、一回限り)。 */
+function bulkRegisterClodiHorai1022() {
+  var store = '西大寺宝来店';
+  var brand = 'CLODI';
+  var names = ['DG-13', 'DG-15', 'DG-20', 'LV-03', 'MG-01', 'MG-07', 'LL-01', 'LL-07', 'LL-08'];
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var data = sheet.getDataRange().getValues();
+  var existing = {};
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === store) existing[String(data[i][3]).trim() + '||' + String(data[i][2]).trim()] = data[i][1];
+  }
+  ensureBrandExists_(store, brand);
+  var rows = [], skipped = [];
+  names.forEach(function (name) {
+    if (existing[brand + '||' + name]) { skipped.push(name); return; }
+    rows.push([store, 'QR-' + Utilities.getUuid().split('-')[0].toUpperCase(), name, brand, 'カラー', '', '本', '韓国ジェル', new Date(), '', '']);
+  });
+  if (rows.length) {
+    var start = sheet.getLastRow() + 1;
+    sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
+    sheet.getRange(start, 2, rows.length, 1).setNumberFormat('@');
+  }
+  Logger.log('西大寺宝来店 CLODI: ' + rows.length + '色を登録しました。' + (skipped.length ? ' すでに登録済み: ' + skipped.join(', ') : ''));
+  rows.forEach(function (r) { Logger.log('  ' + r[2] + ' → ' + r[1]); });
+}
