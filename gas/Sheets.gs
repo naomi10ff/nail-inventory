@@ -1694,3 +1694,40 @@ function bulkRegisterClodiHorai1022() {
     }
   ]);
 }
+
+/**
+ * 2026-10-22 に QRラベルを貼って各店に持ち帰った商品(CLODIほか)の入荷を、本社から1本ずつまとめて記録する(一回限り)。
+ * 木津店は今日の棚卸で数えていない新規登録分(CLODI 12色・ワタガシ(QR)・インク ホワイト)だけ。
+ * キャンジェル ノンヒート・D059・225G は棚卸の「続きから数える」で入れたか確認してから個別に入れるので、ここには含めない。
+ * 商品が未登録のコードはスキップ。同じメモの入荷記録がすでにあるコードもスキップするので、2回実行しても二重にならない。
+ */
+function recordIncoming1022() {
+  var memo = '10/22 本社一括入荷(QRラベル)';
+  var plan = {
+    '木津店': ["QR-D0ADB51E","QR-719273EE","QR-45AD9947","QR-CD2DD768","QR-13933762","QR-84CCD3D7","QR-8944DDD4","QR-9D634A14","QR-1B2EAA97","QR-A6A20E03","QR-4A3686B2","QR-3451FBB5","QR-B2B66F61","QR-B162B27C"],
+    '生駒店': ["QR-2BD3F920","QR-43A2148C","QR-D023F5BE","QR-8593C1DA","QR-655BD1D9","QR-FE20A100"],
+    '西大寺宝来店': ["QR-3D2D22AE","QR-94AA4DE6","QR-1A15D47D","QR-D26C0196","QR-8440D9F2","QR-F46D66DE","QR-FDBC2088","QR-60494BA9","QR-89306531"]
+  };
+  var log = getSheet_(SHEET_LOG).getDataRange().getValues();
+  var done = {};
+  for (var i = 1; i < log.length; i++) {
+    if (log[i][8] === memo) done[log[i][1] + '||' + String(log[i][3])] = true;
+  }
+  var rows = [], skipped = [], ts = new Date();
+  Object.keys(plan).forEach(function (store) {
+    var products = getProductMap_(store);
+    plan[store].forEach(function (code) {
+      var p = products[code];
+      if (!p) { skipped.push(store + ' ' + code + '(未登録)'); return; }
+      if (done[store + '||' + code]) { skipped.push(store + ' ' + p.name + '(記録済み)'); return; }
+      rows.push([ts, store, '本社', code, p.name, p.brand, '入荷', 1, memo]);
+    });
+  });
+  if (rows.length) {
+    var sheet = getSheet_(SHEET_LOG);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    Object.keys(plan).forEach(function (store) { revokeApprovalIfStale_(store, ts); });
+  }
+  Logger.log('入荷を記録しました: ' + rows.length + '件' + (skipped.length ? ' / スキップ: ' + skipped.join(', ') : ''));
+  rows.forEach(function (r) { Logger.log('  ' + r[1] + ' ' + r[5] + ' ' + r[4] + ' +1'); });
+}
