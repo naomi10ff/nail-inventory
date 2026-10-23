@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F5F7FB">
-<title>棚卸（新しい画面・テスト版）</title>
+<title>在庫管理（新しい画面・テスト版）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <!--
-  棚卸だけを新しいデザインにしたテスト版(2026-10-22 木津店の棚卸で使う)。
+  お店のスマホ用の新しい画面(テスト版)。2026-10-22 木津店の棚卸で使った棚卸の画面に、
+  2026-10-23 ホーム・入荷登録・破棄登録・在庫を調べる・下のタブバーを追加した。
   データのやり取りは今の棚卸しシステム(../index.html)と同じGASのAPIをそのまま使い、
   ログイン情報(localStorageのtoken)と棚卸の途中データ(stocktakeDraft_店舗名)も
-  同じ形式で共有する。このため、こちらで困ったら今の画面に切り替えて続きから数えられる。
+  同じ形式で共有する。このため、こちらで困ったら今の画面に切り替えて続きから使える。
 -->
 <style>
   :root {
@@ -27,9 +28,11 @@
   .app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
   .screen { display: none; flex: 1; flex-direction: column; }
   .screen.active { display: flex; animation: screenIn .28s ease; }
+  .screen[data-tab] .body { padding-bottom: 92px; } /* 下のタブバーの分 */
   @keyframes screenIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
   @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
   @keyframes scanLine { 0% { top: 20%; } 50% { top: 78%; } 100% { top: 20%; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .topbar { background: #fff; border-bottom: 1px solid var(--line); padding: 10px 12px 12px; position: sticky; top: 0; z-index: 5; }
   .topbar-row { display: flex; align-items: center; gap: 6px; }
@@ -53,6 +56,7 @@
   .btn-primary:disabled { background: #93C5FD; }
   .btn-ghost { background: #fff; color: var(--ink); border: 1px solid #D1D5DB; }
   .btn-danger { background: var(--red); color: #fff; }
+  .btn-danger:disabled { background: #FCA5A5; }
   .btn-small { height: 44px; font-size: 14px; }
   .link-btn { background: none; border: none; color: var(--blue); font-size: 14px; padding: 8px 0; cursor: pointer; text-align: left; }
 
@@ -63,7 +67,7 @@
   .note-blue { background: var(--blue-bg); color: var(--blue-dark); }
 
   .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
-  .input { height: 50px; border-radius: 12px; border: 1px solid #D1D5DB; background: #fff; padding: 0 14px; font-size: 16px; color: var(--ink); }
+  .input { height: 50px; border-radius: 12px; border: 1px solid #D1D5DB; background: #fff; padding: 0 14px; font-size: 16px; color: var(--ink); width: 100%; }
 
   .choice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 16px; background: #fff; border: 2px solid var(--line); cursor: pointer; }
   .choice input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--blue); flex-shrink: 0; }
@@ -74,22 +78,27 @@
 
   .camera { position: relative; height: 300px; border-radius: 20px; background: #111827; overflow: hidden; flex-shrink: 0; }
   .camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .camera #fallback-reader { width: 100%; height: 100%; }
+  .camera .fb-reader { width: 100%; height: 100%; }
   .cam-frame { position: absolute; left: 12%; right: 12%; top: 16%; bottom: 16%; border: 2px solid rgba(255,255,255,.9); border-radius: 16px; pointer-events: none; }
   .cam-line { position: absolute; left: 14%; right: 14%; height: 2px; background: #60A5FA; animation: scanLine 2.4s ease-in-out infinite; pointer-events: none; }
   .cam-msg { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 13px; color: #E5E7EB; pointer-events: none; }
-  .cam-paused { position: absolute; inset: 0; background: rgba(17,24,39,.55); display: none; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700; }
+  .cam-paused { position: absolute; inset: 0; background: rgba(17,24,39,.55); display: none; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700; text-align: center; padding: 0 20px; }
   .camera.paused .cam-paused { display: flex; }
   .camera.paused .cam-line { display: none; }
 
   .scan-card { border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; animation: popIn .22s ease; }
   .scan-card.ok { background: var(--green-bg); border: 1px solid #A7F3D0; }
   .scan-card.ng { background: var(--amber-bg); border: 1px solid #FDE68A; }
+  .scan-card.info { background: #fff; border: 1px solid var(--line); }
+  .scan-card.warn { background: var(--red-bg); border: 1px solid #FECACA; }
   .scan-name { font-size: 16px; font-weight: 700; line-height: 1.4; }
-  .scan-brand { font-size: 12px; color: #065F46; }
+  .scan-brand { font-size: 12px; color: var(--sub); }
+  .ok-dot { width: 34px; height: 34px; border-radius: 17px; background: var(--green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .stepper { display: flex; align-items: center; gap: 12px; }
   .stepper button { width: 48px; height: 48px; border-radius: 24px; border: 1px solid #D1D5DB; background: #fff; font-size: 22px; cursor: pointer; }
   .stepper .num { font-size: 26px; font-weight: 700; min-width: 40px; text-align: center; }
+  .big-num { font-size: 40px; font-weight: 700; line-height: 1; }
+  .big-num small { font-size: 16px; font-weight: 500; margin-left: 4px; }
 
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
@@ -108,6 +117,8 @@
   .row .stepper { gap: 8px; }
   .row .stepper button { width: 36px; height: 36px; border-radius: 18px; font-size: 18px; }
   .row .stepper .num { font-size: 16px; min-width: 28px; }
+  .row-count { font-size: 16px; font-weight: 700; min-width: 44px; text-align: right; }
+  .row-count.zero { color: var(--red); font-size: 13px; }
   .empty { padding: 20px; text-align: center; font-size: 14px; color: var(--sub); }
 
   .check-line { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.6; cursor: pointer; }
@@ -116,7 +127,40 @@
   .done-icon { width: 84px; height: 84px; border-radius: 42px; background: var(--green); display: flex; align-items: center; justify-content: center; margin: 24px auto 0; animation: popIn .35s ease; }
   .center { text-align: center; }
   .error { color: var(--red); font-size: 14px; min-height: 1em; }
-  .busy { opacity: .6; pointer-events: none; }
+
+  /* ホーム */
+  .hello { display: flex; align-items: center; gap: 12px; }
+  .hello-store { font-size: 13px; color: var(--sub); }
+  .hello-name { font-size: 20px; font-weight: 700; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--line); color: var(--sub); }
+  .badge.wait { background: var(--amber-bg); color: var(--amber); }
+  .badge.ok { background: var(--green-bg); color: #065F46; }
+  .badge.ng { background: var(--red-bg); color: var(--red); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; cursor: pointer; text-align: left; font-size: 15px; font-weight: 700; color: var(--ink); }
+  .tile-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--blue-bg); display: flex; align-items: center; justify-content: center; }
+  .tile small { font-size: 12px; font-weight: 400; color: var(--sub); }
+
+  /* 在庫 */
+  .filters { display: flex; flex-direction: column; gap: 8px; }
+  .menu-list { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .menu-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: none; border-top: 1px solid #F3F4F6; background: #fff; width: 100%; font-size: 15px; color: var(--ink); cursor: pointer; text-decoration: none; text-align: left; }
+  .menu-item:first-child { border-top: none; }
+  .menu-item .chev { margin-left: auto; color: #9CA3AF; }
+
+  /* 下のタブバー */
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #fff; border-top: 1px solid var(--line); display: none; padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar.show { display: block; }
+  .tabbar-in { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); }
+  .tab { height: 62px; border: none; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: #6B7280; cursor: pointer; }
+  .tab svg { stroke: #6B7280; }
+  .tab.on { color: var(--blue); font-weight: 700; }
+  .tab.on svg { stroke: var(--blue); }
+
+  /* 下に引っぱって更新 */
+  .ptr { height: 0; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; transition: height .2s ease; }
+  .ptr-spin { width: 26px; height: 26px; margin-bottom: 8px; border-radius: 13px; border: 3px solid #BFDBFE; border-top-color: var(--blue); }
+  .ptr.loading .ptr-spin { animation: spin .8s linear infinite; }
 </style>
 </head>
 <body>
@@ -129,7 +173,7 @@
         <div style="width:72px;height:72px;border-radius:22px;background:var(--blue);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
         </div>
-        <p class="h1">棚卸</p>
+        <p class="h1">在庫管理</p>
         <p class="hint">新しい画面（テスト版）</p>
       </div>
       <label class="field">ユーザー名<input class="input" id="login-user" autocomplete="username" autocapitalize="off"></label>
@@ -142,7 +186,7 @@
 
   <!-- 店舗・担当者 -->
   <section class="screen" id="s-staff">
-    <div class="topbar"><div class="topbar-row"><div class="topbar-title" style="padding-left:8px">だれが数えますか？</div><div class="topbar-sub" id="staff-store-label"></div></div></div>
+    <div class="topbar"><div class="topbar-row"><div class="topbar-title" style="padding-left:8px">だれが使いますか？</div><div class="topbar-sub" id="staff-store-label"></div></div></div>
     <div class="body">
       <div id="store-pick-wrap" style="display:none; flex-direction:column; gap:10px;">
         <p class="h2">店舗</p>
@@ -159,18 +203,39 @@
       </details>
       <div class="error" id="staff-error"></div>
       <div class="spacer"></div>
-      <button class="btn btn-primary" id="btn-staff-next">次へ（棚卸）</button>
-      <a class="btn btn-ghost" href="../index.html" style="display:flex; align-items:center; justify-content:center; text-decoration:none;">入荷登録・在庫を調べる など（今の画面へ）</a>
-      <p class="hint center" style="font-size:12px">この新しい画面は、今は「棚卸」だけです。ほかのメニューは今の画面で使えます（ログインはそのまま）</p>
+      <button class="btn btn-primary" id="btn-staff-next">次へ</button>
       <button class="link-btn" id="btn-logout">ログアウト</button>
     </div>
   </section>
 
-  <!-- ステップ1 はじめ方 -->
+  <!-- ホーム -->
+  <section class="screen" id="s-home" data-tab="home">
+    <div class="ptr"><div class="ptr-spin"></div></div>
+    <div class="body">
+      <div class="hello">
+        <div style="flex:1; min-width:0"><div class="hello-store" id="home-store"></div><div class="hello-name" id="home-staff"></div></div>
+        <button class="btn btn-ghost btn-small" style="width:auto; padding:0 14px" id="btn-home-change">担当を変える</button>
+      </div>
+      <div class="card" style="display:flex; flex-direction:column; gap:12px">
+        <div style="display:flex; align-items:center; gap:8px"><span class="h2">今月の棚卸</span><span class="badge" id="home-st-badge">確認中</span></div>
+        <p class="hint" id="home-st-text">読み込み中…</p>
+        <button class="btn btn-primary" id="btn-home-stocktake">棚卸をする</button>
+      </div>
+      <div class="tiles">
+        <button class="tile" id="tile-incoming"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg></span>入荷登録<small>届いた商品を読む</small></button>
+        <button class="tile" id="tile-lookup"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>在庫を調べる<small>商品を読んで数を見る</small></button>
+        <button class="tile" id="tile-disposal"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg></span>破棄登録<small>使えない商品を減らす</small></button>
+        <button class="tile" id="tile-stock"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg></span>在庫の一覧<small>お店の在庫を全部見る</small></button>
+      </div>
+      <p class="hint center" style="font-size:12px">下に引っぱると、最新の情報に更新します</p>
+    </div>
+  </section>
+
+  <!-- 棚卸 ステップ1 はじめ方 -->
   <section class="screen" id="s-start">
     <div class="topbar">
       <div class="topbar-row">
-        <button class="icon-btn" id="btn-start-back" aria-label="担当者の選択に戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="icon-btn back-home" aria-label="ホームに戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
         <div class="topbar-title">棚卸</div><div class="topbar-sub who"></div>
       </div>
       <div class="steps" data-step="0"></div>
@@ -180,7 +245,7 @@
     </div>
   </section>
 
-  <!-- ステップ2 数える -->
+  <!-- 棚卸 ステップ2 数える -->
   <section class="screen" id="s-scan">
     <div class="topbar">
       <div class="topbar-row">
@@ -190,13 +255,7 @@
       <div class="steps" data-step="1"></div>
     </div>
     <div class="body">
-      <div class="camera" id="camera">
-        <video id="video" playsinline muted></video>
-        <div id="fallback-reader" style="display:none"></div>
-        <div class="cam-frame"></div><div class="cam-line"></div>
-        <div class="cam-msg" id="cam-msg">カメラを起動しています…</div>
-        <div class="cam-paused">「次の商品へ」を押すと読み取ります</div>
-      </div>
+      <div class="camera" id="cam-scan"></div>
       <div id="scan-card-wrap"></div>
       <div class="stats">
         <div class="stat"><div class="stat-label">数えた品目</div><div class="stat-num" id="stat-items">0</div></div>
@@ -205,8 +264,8 @@
       <details>
         <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
         <div style="display:flex; gap:8px; margin-top:8px;">
-          <input class="input" id="manual-code" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
-          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" id="btn-manual">追加</button>
+          <input class="input" id="manual-scan" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-scan">追加</button>
         </div>
       </details>
       <div class="spacer"></div>
@@ -214,7 +273,7 @@
     </div>
   </section>
 
-  <!-- ステップ3 確認・送信 -->
+  <!-- 棚卸 ステップ3 確認・送信 -->
   <section class="screen" id="s-review">
     <div class="topbar">
       <div class="topbar-row">
@@ -237,18 +296,128 @@
     </div>
   </section>
 
-  <!-- 完了 -->
+  <!-- 棚卸 完了 -->
   <section class="screen" id="s-done">
     <div class="body" style="justify-content:center; gap:14px;">
       <div class="done-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>
       <p class="h1 center">送信しました</p>
       <p class="hint center" id="done-text"></p>
       <div class="spacer" style="flex:0 0 12px"></div>
-      <button class="btn btn-ghost" id="btn-done-home">最初の画面へ</button>
+      <button class="btn btn-ghost back-home">ホームへ</button>
+    </div>
+  </section>
+
+  <!-- 入荷登録 -->
+  <section class="screen" id="s-incoming">
+    <div class="topbar"><div class="topbar-row">
+      <button class="icon-btn back-home" aria-label="ホームに戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="topbar-title">入荷登録</div><div class="topbar-sub who"></div>
+    </div></div>
+    <div class="body">
+      <p class="hint">届いた商品を1つずつ読み取ります。読むと<b>1個入荷</b>として記録されます。</p>
+      <div class="camera" id="cam-incoming"></div>
+      <div id="incoming-card-wrap"></div>
+      <details>
+        <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input" id="manual-incoming" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-incoming">追加</button>
+        </div>
+      </details>
+      <p class="h2" style="margin-top:4px">今回入荷した商品 <span class="badge" id="incoming-total">0個</span></p>
+      <div class="list" id="incoming-list"><div class="empty">まだありません</div></div>
+      <p class="hint" style="font-size:12px">数を間違えたときは、本社に連絡してください（本社で直せます）。</p>
+    </div>
+  </section>
+
+  <!-- 破棄登録 -->
+  <section class="screen" id="s-disposal">
+    <div class="topbar"><div class="topbar-row">
+      <button class="icon-btn back-home" aria-label="ホームに戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="topbar-title">破棄登録</div><div class="topbar-sub who"></div>
+    </div></div>
+    <div class="body">
+      <p class="hint">固まった・こぼれたなど、使えなくなった商品を読み取って、在庫から減らします。</p>
+      <div class="camera" id="cam-disposal"></div>
+      <div id="disposal-card-wrap"></div>
+      <details>
+        <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input" id="manual-disposal" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-disposal">調べる</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 在庫を調べる(読み取り) -->
+  <section class="screen" id="s-lookup">
+    <div class="topbar"><div class="topbar-row">
+      <button class="icon-btn" id="btn-lookup-back" aria-label="戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="topbar-title">在庫を調べる</div><div class="topbar-sub who"></div>
+    </div></div>
+    <div class="body">
+      <div class="camera" id="cam-lookup"></div>
+      <div id="lookup-card-wrap"></div>
+      <details>
+        <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input" id="manual-lookup" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-lookup">調べる</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 在庫の一覧 -->
+  <section class="screen" id="s-stock" data-tab="stock">
+    <div class="topbar"><div class="topbar-row"><div class="topbar-title" style="padding-left:8px">在庫</div><div class="topbar-sub" id="stock-store"></div></div></div>
+    <div class="ptr"><div class="ptr-spin"></div></div>
+    <div class="body">
+      <button class="btn btn-primary" id="btn-stock-scan">バーコードを読んで調べる</button>
+      <div class="filters">
+        <input class="input" id="stock-search" type="search" placeholder="品名・カラー番号で探す（例：06）">
+        <select class="input" id="stock-brand"><option value="">すべてのブランド</option></select>
+        <div class="seg">
+          <button id="stock-all" class="on">すべて</button>
+          <button id="stock-zero">在庫なしだけ</button>
+        </div>
+      </div>
+      <p class="hint" id="stock-count"></p>
+      <div class="list" id="stock-list"><div class="empty">読み込み中…</div></div>
+    </div>
+  </section>
+
+  <!-- メニュー -->
+  <section class="screen" id="s-menu" data-tab="menu">
+    <div class="topbar"><div class="topbar-row"><div class="topbar-title" style="padding-left:8px">メニュー</div><div class="topbar-sub who"></div></div></div>
+    <div class="body">
+      <div class="menu-list">
+        <button class="menu-item" data-go="incoming">入荷登録<span class="chev">›</span></button>
+        <button class="menu-item" data-go="disposal">破棄登録<span class="chev">›</span></button>
+        <button class="menu-item" data-go="lookup">在庫を調べる（読み取り）<span class="chev">›</span></button>
+        <button class="menu-item" data-go="stocktake">棚卸<span class="chev">›</span></button>
+      </div>
+      <div class="menu-list">
+        <button class="menu-item" id="btn-menu-staff">担当者を変える<span class="chev">›</span></button>
+        <a class="menu-item" href="../index.html">今の画面を開く<span class="chev">›</span></a>
+        <button class="menu-item" id="btn-menu-logout" style="color:var(--red)">ログアウト</button>
+      </div>
+      <p class="hint center" style="font-size:12px">新しい画面（テスト版）です。困ったときは「今の画面を開く」から、いつもの画面で続きができます。</p>
     </div>
   </section>
 
 </div>
+
+<!-- 下のタブバー -->
+<nav class="tabbar" id="tabbar" aria-label="メニュー">
+  <div class="tabbar-in">
+    <button class="tab" data-tab="home"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>ホーム</button>
+    <button class="tab" data-tab="stocktake"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5a1 1 0 011-1h2"/><path d="M17 4h2a1 1 0 011 1v2"/><path d="M20 17v2a1 1 0 01-1 1h-2"/><path d="M7 20H5a1 1 0 01-1-1v-2"/><path d="M8 8v8M12 8v8M16 8v8"/></svg>棚卸</button>
+    <button class="tab" data-tab="stock"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>在庫</button>
+    <button class="tab" data-tab="menu"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>メニュー</button>
+  </div>
+</nav>
 
 <script>
 /* eslint-disable no-console */
@@ -265,13 +434,18 @@ const S = {
   products: [],
   productsLoaded: false,
   lastCode: null,
-  sending: false
+  sending: false,
+  busy: false,            // 入荷・破棄の記録中(終わるまで次の読み取りを受け付けない)
+  incoming: {},           // 今回の入荷登録: code -> { name, brand, count }
+  stock: null             // 在庫の一覧(getInventorySummaryの結果)
 };
 const STORES = ['木津店', '西大寺宝来店', '生駒店'];
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function monthNow() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+const productLabel = (p) => esc(p.name) + (p.colorNo ? '（' + esc(p.colorNo) + '）' : '');
+const OK_ICON = '<div class="ok-dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>';
 
 // ---- API ----
 async function api(action, payload) {
@@ -282,12 +456,22 @@ async function api(action, payload) {
   if (!json.ok) throw new Error(json.error || '不明なエラーが発生しました');
   return json.data;
 }
+const isLoginError = (e) => /ログイン|セッション/.test(e.message);
+function toLogin(msg) { show('s-login'); $('login-error').textContent = msg || ''; }
 
 // ---- 画面 ----
+const TAB_OF = { 's-home': 'home', 's-stock': 'stock', 's-menu': 'menu' };
 function show(id) {
   document.querySelectorAll('.screen').forEach((el) => el.classList.toggle('active', el.id === id));
   window.scrollTo(0, 0);
-  if (id !== 's-scan') stopCamera();
+  stopCamera();
+  // 読み取り結果のカードは画面ごとに同じボタン名(btn-next など)を使うため、
+  // 前の画面のカードが残っていると押したボタンを取り違える。画面を移るたびに消す。
+  document.querySelectorAll('[id$="-card-wrap"]').forEach((w) => { w.innerHTML = ''; });
+  const tab = TAB_OF[id];
+  $('tabbar').classList.toggle('show', !!tab);
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === tab));
+  document.querySelectorAll('.who').forEach((el) => { el.innerHTML = esc(S.store || '') + '<br>' + esc(S.staff || ''); });
 }
 function renderSteps() {
   document.querySelectorAll('.steps').forEach((box) => {
@@ -295,7 +479,39 @@ function renderSteps() {
     box.innerHTML = ['はじめ方', '数える', '確認・送信'].map((label, i) =>
       '<div class="step ' + (i < now ? 'done' : i === now ? 'now' : '') + '"><div class="step-bar"></div><div class="step-label">' + label + '</div></div>').join('');
   });
-  document.querySelectorAll('.who').forEach((el) => { el.innerHTML = esc(S.store || '') + '<br>' + esc(S.staff || ''); });
+}
+function go(where) {
+  if (where === 'home') toHome();
+  else if (where === 'stocktake') toStart();
+  else if (where === 'stock') toStock();
+  else if (where === 'menu') show('s-menu');
+  else if (where === 'incoming') toIncoming();
+  else if (where === 'disposal') toDisposal();
+  else if (where === 'lookup') toLookup('s-home');
+}
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => go(t.dataset.tab)));
+document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
+document.querySelectorAll('.back-home').forEach((b) => b.addEventListener('click', toHome));
+
+// ---- 下に引っぱって更新(ホーム・在庫の一覧だけ。カメラの画面では使わない) ----
+function pullToRefresh(screenId, onRefresh) {
+  const screen = $(screenId), ptr = screen.querySelector('.ptr');
+  let startY = null, dist = 0, loading = false;
+  screen.addEventListener('touchstart', (e) => { startY = (window.scrollY <= 0 && !loading) ? e.touches[0].clientY : null; dist = 0; }, { passive: true });
+  screen.addEventListener('touchmove', (e) => {
+    if (startY === null) return;
+    dist = Math.max(0, e.touches[0].clientY - startY);
+    ptr.style.transition = 'none';
+    ptr.style.height = Math.min(70, dist * 0.5) + 'px';
+  }, { passive: true });
+  screen.addEventListener('touchend', async () => {
+    if (startY === null) return;
+    startY = null;
+    ptr.style.transition = '';
+    if (dist * 0.5 < 56) { ptr.style.height = '0'; return; }
+    loading = true; ptr.style.height = '48px'; ptr.classList.add('loading');
+    try { await onRefresh(); } finally { loading = false; ptr.classList.remove('loading'); ptr.style.height = '0'; }
+  });
 }
 
 // ---- 途中データ(今の画面と同じ保存場所・形式) ----
@@ -320,11 +536,14 @@ $('btn-login').addEventListener('click', async (ev) => {
     btn.disabled = false; btn.textContent = 'ログイン';
   }
 });
-$('btn-logout').addEventListener('click', () => {
+function logout() {
   ['token', 'store', 'role'].forEach((k) => localStorage.removeItem(k));
-  S.token = S.role = S.store = null;
+  S.token = S.role = S.store = S.staff = null;
+  S.products = []; S.productsLoaded = false; S.stock = null;
   show('s-login');
-});
+}
+$('btn-logout').addEventListener('click', logout);
+$('btn-menu-logout').addEventListener('click', () => { if (confirm('ログアウトします。よろしいですか？')) logout(); });
 
 // ---- 店舗・担当者 ----
 async function toStaff() {
@@ -336,7 +555,9 @@ async function toStaff() {
     $('store-list').innerHTML = STORES.map((s) =>
       '<label class="choice"><input type="radio" name="store" value="' + esc(s) + '"' + (S.store === s ? ' checked' : '') + '><div class="choice-title">' + esc(s) + '</div></label>').join('');
     $('store-list').querySelectorAll('input').forEach((r) => r.addEventListener('change', () => {
-      S.store = r.value; localStorage.setItem('v2_hq_store', r.value); loadStaff();
+      S.store = r.value; localStorage.setItem('v2_hq_store', r.value);
+      S.products = []; S.productsLoaded = false; S.stock = null; S.incoming = {};
+      loadStaff();
     }));
   }
   await loadStaff();
@@ -348,14 +569,14 @@ async function loadStaff() {
   list.innerHTML = '<div class="empty">読み込み中…</div>';
   try {
     const d = await api('getStaffList', {});
-    const remembered = localStorage.getItem('v2_staff_' + S.store);
+    const remembered = S.staff || localStorage.getItem('v2_staff_' + S.store);
     const staff = d.staff.filter((s) => !s.store || s.store === S.store);
     list.innerHTML = staff.length ? staff.map((s) =>
       '<label class="choice"><input type="radio" name="staff" value="' + esc(s.name) + '"' + (remembered === s.name ? ' checked' : '') + '><div class="choice-title">' + esc(s.name) + '</div></label>').join('')
       : '<div class="empty">担当者が登録されていません。下の「＋ 担当者を追加する」から名前を入れてください</div>';
     $('add-staff-box').open = !staff.length;
   } catch (e) {
-    if (/ログイン|セッション/.test(e.message)) { show('s-login'); $('login-error').textContent = e.message; return; }
+    if (isLoginError(e)) { toLogin(e.message); return; }
     list.innerHTML = '';
     $('staff-error').textContent = e.message;
   }
@@ -370,6 +591,7 @@ $('btn-add-staff').addEventListener('click', async (ev) => {
   try {
     await api('addStaff', { name });
     localStorage.setItem('v2_staff_' + S.store, name); // 追加した人を選んだ状態にする
+    S.staff = name;
     $('new-staff-name').value = '';
     $('add-staff-box').open = false;
     await loadStaff();
@@ -385,11 +607,60 @@ $('btn-staff-next').addEventListener('click', () => {
   if (!picked) { $('staff-error').textContent = '担当者を選んでください'; return; }
   S.staff = picked.value;
   localStorage.setItem('v2_staff_' + S.store, S.staff);
-  toStart();
+  toHome();
 });
+$('btn-home-change').addEventListener('click', toStaff);
+$('btn-menu-staff').addEventListener('click', toStaff);
 
-// ---- ステップ1 はじめ方 ----
-$('btn-start-back').addEventListener('click', toStaff);
+// ---- ホーム ----
+async function toHome() {
+  show('s-home');
+  $('home-store').textContent = S.store || '';
+  $('home-staff').textContent = (S.staff || '') + ' さん';
+  loadProducts();
+  await loadHomeStatus();
+}
+async function loadHomeStatus() {
+  const badge = $('home-st-badge'), text = $('home-st-text');
+  try {
+    const st = await api('getStocktakeStatus', { month: monthNow() });
+    const draft = loadDraft();
+    const draftN = draft ? Object.keys(draft.tally || {}).length : 0;
+    const dateStr = st.implementedDate ? new Date(st.implementedDate).toLocaleDateString('ja-JP') : '';
+    const cls = { '承認済み': 'ok', '承認待ち': 'wait', '差し戻し': 'ng' }[st.status] || '';
+    badge.className = 'badge ' + cls;
+    badge.textContent = st.status || '未実施';
+    let msg = {
+      '承認済み': dateStr + ' に送信し、本社が確認済みです。',
+      '承認待ち': dateStr + ' に送信済み。本社の確認待ちです。',
+      '差し戻し': '本社から差し戻されました。理由：' + (st.rejectedReason || '記載なし')
+    }[st.status] || '今月はまだ数えていません。';
+    if (draftN) msg += '（途中のデータ ' + draftN + '品目あり）';
+    text.textContent = msg;
+    $('btn-home-stocktake').textContent = draftN ? '棚卸の続きをする' : '棚卸をする';
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    badge.className = 'badge'; badge.textContent = '—';
+    text.textContent = '読み込めませんでした：' + e.message;
+  }
+}
+pullToRefresh('s-home', () => Promise.all([loadHomeStatus(), loadProducts(true)]));
+$('btn-home-stocktake').addEventListener('click', toStart);
+$('tile-incoming').addEventListener('click', toIncoming);
+$('tile-lookup').addEventListener('click', () => toLookup('s-home'));
+$('tile-disposal').addEventListener('click', toDisposal);
+$('tile-stock').addEventListener('click', toStock);
+
+async function loadProducts(force) {
+  if (!force && S.productsLoaded && S.productsStore === S.store) return;
+  try {
+    const d = await api('listProducts', {});
+    S.products = d.products; S.productsLoaded = true; S.productsStore = S.store;
+  } catch (e) { console.error(e); }
+}
+const findProduct = (code) => S.products.find((x) => String(x.code) === String(code)) || null;
+
+// ---- 棚卸 ステップ1 はじめ方 ----
 async function toStart() {
   renderSteps();
   show('s-start');
@@ -402,6 +673,7 @@ async function toStart() {
   try {
     status = await api('getStocktakeStatus', { month: monthNow() });
   } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
     body.innerHTML = '<div class="note note-red">' + esc(e.message) + '</div><button class="btn btn-ghost" id="retry-start">もう一度確認する</button>';
     $('retry-start').addEventListener('click', toStart);
     return;
@@ -449,15 +721,7 @@ async function toStart() {
   $('btn-start').addEventListener('click', () => { S.tally = {}; S.mode = 'overwrite'; toScan(); });
 }
 
-async function loadProducts() {
-  if (S.productsLoaded && S.productsStore === S.store) return;
-  try {
-    const d = await api('listProducts', {});
-    S.products = d.products; S.productsLoaded = true; S.productsStore = S.store;
-  } catch (e) { console.error(e); }
-}
-
-// ---- ステップ2 数える ----
+// ---- 棚卸 ステップ2 数える ----
 $('btn-scan-back').addEventListener('click', () => {
   if (Object.keys(S.tally).length && !confirm('はじめ方の画面に戻ります。数えた分は保存されているので、あとで続きから再開できます。')) return;
   toStart();
@@ -467,7 +731,7 @@ function toScan() {
   show('s-scan');
   updateStats();
   $('scan-card-wrap').innerHTML = '';
-  startCamera();
+  startCamera('cam-scan', onStocktakeScan, '「次の商品へ」を押すと読み取ります');
 }
 function updateStats() {
   const items = Object.values(S.tally);
@@ -483,52 +747,48 @@ function setCount(code, n) {
   updateStats();
 }
 
-async function onScan(code) {
+async function onStocktakeScan(code) {
   pauseCamera(true);
   if (navigator.vibrate) navigator.vibrate(60);
   S.lastCode = code;
-  let p = S.products.find((x) => String(x.code) === String(code)) || null;
+  let p = findProduct(code);
   if (!p) {
     try { p = await api('lookupProduct', { code }); } catch (e) { p = null; }
   }
-  if (!p) { renderUnknown(code); return; }
+  const wrap = $('scan-card-wrap');
+  const next = () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); };
+  if (!p) { renderUnknown(wrap, code, '登録して数える', (product) => showCounted(code, product), next); return; }
   showCounted(code, p);
 }
 
 /** 数えた商品の緑のカード(数の−/＋と「次の商品へ」)を出す。 */
 function showCounted(code, p) {
   const wrap = $('scan-card-wrap');
-  {
+  if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
+  S.tally[code].count += 1;
+  saveDraft();
+  updateStats();
+  wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' + OK_ICON +
+    '<div style="flex:1;min-width:0"><div class="scan-name">' + productLabel(p) + '</div><div class="scan-brand">' + esc(p.brand || '') + '</div></div></div>' +
+    '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">この商品の数</span>' +
+    '<div class="stepper"><button id="cnt-minus" aria-label="1つ減らす">−</button><span class="num" id="cnt-num">' + S.tally[code].count + '</span><button id="cnt-plus" aria-label="1つ増やす">＋</button></div></div>' +
+    '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
+  const refresh = () => { const t = S.tally[code]; $('cnt-num').textContent = t ? t.count : 0; };
+  $('cnt-minus').addEventListener('click', () => { if (S.tally[code]) setCount(code, S.tally[code].count - 1); refresh(); });
+  $('cnt-plus').addEventListener('click', () => {
     if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
-    S.tally[code].count += 1;
-    saveDraft();
-    updateStats();
-    wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' +
-      '<div style="width:34px;height:34px;border-radius:17px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>' +
-      '<div style="flex:1;min-width:0"><div class="scan-name">' + esc(p.name) + (p.colorNo ? '（' + esc(p.colorNo) + '）' : '') + '</div><div class="scan-brand">' + esc(p.brand || '') + '</div></div></div>' +
-      '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">この商品の数</span>' +
-      '<div class="stepper"><button id="cnt-minus" aria-label="1つ減らす">−</button><span class="num" id="cnt-num">' + S.tally[code].count + '</span><button id="cnt-plus" aria-label="1つ増やす">＋</button></div></div>' +
-      '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
-    const refresh = () => { const t = S.tally[code]; $('cnt-num').textContent = t ? t.count : 0; };
-    $('cnt-minus').addEventListener('click', () => { if (S.tally[code]) setCount(code, S.tally[code].count - 1); refresh(); });
-    $('cnt-plus').addEventListener('click', () => {
-      if (!S.tally[code]) S.tally[code] = { code: String(code), name: p.name, brand: p.brand || '(ブランドなし)', count: 0 };
-      setCount(code, S.tally[code].count + 1); refresh();
-    });
-  }
-  $('btn-next').addEventListener('click', () => {
-    $('scan-card-wrap').innerHTML = '';
-    resumeCameraIgnoring(code);
+    setCount(code, S.tally[code].count + 1); refresh();
   });
+  $('btn-next').addEventListener('click', () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); });
 }
 
 /**
- * 商品リストにないコードを読んだとき、その場で登録して数えられるようにする
- * (入荷登録と同じく、リストにある「QR-」の商品にバーコードを付けるか、新しい商品として登録)。
+ * 商品リストにないコードを読んだとき、その場で登録できるようにする(棚卸・入荷登録で共通)。
+ * リストにある「QR-」の商品にバーコードを付けるか、新しい商品として登録する。
  * 隣の商品のバーコードを拾っていないか確かめられるよう、読み取った数字を大きく見せる。
+ * onRegistered(product) は登録できたあと、onSkip は「登録しないで次へ」で呼ぶ。
  */
-function renderUnknown(code) {
-  const wrap = $('scan-card-wrap');
+function renderUnknown(wrap, code, saveLabel, onRegistered, onSkip) {
   const brands = Array.from(new Set(S.products.map((x) => x.brand).filter(Boolean)))
     .sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
   wrap.innerHTML = '<div class="scan-card ng">' +
@@ -548,8 +808,8 @@ function renderUnknown(code) {
     '<label class="field">商品名<input class="input" id="unk-name"></label>' +
     '<label class="field">カラー番号（あれば）<input class="input" id="unk-color"></label></div>' +
     '<div class="error" id="unk-error"></div>' +
-    '<button class="btn btn-primary" id="unk-save">登録して数える</button>' +
-    '<button class="btn btn-ghost" id="btn-next">登録しないで次へ</button></div>';
+    '<button class="btn btn-primary" id="unk-save">' + esc(saveLabel) + '</button>' +
+    '<button class="btn btn-ghost" id="unk-skip">登録しないで次へ</button></div>';
 
   const mode = () => document.querySelector('input[name="unk"]:checked').value;
   const fillProducts = () => {
@@ -559,10 +819,10 @@ function renderUnknown(code) {
     const cands = S.products.filter((x) => x.brand === brand && String(x.code).indexOf('QR-') === 0)
       .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ja'));
     sel.innerHTML = cands.length
-      ? '<option value="">選んでください</option>' + cands.map((x) => '<option value="' + esc(x.code) + '">' + esc(x.name) + (x.colorNo ? '（' + esc(x.colorNo) + '）' : '') + '</option>').join('')
+      ? '<option value="">選んでください</option>' + cands.map((x) => '<option value="' + esc(x.code) + '">' + productLabel(x) + '</option>').join('')
       : '<option value="">このブランドに、バーコードのない商品はありません</option>';
   };
-  document.querySelectorAll('input[name="unk"]').forEach((r) => r.addEventListener('change', () => {
+  wrap.querySelectorAll('input[name="unk"]').forEach((r) => r.addEventListener('change', () => {
     const isLink = mode() === 'link';
     $('unk-link-area').style.display = isLink ? 'block' : 'none';
     $('unk-new-area').style.display = isLink ? 'none' : 'flex';
@@ -578,7 +838,7 @@ function renderUnknown(code) {
       if (mode() === 'link') {
         const qrCode = $('unk-product').value;
         if (!qrCode) { $('unk-error').textContent = '商品を選んでください'; return; }
-        const target = S.products.find((x) => String(x.code) === qrCode);
+        const target = findProduct(qrCode);
         if (!confirm('「' + (target ? target.name : '') + '」に、バーコード ' + code + ' を付けます。よろしいですか？')) return;
         btn.disabled = true; btn.textContent = '登録しています…';
         await api('linkBarcode', { code: qrCode, newCode: code });
@@ -596,61 +856,279 @@ function renderUnknown(code) {
       }
     } catch (e) {
       $('unk-error').textContent = e.message;
-      btn.disabled = false; btn.textContent = '登録して数える';
+      btn.disabled = false; btn.textContent = saveLabel;
       return;
     }
-    showCounted(String(code), product);
+    await onRegistered(product);
   });
-  $('btn-next').addEventListener('click', () => {
-    $('scan-card-wrap').innerHTML = '';
-    resumeCameraIgnoring(code);
-  });
+  $('unk-skip').addEventListener('click', onSkip);
 }
 
-$('btn-manual').addEventListener('click', () => {
-  const v = $('manual-code').value.trim();
-  if (!v) return;
-  $('manual-code').value = '';
-  onScan(v);
-});
+document.querySelectorAll('[data-manual]').forEach((b) => b.addEventListener('click', () => {
+  const input = $(b.dataset.manual);
+  const v = input.value.trim();
+  if (!v || !CAM.handler) return;
+  input.value = '';
+  CAM.handler(v);
+}));
 $('btn-to-review').addEventListener('click', toReview);
 
-// ---- カメラ ----
+// ---- 入荷登録 ----
+// 読み取った商品はその場で1個入荷として記録する(今の画面と同じ)。記録が終わるまでは
+// 次の読み取りを受け付けない(登録中に次を読むと、別の商品にバーコードが付く事故が宝来店で起きたため)。
+function toIncoming() {
+  show('s-incoming');
+  loadProducts();
+  $('incoming-card-wrap').innerHTML = '';
+  renderIncomingList();
+  startCamera('cam-incoming', onIncomingScan, '「次の商品へ」を押すと読み取ります');
+}
+function renderIncomingList() {
+  const items = Object.entries(S.incoming);
+  const total = items.reduce((n, [, t]) => n + t.count, 0);
+  $('incoming-total').textContent = total + '個';
+  $('incoming-list').innerHTML = items.length
+    ? items.map(([, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div></div><div class="row-count">' + t.count + '個</div></div>').reverse().join('')
+    : '<div class="empty">まだありません</div>';
+}
+async function recordIncomingOne(product) {
+  await api('recordIncoming', { code: product.code, quantity: 1, staffName: S.staff });
+  const key = String(product.code);
+  if (!S.incoming[key]) S.incoming[key] = { name: (product.name || '') + (product.colorNo ? '（' + product.colorNo + '）' : ''), brand: product.brand, count: 0 };
+  S.incoming[key].count += 1;
+  S.stock = null; // 在庫の一覧は次に開いたときに読み直す
+  renderIncomingList();
+}
+async function onIncomingScan(code) {
+  if (S.busy) return;
+  S.busy = true;
+  pauseCamera(true);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const wrap = $('incoming-card-wrap');
+  const next = () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); };
+  try {
+    let p = findProduct(code);
+    if (!p) { try { p = await api('lookupProduct', { code }); } catch (e) { p = null; } }
+    if (!p) {
+      renderUnknown(wrap, code, '登録して入荷1個', async (product) => {
+        try { await recordIncomingOne(product); showIncomingDone(product, next); } catch (e) { showIncomingError(e, next); }
+      }, next);
+      return;
+    }
+    wrap.innerHTML = '<div class="scan-card info"><div class="scan-name">' + productLabel(p) + '</div><div class="hint">記録しています…</div></div>';
+    await recordIncomingOne(p);
+    showIncomingDone(p, next);
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    showIncomingError(e, next);
+  } finally {
+    S.busy = false;
+  }
+}
+function showIncomingDone(p, next) {
+  const wrap = $('incoming-card-wrap');
+  wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' + OK_ICON +
+    '<div style="flex:1;min-width:0"><div class="scan-name">' + productLabel(p) + '</div><div class="scan-brand">' + esc(p.brand || '') + '</div>' +
+    '<div style="font-size:14px; font-weight:700; color:#065F46; margin-top:4px">入荷 1個を記録しました（今回 ' + S.incoming[String(p.code)].count + '個）</div></div></div>' +
+    '<button class="btn btn-ghost btn-small" id="btn-inc-more">同じ商品をもう1個</button>' +
+    '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
+  $('btn-next').addEventListener('click', next);
+  $('btn-inc-more').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true; btn.textContent = '記録しています…';
+    try { await recordIncomingOne(p); showIncomingDone(p, next); } catch (e) { showIncomingError(e, next); }
+  });
+}
+function showIncomingError(e, next) {
+  $('incoming-card-wrap').innerHTML = '<div class="scan-card warn"><div class="scan-name">記録できませんでした</div><div class="hint">' + esc(e.message) + '</div><button class="btn btn-ghost" id="btn-next">もう一度読む</button></div>';
+  $('btn-next').addEventListener('click', next);
+}
+
+// ---- 破棄登録 ----
+function toDisposal() {
+  show('s-disposal');
+  $('disposal-card-wrap').innerHTML = '';
+  startCamera('cam-disposal', onDisposalScan, '「次の商品へ」を押すと読み取ります');
+}
+async function onDisposalScan(code) {
+  if (S.busy) return;
+  S.busy = true;
+  pauseCamera(true);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const wrap = $('disposal-card-wrap');
+  const next = () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); };
+  wrap.innerHTML = '<div class="scan-card info"><div class="hint">調べています…</div></div>';
+  try {
+    const r = await api('lookupCurrentStock', { code });
+    if (!r.found) {
+      wrap.innerHTML = '<div class="scan-card ng"><div class="scan-name">商品リストにないコードです</div><div style="font-size:20px; font-weight:700">' + esc(code) + '</div>' +
+        '<div class="hint">リストにない商品は破棄登録できません。本社に連絡してください。</div><button class="btn btn-ghost" id="btn-next">次の商品へ</button></div>';
+      $('btn-next').addEventListener('click', next);
+      return;
+    }
+    let qty = 1;
+    wrap.innerHTML = '<div class="scan-card info"><div><div class="scan-name">' + productLabel(r) + '</div><div class="scan-brand">' + esc(r.brand || '') + '</div></div>' +
+      '<div class="hint">今の在庫：<b>' + esc(r.currentStock) + '個</b></div>' +
+      '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">捨てる数</span>' +
+      '<div class="stepper"><button id="dis-minus" aria-label="1つ減らす">−</button><span class="num" id="dis-num">1</span><button id="dis-plus" aria-label="1つ増やす">＋</button></div></div>' +
+      '<div class="error" id="dis-error"></div>' +
+      '<button class="btn btn-danger" id="btn-dis-save">破棄を登録する</button>' +
+      '<button class="btn btn-ghost" id="btn-next">登録しないで次へ</button></div>';
+    $('dis-minus').addEventListener('click', () => { qty = Math.max(1, qty - 1); $('dis-num').textContent = qty; });
+    $('dis-plus').addEventListener('click', () => { qty += 1; $('dis-num').textContent = qty; });
+    $('btn-next').addEventListener('click', next);
+    $('btn-dis-save').addEventListener('click', async (ev) => {
+      if (!confirm('「' + r.name + '」を ' + qty + '個 破棄として登録します。よろしいですか？')) return;
+      const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '登録しています…';
+      try {
+        await api('recordDisposal', { code: r.code, quantity: qty, staffName: S.staff });
+        S.stock = null;
+        wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' + OK_ICON +
+          '<div style="flex:1;min-width:0"><div class="scan-name">' + productLabel(r) + '</div>' +
+          '<div style="font-size:14px; font-weight:700; color:#065F46; margin-top:4px">破棄 ' + qty + '個を登録しました（在庫 ' + (r.currentStock - qty) + '個）</div></div></div>' +
+          '<button class="btn btn-primary" id="btn-next2">次の商品へ</button></div>';
+        $('btn-next2').addEventListener('click', next);
+      } catch (e) {
+        $('dis-error').textContent = e.message;
+        btn.disabled = false; btn.textContent = '破棄を登録する';
+      }
+    });
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    wrap.innerHTML = '<div class="scan-card warn"><div class="scan-name">調べられませんでした</div><div class="hint">' + esc(e.message) + '</div><button class="btn btn-ghost" id="btn-next">もう一度読む</button></div>';
+    $('btn-next').addEventListener('click', next);
+  } finally {
+    S.busy = false;
+  }
+}
+
+// ---- 在庫を調べる(読み取り) ----
+let lookupFrom = 's-home';
+function toLookup(from) {
+  lookupFrom = from || 's-home';
+  show('s-lookup');
+  $('lookup-card-wrap').innerHTML = '';
+  startCamera('cam-lookup', onLookupScan, '「ほかの商品を調べる」を押すと読み取ります');
+}
+$('btn-lookup-back').addEventListener('click', () => { if (lookupFrom === 's-stock') toStock(); else toHome(); });
+async function onLookupScan(code) {
+  if (S.busy) return;
+  S.busy = true;
+  pauseCamera(true);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const wrap = $('lookup-card-wrap');
+  const next = () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); };
+  wrap.innerHTML = '<div class="scan-card info"><div class="hint">調べています…</div></div>';
+  try {
+    const r = await api('lookupCurrentStock', { code });
+    wrap.innerHTML = r.found
+      ? '<div class="scan-card ' + (r.currentStock > 0 ? 'ok' : 'warn') + '"><div><div class="scan-name">' + productLabel(r) + '</div><div class="scan-brand">' + esc(r.brand || '') + '</div></div>' +
+        '<div><div class="hint">' + esc(S.store) + ' の在庫</div><div class="big-num">' + esc(r.currentStock) + '<small>個</small></div>' +
+        (r.currentStock > 0 ? '' : '<div style="color:var(--red); font-weight:700; font-size:14px; margin-top:4px">在庫がありません</div>') + '</div>' +
+        '<button class="btn btn-primary" id="btn-next">ほかの商品を調べる</button></div>'
+      : '<div class="scan-card ng"><div class="scan-name">商品リストにないコードです</div><div style="font-size:20px; font-weight:700">' + esc(code) + '</div>' +
+        '<div class="hint">まだ登録されていない商品です。届いた商品なら「入荷登録」で登録できます。</div><button class="btn btn-ghost" id="btn-next">ほかの商品を調べる</button></div>';
+    $('btn-next').addEventListener('click', next);
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    wrap.innerHTML = '<div class="scan-card warn"><div class="scan-name">調べられませんでした</div><div class="hint">' + esc(e.message) + '</div><button class="btn btn-ghost" id="btn-next">もう一度読む</button></div>';
+    $('btn-next').addEventListener('click', next);
+  } finally {
+    S.busy = false;
+  }
+}
+
+// ---- 在庫の一覧 ----
+let stockOnlyZero = false;
+async function toStock() {
+  show('s-stock');
+  $('stock-store').textContent = S.store || '';
+  if (S.stock && S.stockStore === S.store) { renderStock(); return; }
+  await loadStock();
+}
+async function loadStock() {
+  $('stock-list').innerHTML = '<div class="empty">読み込み中…（少し時間がかかります）</div>';
+  $('stock-count').textContent = '';
+  try {
+    const d = await api('getInventorySummary', {});
+    S.stock = d.items; S.stockStore = S.store;
+    const brandSel = $('stock-brand'), cur = brandSel.value;
+    const brands = Array.from(new Set(S.stock.map((i) => i.brand).filter(Boolean))).sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
+    brandSel.innerHTML = '<option value="">すべてのブランド</option>' + brands.map((b) => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+    brandSel.value = brands.includes(cur) ? cur : '';
+    renderStock();
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    $('stock-list').innerHTML = '<div class="empty">読み込めませんでした：' + esc(e.message) + '</div>';
+  }
+}
+// 全角・半角や大文字・小文字の違いで見つからないことがないようにそろえる
+const norm = (s) => String(s == null ? '' : s).normalize('NFKC').toLowerCase();
+function renderStock() {
+  if (!S.stock) return;
+  const brand = $('stock-brand').value;
+  const words = norm($('stock-search').value).split(/\s+/).filter(Boolean);
+  const items = S.stock.filter((i) => {
+    if (brand && i.brand !== brand) return false;
+    if (stockOnlyZero && i.currentStock > 0) return false;
+    if (!words.length) return true;
+    const hay = norm([i.code, i.brand, i.name, i.colorNo].join(' '));
+    return words.every((w) => hay.includes(w));
+  }).sort((a, b) => String(a.brand || '').toLowerCase().localeCompare(String(b.brand || '').toLowerCase()) || String(a.name).localeCompare(String(b.name), 'ja'));
+  $('stock-count').textContent = items.length + '品目' + (items.length > 300 ? '（多いので最初の300品目だけ表示しています。ブランドや検索でしぼってください）' : '');
+  const shown = items.slice(0, 300).map((i) => Object.assign({}, i, { brand: i.brand || '(ブランドなし)' }));
+  $('stock-list').innerHTML = shown.length ? groupHtml(shown, (i) =>
+    '<div class="row"><div class="row-name">' + productLabel(i) + '</div>' +
+    (i.currentStock > 0 ? '<div class="row-count">' + esc(i.currentStock) + '個</div>' : '<div class="row-count zero">在庫なし</div>') + '</div>')
+    : '<div class="empty">見つかりませんでした</div>';
+}
+$('stock-search').addEventListener('input', renderStock);
+$('stock-brand').addEventListener('change', renderStock);
+$('stock-all').addEventListener('click', () => { stockOnlyZero = false; $('stock-all').classList.add('on'); $('stock-zero').classList.remove('on'); renderStock(); });
+$('stock-zero').addEventListener('click', () => { stockOnlyZero = true; $('stock-zero').classList.add('on'); $('stock-all').classList.remove('on'); renderStock(); });
+$('btn-stock-scan').addEventListener('click', () => toLookup('s-stock'));
+pullToRefresh('s-stock', loadStock);
+
+// ---- カメラ(棚卸・入荷・破棄・在庫を調べる で共通) ----
 // Androidはスマホに入っているバーコード読み取り機能(BarcodeDetector)を直接使う。
 // 向きに強く、写っているコードの位置もわかるので、いちばん大きく写っているもの
 // (=手に持っている商品)を選ぶ。使えない機種(iPhoneなど)だけhtml5-qrcodeに切り替える。
-const CAM = { stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
+const CAM = { box: null, handler: null, stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
 const WANTED = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
 
-async function startCamera() {
+async function startCamera(boxId, handler, pausedText) {
   stopCamera();
-  CAM.running = true; CAM.paused = false; CAM.ignore = null;
-  $('camera').classList.remove('paused');
-  $('cam-msg').textContent = 'カメラを起動しています…';
+  const box = $(boxId);
+  box.innerHTML = '<video playsinline muted></video><div class="fb-reader" id="fb-' + boxId + '" style="display:none"></div>' +
+    '<div class="cam-frame"></div><div class="cam-line"></div><div class="cam-msg">カメラを起動しています…</div><div class="cam-paused">' + esc(pausedText) + '</div>';
+  box.classList.remove('paused');
+  Object.assign(CAM, { box, handler, running: true, paused: false, ignore: null });
+  const msg = box.querySelector('.cam-msg');
   try {
     if ('BarcodeDetector' in window) {
       const supported = await window.BarcodeDetector.getSupportedFormats();
       const formats = WANTED.filter((f) => supported.includes(f));
       CAM.detector = new window.BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
-      CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      const video = $('video');
-      video.style.display = 'block'; $('fallback-reader').style.display = 'none';
-      video.srcObject = CAM.stream;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      if (CAM.box !== box || !CAM.running) { stream.getTracks().forEach((t) => t.stop()); return; } // 起動中に別の画面へ移った
+      CAM.stream = stream;
+      const video = box.querySelector('video');
+      video.srcObject = stream;
       await video.play();
-      $('cam-msg').textContent = 'バーコード・QRを枠に入れてください';
+      msg.textContent = 'バーコード・QRを枠に入れてください';
       tick();
     } else {
-      await startFallback();
+      await startFallback(box);
     }
   } catch (e) {
     console.error(e);
-    $('cam-msg').textContent = 'カメラを起動できませんでした。下の「コードを手で入れる」も使えます';
+    msg.textContent = 'カメラを起動できませんでした。下の「コードを手で入れる」も使えます';
   }
 }
 async function tick() {
   if (!CAM.running) return;
-  const video = $('video');
-  if (!CAM.paused && CAM.detector && video.readyState >= 2) {
+  const video = CAM.box.querySelector('video');
+  if (!CAM.paused && CAM.detector && video && video.readyState >= 2) {
     try {
       const found = await CAM.detector.detect(video);
       handleFound(found.map((b) => ({ value: b.rawValue, area: b.boundingBox ? b.boundingBox.width * b.boundingBox.height : 0 })));
@@ -659,22 +1137,22 @@ async function tick() {
   CAM.timer = setTimeout(tick, 120);
 }
 function handleFound(list) {
-  if (CAM.paused || !CAM.running) return;
+  if (CAM.paused || !CAM.running || !CAM.handler) return;
   const now = Date.now();
   if (CAM.ignore) {
-    // 直前に数えた商品がまだ写っている間は数えない(写らなくなって0.7秒たったら解除)。
-    // 別の商品のコードが写ったら、その場で数える。
+    // 直前に読んだ商品がまだ写っている間は読まない(写らなくなって0.7秒たったら解除)。
+    // 別の商品のコードが写ったら、その場で読む。
     if (list.some((x) => x.value === CAM.ignore)) CAM.ignoreSeen = now;
     list = list.filter((x) => x.value !== CAM.ignore);
     if (!list.length) { if (now - CAM.ignoreSeen > 700) CAM.ignore = null; return; }
   }
   if (!list.length) return;
   list.sort((a, b) => b.area - a.area);
-  onScan(list[0].value);
+  CAM.handler(list[0].value);
 }
 function pauseCamera(p) {
   CAM.paused = p;
-  $('camera').classList.toggle('paused', p);
+  if (CAM.box) CAM.box.classList.toggle('paused', p);
 }
 function resumeCameraIgnoring(code) {
   CAM.ignore = code; CAM.ignoreSeen = Date.now();
@@ -689,26 +1167,26 @@ function stopCamera() {
 function loadScript(src) {
   return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
 }
-async function startFallback() {
+async function startFallback(box) {
   if (!window.Html5Qrcode) await loadScript('https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js');
-  $('video').style.display = 'none';
-  const el = $('fallback-reader'); el.style.display = 'block'; el.innerHTML = '';
-  CAM.fallback = new window.Html5Qrcode('fallback-reader', { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  if (CAM.box !== box || !CAM.running) return;
+  box.querySelector('video').style.display = 'none';
+  const el = box.querySelector('.fb-reader'); el.style.display = 'block';
+  CAM.fallback = new window.Html5Qrcode(el.id, { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
   await CAM.fallback.start({ facingMode: 'environment' }, { fps: 10, qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.floor(h * 0.6) }) },
     (text) => handleFound([{ value: text, area: 1 }]), () => {
       if (CAM.ignore && Date.now() - CAM.ignoreSeen > 700) CAM.ignore = null;
     });
-  $('cam-msg').textContent = 'バーコード・QRを枠に入れてください';
+  box.querySelector('.cam-msg').textContent = 'バーコード・QRを枠に入れてください';
 }
 
-// ---- ステップ3 確認・送信 ----
+// ---- 棚卸 ステップ3 確認・送信 ----
 let reviewTab = 'scanned';
 $('btn-review-back').addEventListener('click', toScan);
 $('tab-scanned').addEventListener('click', () => { reviewTab = 'scanned'; renderReview(); });
 $('tab-unscanned').addEventListener('click', () => { reviewTab = 'unscanned'; renderReview(); });
 
 async function toReview() {
-  stopCamera();
   renderSteps();
   show('s-review');
   $('review-error').textContent = '';
@@ -769,8 +1247,7 @@ $('btn-send').addEventListener('click', async (ev) => {
       (zero ? '<br>数えていない ' + esc(zeros.length) + '品目は0にしました' : '') +
       (d.unknownCodes && d.unknownCodes.length ? '<br>登録されていないコード：' + esc(d.unknownCodes.join('、')) : '') +
       '<br>本社の確認をお待ちください';
-    S.tally = {}; S.mode = 'add';
-    renderSteps();
+    S.tally = {}; S.mode = 'add'; S.stock = null;
     show('s-done');
   } catch (e) {
     $('review-error').textContent = '送信できませんでした：' + e.message + '（数えた分は保存されています。もう一度押してください）';
@@ -778,7 +1255,6 @@ $('btn-send').addEventListener('click', async (ev) => {
     S.sending = false; btn.disabled = false; btn.textContent = '本社へ送信する';
   }
 });
-$('btn-done-home').addEventListener('click', toStaff);
 
 // ---- はじめ ----
 (function init() {
