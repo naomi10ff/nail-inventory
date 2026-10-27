@@ -2446,8 +2446,8 @@ const AONE_ROWS = 19;
 const AONE_PER_PAGE = AONE_COLS * AONE_ROWS;
 const AONE_PREVIEW_SCALE = 0.5;
 // エーワン公式のテストプリント用紙(フォーマット番号F95A4-1)で実測した値。
-// 上16.5mm・左13.5mm、ラベルの間は上下左右とも2mmの隙間(.aone-sheetのgapで指定)。
-const AONE_DEFAULT_MARGIN_TOP = 16.5;
+// 上16.5mm(実際の用紙では2mm下にずれたので14.5mmにした)・左13.5mm、ラベルの間は上下左右とも2mmの隙間(.aone-sheetのgapで指定)。
+const AONE_DEFAULT_MARGIN_TOP = 14.5; // 10/27 実際のラベル用紙で2mm下にずれたため16.5から変更
 const AONE_DEFAULT_MARGIN_LEFT = 13.5;
 
 function getAoneMargins() {
