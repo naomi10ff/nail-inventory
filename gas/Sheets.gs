@@ -1758,3 +1758,37 @@ function adjustKizuUncounted1022() {
   rows.forEach(function (r) { Logger.log('  ' + r[5] + ' ' + r[4] + ' → 在庫 ' + r[7]); });
   Logger.log('木津店の在庫を' + rows.length + '品目、実際の本数にしました。');
 }
+
+/**
+ * 生駒店 10/28の棚卸でQRがなく、写真で数えた9品目を登録し、在庫を1本ずつにする(一回限り)。
+ * ラベル(デスクトップ「生駒店_QRラベル_写真分_10月28日」)と同じ番号で登録する。
+ * 在庫は種別「調整」(数をそのまま置き換える)なので、何度実行しても本数はずれない。
+ */
+function setupIkomaPhotoItems1028() {
+  var store = '生駒店';
+  var items = [
+    { brand: 'essent.', name: 'AM01', category: 'カラー', code: 'QR-470A8B17' },
+    { brand: 'essent.', name: 'AM02', category: 'カラー', code: 'QR-8DF81416' },
+    { brand: 'essent.', name: 'AM03', category: 'カラー', code: 'QR-89F44615' },
+    { brand: 'essent.', name: 'AM04', category: 'カラー', code: 'QR-CE37BAD0' },
+    { brand: 'essent.', name: 'AM05', category: 'カラー', code: 'QR-34DD9207' },
+    { brand: 'essent.', name: 'AM06', category: 'カラー', code: 'QR-DED09557' },
+    { brand: 'essent.', name: 'AM07', category: 'カラー', code: 'QR-1EDBD205' },
+    { brand: '云钻', name: 'キャットアイジェル 02', category: 'カラー', memo: '中国のジェル(云钻猫眼胶02)', code: 'QR-F4B1A046' },
+    { brand: 'CLODI', name: 'DG-03', category: 'カラー', memo: '韓国ジェル', code: 'QR-FC68C4D7' }
+  ];
+  registerFixedQrItems_(store, items);
+  var products = getProductMap_(store);
+  var rows = [], ts = new Date();
+  items.forEach(function (it) {
+    var p = products[it.code];
+    if (!p) { Logger.log('見つかりません(同じ名前ですでに登録済み?): ' + it.brand + ' ' + it.name); return; }
+    rows.push([ts, store, '本社', it.code, p.name, p.brand, '調整', 1, '10/28 棚卸でQRなし・写真で数えた分']);
+  });
+  if (rows.length) {
+    var sheet = getSheet_(SHEET_LOG);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    revokeApprovalIfStale_(store, ts);
+  }
+  Logger.log('生駒店の在庫を' + rows.length + '品目、1本ずつにしました。');
+}
