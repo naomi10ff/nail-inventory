@@ -85,6 +85,8 @@
   .cam-paused { position: absolute; inset: 0; background: rgba(17,24,39,.55); display: none; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700; text-align: center; padding: 0 20px; }
   .camera.paused .cam-paused { display: flex; }
   .camera.paused .cam-line { display: none; }
+  .cam-ctrl { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 3; }
+  .cam-ctrl button { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.5); background: rgba(17,24,39,.6); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
 
   .scan-card { border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; animation: popIn .22s ease; }
   .scan-card.ok { background: var(--green-bg); border: 1px solid #A7F3D0; }
@@ -1093,37 +1095,115 @@ pullToRefresh('s-stock', loadStock);
 // Androidはスマホに入っているバーコード読み取り機能(BarcodeDetector)を直接使う。
 // 向きに強く、写っているコードの位置もわかるので、いちばん大きく写っているもの
 // (=手に持っている商品)を選ぶ。使えない機種(iPhoneなど)だけhtml5-qrcodeに切り替える。
-const CAM = { box: null, handler: null, stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
+// 右上の「カメラ切替」「ズーム」は、iPhoneのPro機種で近くにピントが合わず小さいQRが
+// 読めなかったため(10/28 生駒店)。選んだカメラ・ズームはスマホに覚えておく。
+const CAM = { box: null, boxId: null, handler: null, pausedText: '', stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
 const WANTED = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* 無視 */ } };
+
+/** カメラの指定。切り替えたカメラがあればそれを、なければ背面カメラを高い画質で使う。 */
+function videoConstraints() {
+  const id = lsGet('v2_cam_device');
+  const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+  return Object.assign(id ? { deviceId: { exact: id } } : { facingMode: { ideal: 'environment' } }, size);
+}
 
 async function startCamera(boxId, handler, pausedText) {
   stopCamera();
   const box = $(boxId);
   box.innerHTML = '<video playsinline muted></video><div class="fb-reader" id="fb-' + boxId + '" style="display:none"></div>' +
-    '<div class="cam-frame"></div><div class="cam-line"></div><div class="cam-msg">カメラを起動しています…</div><div class="cam-paused">' + esc(pausedText) + '</div>';
+    '<div class="cam-frame"></div><div class="cam-line"></div><div class="cam-msg">カメラを起動しています…</div><div class="cam-paused">' + esc(pausedText) + '</div>' +
+    '<div class="cam-ctrl"><button type="button" class="cam-zoom" style="display:none">ズーム 1倍</button><button type="button" class="cam-switch" style="display:none">カメラ切替</button></div>';
   box.classList.remove('paused');
-  Object.assign(CAM, { box, handler, running: true, paused: false, ignore: null });
+  Object.assign(CAM, { box, boxId, handler, pausedText, running: true, paused: false, ignore: null });
   const msg = box.querySelector('.cam-msg');
   try {
-    if ('BarcodeDetector' in window) {
-      const supported = await window.BarcodeDetector.getSupportedFormats();
-      const formats = WANTED.filter((f) => supported.includes(f));
-      CAM.detector = new window.BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      if (CAM.box !== box || !CAM.running) { stream.getTracks().forEach((t) => t.stop()); return; } // 起動中に別の画面へ移った
-      CAM.stream = stream;
-      const video = box.querySelector('video');
-      video.srcObject = stream;
-      await video.play();
-      msg.textContent = 'バーコード・QRを枠に入れてください';
-      tick();
-    } else {
-      await startFallback(box);
+    try {
+      await openCamera(box);
+    } catch (e) {
+      // 覚えていたカメラが使えない(機種変更など)ときは、いつもの背面カメラでやり直す
+      if (!lsGet('v2_cam_device')) throw e;
+      lsSet('v2_cam_device', null);
+      stopCamera(); CAM.running = true;
+      await openCamera(box);
     }
+    if (CAM.box !== box || !CAM.running) return;
+    msg.textContent = 'バーコード・QRを枠に入れてください';
+    await setupCameraControls(box);
   } catch (e) {
     console.error(e);
     msg.textContent = 'カメラを起動できませんでした。下の「コードを手で入れる」も使えます';
   }
+}
+async function openCamera(box) {
+  if ('BarcodeDetector' in window) {
+    const supported = await window.BarcodeDetector.getSupportedFormats();
+    const formats = WANTED.filter((f) => supported.includes(f));
+    CAM.detector = new window.BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
+    if (CAM.box !== box || !CAM.running) { stream.getTracks().forEach((t) => t.stop()); return; } // 起動中に別の画面へ移った
+    CAM.stream = stream;
+    const video = box.querySelector('video');
+    video.style.display = 'block';
+    video.srcObject = stream;
+    await video.play();
+    tick();
+  } else {
+    await startFallback(box);
+  }
+}
+/** いま映しているカメラの映像(トラック)。ズームの確認・変更に使う。 */
+function currentTrack(box) {
+  const v = Array.from(box.querySelectorAll('video')).find((x) => x.srcObject);
+  return v ? v.srcObject.getVideoTracks()[0] : null;
+}
+async function setupCameraControls(box) {
+  const track = currentTrack(box);
+  // ズーム(使える機種だけ)。少し離してピントを合わせ、ズームで大きく映すと小さいQRも読める
+  const zoomBtn = box.querySelector('.cam-zoom');
+  const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+  if (caps.zoom && caps.zoom.max > 1) {
+    const min = caps.zoom.min || 1;
+    const levels = [1, 2, 3].filter((z) => z >= min && z <= caps.zoom.max);
+    let z = Number(lsGet('v2_cam_zoom')) || 1;
+    if (!levels.includes(z)) z = levels[0];
+    const apply = async () => {
+      try { await track.applyConstraints({ advanced: [{ zoom: z }] }); } catch (e) { console.error(e); }
+      zoomBtn.textContent = 'ズーム ' + z + '倍';
+    };
+    if (levels.length > 1) {
+      await apply();
+      zoomBtn.style.display = 'block';
+      zoomBtn.addEventListener('click', async () => {
+        z = levels[(levels.indexOf(z) + 1) % levels.length];
+        lsSet('v2_cam_zoom', String(z));
+        await apply();
+      });
+    }
+  }
+  // カメラ切替(カメラが2つ以上あるときだけ。背面カメラがいくつかあればその中で切り替える)
+  const switchBtn = box.querySelector('.cam-switch');
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.deviceId);
+    const back = cams.filter((d) => !/front|前面|user/i.test(d.label));
+    const list = back.length >= 2 ? back : cams;
+    if (list.length < 2) return;
+    switchBtn.style.display = 'block';
+    switchBtn.addEventListener('click', () => {
+      const nowId = track && track.getSettings ? track.getSettings().deviceId : lsGet('v2_cam_device');
+      const i = list.findIndex((d) => d.deviceId === nowId);
+      const nextIndex = (i + 1) % list.length;
+      lsSet('v2_cam_device', list[nextIndex].deviceId);
+      lsSet('v2_cam_zoom', null);
+      const paused = CAM.paused;
+      startCamera(CAM.boxId, CAM.handler, CAM.pausedText).then(() => {
+        if (paused) pauseCamera(true);
+        const msg = CAM.box && CAM.box.querySelector('.cam-msg');
+        if (msg) msg.textContent = 'カメラを切り替えました（' + (nextIndex + 1) + '/' + list.length + '）';
+      });
+    });
+  } catch (e) { console.error(e); }
 }
 async function tick() {
   if (!CAM.running) return;
@@ -1172,18 +1252,22 @@ async function startFallback(box) {
   if (CAM.box !== box || !CAM.running) return;
   box.querySelector('video').style.display = 'none';
   const el = box.querySelector('.fb-reader'); el.style.display = 'block';
-  CAM.fallback = new window.Html5Qrcode(el.id, { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+  // 読むコードの種類をしぼる(何も指定しないと全種類を毎回試すので遅い。今の画面 ../app.js と同じ種類)
+  const F = window.Html5QrcodeSupportedFormats;
+  const formats = F ? [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39] : undefined;
+  CAM.fallback = new window.Html5Qrcode(el.id, { verbose: false, formatsToSupport: formats, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
   // iPhoneは何も指定しないと低い画質で映すため、小さいQR(切り取ったラベル)がつぶれて読めない。
   // 今の画面(../app.js)と同じく高い画質を求める(10/28 生駒店の棚卸で読めなかった)。
-  await CAM.fallback.start({ facingMode: 'environment' }, {
+  const vc = videoConstraints();
+  await CAM.fallback.start(vc.deviceId ? { deviceId: vc.deviceId } : { facingMode: 'environment' }, {
     fps: 10,
-    qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.floor(h * 0.6) }),
-    videoConstraints: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    // 横長のバーコードも入るよう横長の枠にする(今の画面と同じ考え方)
+    qrbox: (w, h) => ({ width: Math.max(200, Math.floor(w * 0.85)), height: Math.max(120, Math.floor(h * 0.6)) }),
+    videoConstraints: vc
   },
     (text) => handleFound([{ value: text, area: 1 }]), () => {
       if (CAM.ignore && Date.now() - CAM.ignoreSeen > 700) CAM.ignore = null;
     });
-  box.querySelector('.cam-msg').textContent = 'バーコード・QRを枠に入れてください';
 }
 
 // ---- 棚卸 ステップ3 確認・送信 ----
