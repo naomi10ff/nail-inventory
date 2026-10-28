@@ -1173,7 +1173,13 @@ async function startFallback(box) {
   box.querySelector('video').style.display = 'none';
   const el = box.querySelector('.fb-reader'); el.style.display = 'block';
   CAM.fallback = new window.Html5Qrcode(el.id, { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-  await CAM.fallback.start({ facingMode: 'environment' }, { fps: 10, qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.floor(h * 0.6) }) },
+  // iPhoneは何も指定しないと低い画質で映すため、小さいQR(切り取ったラベル)がつぶれて読めない。
+  // 今の画面(../app.js)と同じく高い画質を求める(10/28 生駒店の棚卸で読めなかった)。
+  await CAM.fallback.start({ facingMode: 'environment' }, {
+    fps: 10,
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.8), height: Math.floor(h * 0.6) }),
+    videoConstraints: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+  },
     (text) => handleFound([{ value: text, area: 1 }]), () => {
       if (CAM.ignore && Date.now() - CAM.ignoreSeen > 700) CAM.ignore = null;
     });
