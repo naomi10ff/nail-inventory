@@ -1760,7 +1760,7 @@ function adjustKizuUncounted1022() {
 }
 
 /**
- * 生駒店 10/28の棚卸でQRがなく、写真で数えた9品目を登録し、在庫を1本ずつにする(一回限り)。
+ * 生駒店 10/28の棚卸でQRがなく、写真で数えた品目(新しく17・登録済み2)を登録し、在庫を1本ずつにする(一回限り)。
  * ラベル(デスクトップ「生駒店_QRラベル_写真分_10月28日」)と同じ番号で登録する。
  * 在庫は種別「調整」(数をそのまま置き換える)なので、何度実行しても本数はずれない。
  */
@@ -1775,7 +1775,18 @@ function setupIkomaPhotoItems1028() {
     { brand: 'essent.', name: 'AM06', category: 'カラー', code: 'QR-DED09557' },
     { brand: 'essent.', name: 'AM07', category: 'カラー', code: 'QR-1EDBD205' },
     { brand: '云钻', name: 'キャットアイジェル 02', category: 'カラー', memo: '中国のジェル(云钻猫眼胶02)', code: 'QR-F4B1A046' },
-    { brand: 'CLODI', name: 'DG-03', category: 'カラー', memo: '韓国ジェル', code: 'QR-FC68C4D7' }
+    { brand: 'CLODI', name: 'DG-03', category: 'カラー', memo: '韓国ジェル', code: 'QR-FC68C4D7' },
+    { brand: 'CLODI', name: 'LC-03', category: 'カラー', memo: '韓国ジェル', code: 'QR-430B2451' },
+    { brand: 'CLODI', name: 'PB-01', category: 'カラー', memo: '韓国ジェル', code: 'QR-874D36C8' },
+    { brand: 'GRACE', name: 'mag. Glossy M05', category: 'カラー', code: 'QR-8E04BE6F' },
+    { brand: 'GRACE', name: 'color gel Stone ST05', category: 'カラー', code: 'QR-B1ECDC24' },
+    { brand: 'GRACE', name: 'mag. Melty R01', category: 'カラー', code: 'QR-C067C9E4' },
+    { brand: 'GRACE', name: 'flash Classic FLB6', category: 'カラー', code: 'QR-F56D4A2C' },
+    { brand: 'GRACE', name: 'flash Pixie FLE1', category: 'カラー', code: 'QR-D463C2D6' },
+    { brand: 'GRACE', name: 'color gel Crystal Jewelry CJ10', category: 'カラー', code: 'QR-943A49E4' },
+    // 下の2つはすでに登録済み(登録はスキップされ、在庫だけ1本にする)。QRが読めなかったのでラベルを貼り直す
+    { brand: 'ageha', name: '02-03', code: 'QR-46AA79A5' },
+    { brand: 'ageha', name: '04-06', code: 'QR-F5DACF4E' }
   ];
   registerFixedQrItems_(store, items);
   var products = getProductMap_(store);
@@ -1790,5 +1801,5 @@ function setupIkomaPhotoItems1028() {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
     revokeApprovalIfStale_(store, ts);
   }
-  Logger.log('生駒店の在庫を' + rows.length + '品目、1本ずつにしました。');
+  Logger.log('生駒店の在庫を' + rows.length + '品目、1本ずつにしました。(19品目になれば全部OK)');
 }
