@@ -295,6 +295,8 @@
       <div class="list" id="review-list"></div>
       <div id="zero-wrap" class="card" style="display:none; padding:14px;">
         <label class="check-line"><input type="checkbox" id="zero-unscanned"><span><b>数えていない商品は、在庫0として送る</b><br><span class="hint">お店の商品を全部数えたときだけ✓してください。✓しないと、数えていない商品は今のシステムの数のまま残ります。</span></span></label>
+        <!-- 10/28 生駒店で、2台がそれぞれ✓を入れて送り、先に数えた人の分が0で上書きされたため(10/29 追加) -->
+        <div class="note note-amber" style="margin-top:10px"><b>2人以上で数えたとき</b><br>・✓を入れるのは、<b>最後に送る1人だけ</b>。ほかの人は✓を入れずに送る<br>・すでに今月の数がある商品は、0で上書きされないようにしてください（ほかの人が数えた分が消えます）</div>
       </div>
       <div class="error" id="review-error"></div>
       <button class="btn btn-primary" id="btn-send">本社へ送信する</button>
@@ -724,6 +726,7 @@ async function toStart() {
     return;
   }
   html += '<p class="h2">今月はじめての棚卸です</p><p class="hint">お店の商品を、棚ごとに順番に読み取っていきます。<br>同じ商品がいくつかあるときは、1つ読んでから「＋」で数を合わせても大丈夫です。</p>' +
+    '<div class="note note-amber"><b>2人以上で数えるとき</b><br>・最後の確認画面の「在庫0として送る」に✓を入れるのは、<b>最後に送る1人だけ</b><br>・すでに今月の数がある商品は、0で上書きしない</div>' +
     '<div class="spacer"></div><button class="btn btn-primary" id="btn-start">カメラを起動して始める</button>';
   body.innerHTML = html;
   $('btn-start').addEventListener('click', () => { S.tally = {}; S.mode = 'overwrite'; toScan(); });
