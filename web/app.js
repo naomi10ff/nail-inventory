@@ -1486,7 +1486,19 @@ document.getElementById('btn-nav-incoming').addEventListener('click', () => {
   lockStoreSelectToOwnStore('hq-incoming-store-select', 'btn-back-hq-incoming');
   document.getElementById('nav-hq-incoming').click();
 });
+// 2026-10-29決定：破棄登録は当面は本社だけ。お店のメニューには出すがロックする。
+// 棚卸の仕組みが落ち着いたら false にして、お店でも登録できるようにする(新しい画面 v2 も同じ)。
+const DISPOSAL_LOCKED_FOR_STORE = true;
+if (DISPOSAL_LOCKED_FOR_STORE) {
+  const btn = document.getElementById('btn-nav-disposal');
+  btn.textContent = '破棄登録（今は本社のみ）🔒';
+  btn.style.opacity = '0.5';
+}
 document.getElementById('btn-nav-disposal').addEventListener('click', () => {
+  if (DISPOSAL_LOCKED_FOR_STORE) {
+    alert('破棄登録は、今は本社だけが行います。\n使えなくなった商品は、本社に連絡してください（写真があると助かります）。');
+    return;
+  }
   lockStoreSelectToOwnStore('hq-disposal-store-select', 'btn-back-hq-disposal');
   document.getElementById('nav-hq-disposal').click();
 });

@@ -142,6 +142,9 @@
   .tile { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; cursor: pointer; text-align: left; font-size: 15px; font-weight: 700; color: var(--ink); }
   .tile-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--blue-bg); display: flex; align-items: center; justify-content: center; }
   .tile small { font-size: 12px; font-weight: 400; color: var(--sub); }
+  .tile.locked, .menu-item.locked { opacity: .5; }
+  .tile.locked::after { content: '🔒'; position: absolute; top: 12px; right: 12px; font-size: 14px; }
+  .tile { position: relative; }
 
   /* 在庫 */
   .filters { display: flex; flex-direction: column; gap: 8px; }
@@ -619,6 +622,7 @@ async function toHome() {
   show('s-home');
   $('home-store').textContent = S.store || '';
   $('home-staff').textContent = (S.staff || '') + ' さん';
+  renderDisposalLock();
   loadProducts();
   await loadHomeStatus();
 }
@@ -947,7 +951,23 @@ function showIncomingError(e, next) {
 }
 
 // ---- 破棄登録 ----
+// 2026-10-29決定：破棄登録は当面は本社だけ。お店のアカウントでは表示はするがロックする。
+// 棚卸の仕組みが落ち着いたら false にして、お店でも登録できるようにする。
+const DISPOSAL_LOCKED_FOR_STORE = true;
+const disposalLocked = () => DISPOSAL_LOCKED_FOR_STORE && S.role !== 'hq';
+function renderDisposalLock() {
+  const locked = disposalLocked();
+  $('tile-disposal').classList.toggle('locked', locked);
+  $('tile-disposal').querySelector('small').textContent = locked ? '今は本社だけが登録します' : '使えない商品を減らす';
+  const item = document.querySelector('[data-go="disposal"]');
+  item.classList.toggle('locked', locked);
+  item.querySelector('.chev').textContent = locked ? '本社のみ' : '›';
+}
 function toDisposal() {
+  if (disposalLocked()) {
+    alert('破棄登録は、今は本社だけが行います。\n使えなくなった商品は、本社に連絡してください（写真があると助かります）。');
+    return;
+  }
   show('s-disposal');
   $('disposal-card-wrap').innerHTML = '';
   startCamera('cam-disposal', onDisposalScan, '「次の商品へ」を押すと読み取ります');
