@@ -405,6 +405,7 @@
       </div>
       <div class="menu-list">
         <button class="menu-item" id="btn-menu-staff">担当者を変える<span class="chev">›</span></button>
+        <a class="menu-item" id="link-hq" href="hq.html" style="display:none">本社の画面（パソコン用）<span class="chev">›</span></a>
         <a class="menu-item" href="../index.html">今の画面を開く<span class="chev">›</span></a>
         <button class="menu-item" id="btn-menu-logout" style="color:var(--red)">ログアウト</button>
       </div>
@@ -623,6 +624,7 @@ async function toHome() {
   $('home-store').textContent = S.store || '';
   $('home-staff').textContent = (S.staff || '') + ' さん';
   renderDisposalLock();
+  $('link-hq').style.display = S.role === 'hq' ? 'flex' : 'none';
   loadProducts();
   await loadHomeStatus();
 }
