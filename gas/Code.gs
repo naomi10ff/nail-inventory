@@ -487,12 +487,22 @@ function appendLog_(store, staffName, product, type, quantity, memo, timestamp) 
  * 入った時点で承認を取り消し、未承認に戻す。承認後にデータが変わったのに承認済みの
  * 表示が残ってしまうのを防ぐため。送信自体は制限しない(承認有無に関わらず記録できる)。
  */
+/**
+ * 棚卸承認シートの「年月」を "yyyy-MM" の文字にそろえる。appendRow で "2026-10" を書くと
+ * スプレッドシートが日付に変えてしまい、文字との === 比較で承認が見つからなくなっていた
+ * (2026-10-29 承認しても「承認待ち」のまま・押すたびに行が増えた)。日付で入っている行も読めるようにする。
+ */
+function approvalMonthKey_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM');
+  return String(v == null ? '' : v).trim();
+}
+
 function revokeApprovalIfStale_(store, timestamp) {
   var month = Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM');
   var sheet = getSheet_(SHEET_APPROVALS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === store && data[i][1] === month) {
+    if (data[i][0] === store && approvalMonthKey_(data[i][1]) === month) {
       sheet.deleteRow(i + 1);
       return;
     }
@@ -627,7 +637,7 @@ function resetStocktakeThisMonth_(session, p) {
   var approvalSheet = getSheet_(SHEET_APPROVALS);
   var approvalData = approvalSheet.getDataRange().getValues();
   for (var j = approvalData.length - 1; j >= 1; j--) {
-    if (approvalData[j][0] === store && approvalData[j][1] === month) {
+    if (approvalData[j][0] === store && approvalMonthKey_(approvalData[j][1]) === month) {
       approvalSheet.deleteRow(j + 1);
     }
   }
@@ -929,7 +939,7 @@ function getApprovalStatus_(store, month) {
   var sheet = getSheet_(SHEET_APPROVALS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === store && data[i][1] === month) {
+    if (data[i][0] === store && approvalMonthKey_(data[i][1]) === month) {
       var approver = data[i][2], approvedAt = data[i][3];
       // 状態列(E列)が無い古い行は、承認者が入っていれば「承認済み」扱いにする(後方互換)。
       var status = data[i][4] || (approver ? '承認済み' : '');
@@ -1120,7 +1130,7 @@ function approveStocktake_(session, p) {
   var sheet = getSheet_(SHEET_APPROVALS);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === p.store && data[i][1] === p.month) {
+    if (data[i][0] === p.store && approvalMonthKey_(data[i][1]) === p.month) {
       sheet.getRange(i + 1, 3).setValue(session.username);
       sheet.getRange(i + 1, 4).setValue(new Date());
       sheet.getRange(i + 1, 5).setValue('承認済み');
@@ -1130,6 +1140,7 @@ function approveStocktake_(session, p) {
     }
   }
   sheet.appendRow([p.store, p.month, session.username, new Date(), '承認済み', '', '']);
+  sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@').setValue(p.month);
   return { store: p.store, month: p.month, approver: session.username };
 }
 
@@ -1146,7 +1157,7 @@ function rejectStocktake_(session, p) {
   var reason = p.reason || '';
   var now = new Date();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === p.store && data[i][1] === p.month) {
+    if (data[i][0] === p.store && approvalMonthKey_(data[i][1]) === p.month) {
       sheet.getRange(i + 1, 3).setValue('');
       sheet.getRange(i + 1, 4).setValue('');
       sheet.getRange(i + 1, 5).setValue('差し戻し');
@@ -1156,6 +1167,7 @@ function rejectStocktake_(session, p) {
     }
   }
   sheet.appendRow([p.store, p.month, '', '', '差し戻し', reason, now]);
+  sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@').setValue(p.month);
   return { store: p.store, month: p.month, status: '差し戻し' };
 }
 
