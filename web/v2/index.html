@@ -324,6 +324,7 @@
       <p class="hint">届いた商品を1つずつ読み取ります。読むと<b>1個入荷</b>として記録されます。</p>
       <div class="camera" id="cam-incoming"></div>
       <div id="incoming-card-wrap"></div>
+      <button class="btn btn-ghost" id="btn-new-nobarcode">＋ バーコードのない商品を登録（テプラ用の番号を作る）</button>
       <details>
         <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
         <div style="display:flex; gap:8px; margin-top:8px;">
@@ -901,6 +902,76 @@ function renderIncomingList() {
   $('incoming-list').innerHTML = items.length
     ? items.map(([, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div></div><div class="row-count">' + t.count + '個</div></div>').reverse().join('')
     : '<div class="empty">まだありません</div>';
+}
+// ---- バーコードのない商品を登録（テプラ用の番号を作る）----
+// 2026-10-30決定：本社でA4のQRラベルを毎回作るのをやめ、お店で登録→短い番号をテプラで印刷→1本ずつ貼る。
+// 番号は「店の頭文字＋数字5けた」(例 K12345)。テプラのバーコード(CODE128/CODE39)で打ちやすく、
+// この画面のカメラ(code_128・code_39 対応)でも読める。今までの QR- の番号はそのまま使える。
+const STORE_PREFIX = { '木津店': 'K', '西大寺宝来店': 'H', '生駒店': 'G' }; // 生駒は「I」だと数字の1と見まちがえるので G
+function newShortCode() {
+  const used = new Set(S.products.map((p) => String(p.code)));
+  const prefix = STORE_PREFIX[S.store] || 'N';
+  for (let i = 0; i < 50; i++) {
+    const c = prefix + String(Math.floor(10000 + Math.random() * 90000));
+    if (!used.has(c)) return c;
+  }
+  throw new Error('番号を作れませんでした。もう一度押してください');
+}
+$('btn-new-nobarcode').addEventListener('click', async () => {
+  if (S.busy) return;
+  pauseCamera(true);
+  if (!S.productsLoaded) await loadProducts();
+  const wrap = $('incoming-card-wrap');
+  const brands = Array.from(new Set(S.products.map((x) => x.brand).filter(Boolean))).sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
+  let qty = 1;
+  wrap.innerHTML = '<div class="scan-card info"><div class="scan-name">バーコードのない商品を登録</div>' +
+    '<p class="hint">登録すると、テプラで印刷する番号が出ます。届いた数もここで入荷として記録します。</p>' +
+    '<label class="field">ブランド<select class="input" id="nb-brand"><option value="">選んでください</option>' + brands.map((b) => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('') + '</select></label>' +
+    '<label class="field">新しいブランド名（上のリストにないときだけ）<input class="input" id="nb-brand-new"></label>' +
+    '<label class="field">商品名<input class="input" id="nb-name" placeholder="例：AM01"></label>' +
+    '<label class="field">カラー番号（あれば）<input class="input" id="nb-color"></label>' +
+    '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">届いた数</span><div class="stepper"><button id="nb-minus" aria-label="1つ減らす">−</button><span class="num" id="nb-num">1</span><button id="nb-plus" aria-label="1つ増やす">＋</button></div></div>' +
+    '<div class="error" id="nb-error"></div>' +
+    '<button class="btn btn-primary" id="nb-save">登録して番号を作る</button><button class="btn btn-ghost" id="nb-cancel">やめる</button></div>';
+  $('nb-minus').addEventListener('click', () => { qty = Math.max(1, qty - 1); $('nb-num').textContent = qty; });
+  $('nb-plus').addEventListener('click', () => { qty += 1; $('nb-num').textContent = qty; });
+  $('nb-cancel').addEventListener('click', () => { wrap.innerHTML = ''; pauseCamera(false); });
+  $('nb-save').addEventListener('click', async (ev) => {
+    const brand = $('nb-brand-new').value.trim() || $('nb-brand').value;
+    const name = $('nb-name').value.trim();
+    if (!brand) { $('nb-error').textContent = 'ブランドを選ぶか、新しいブランド名を入れてください'; return; }
+    if (!name) { $('nb-error').textContent = '商品名を入れてください'; return; }
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '登録しています…';
+    S.busy = true;
+    try {
+      const code = newShortCode();
+      const r = await api('registerProduct', { code, brand, name, colorNo: $('nb-color').value.trim() });
+      const product = { code: String(r.code), name: r.name, brand: r.brand, colorNo: r.colorNo };
+      S.products.push(product);
+      await api('recordIncoming', { code: product.code, quantity: qty, staffName: S.staff });
+      const key = product.code;
+      S.incoming[key] = { name: product.name + (product.colorNo ? '（' + product.colorNo + '）' : ''), brand: product.brand, count: qty };
+      S.stock = null;
+      renderIncomingList();
+      showTepraCode(product, qty);
+    } catch (e) {
+      if (isLoginError(e)) { toLogin(e.message); return; }
+      $('nb-error').textContent = e.message;
+      btn.disabled = false; btn.textContent = '登録して番号を作る';
+    } finally {
+      S.busy = false;
+    }
+  });
+});
+function showTepraCode(p, qty) {
+  const wrap = $('incoming-card-wrap');
+  wrap.innerHTML = '<div class="scan-card ok"><div style="display:flex; gap:12px; align-items:flex-start">' + OK_ICON +
+    '<div style="flex:1;min-width:0"><div class="scan-name">' + productLabel(p) + '</div><div class="scan-brand">' + esc(p.brand || '') + '　入荷 ' + qty + '個を記録しました</div></div></div>' +
+    '<div style="background:#fff; border-radius:12px; padding:14px; text-align:center"><div class="hint">テプラで印刷する番号</div>' +
+    '<div style="font-size:40px; font-weight:700; letter-spacing:4px; font-family:ui-monospace, Menlo, Consolas, monospace">' + esc(p.code) + '</div></div>' +
+    '<p class="hint" style="color:#065F46">テプラの「<b>バーコード</b>」で、種類は <b>CODE128</b>（なければ CODE39）、<b>番号も下に印字</b>する設定にして、' + qty + '枚印刷 → 1本ずつ貼ってください。<br>貼ったら「在庫を調べる」で1回読んで、この商品が出るか確かめてください。</p>' +
+    '<button class="btn btn-primary" id="btn-next">次の商品へ</button></div>';
+  $('btn-next').addEventListener('click', () => { wrap.innerHTML = ''; pauseCamera(false); });
 }
 async function recordIncomingOne(product) {
   await api('recordIncoming', { code: product.code, quantity: 1, staffName: S.staff });
