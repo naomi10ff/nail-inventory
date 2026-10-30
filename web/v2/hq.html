@@ -164,7 +164,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwGwA8PfZjVi_IgDPvjcQkJ
 const STORES = ['生駒店', '西大寺宝来店', '木津店'];
 const PAGES = [
   ['home', 'ホーム'], ['review', '棚卸の確認'], ['stock', '在庫（3店舗の比較）'], ['products', '商品・QRコード'],
-  ['incoming', '入荷登録'], ['disposal', '廃棄登録']
+  ['delivery', '納品分の確認'], ['incoming', '入荷登録'], ['disposal', '廃棄登録']
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -183,6 +183,8 @@ const S = {
   token: lsGet('token'), role: lsGet('role'), username: lsGet('v2_hq_username') || '',
   page: lsGet('v2_hq_page') || 'home', month: monthNow(),
   review: {},          // 店舗 -> getStocktakeReview の結果(その月)
+  monthRev: {},        // 「店舗|年月」-> getStocktakeReview の結果(納品分の確認で月ごとに使う)
+  delStore: STORES[0], delFilter: 'zero',
   loading: {}, errors: {},
   revStore: STORES[0], revFilter: 'diff', revSearch: '',
   stockSearch: '', stockOnlyZero: false, openBrand: '',
@@ -235,6 +237,7 @@ function onEnterPage() {
   if (S.page === 'home' || S.page === 'stock') loadAll(false);
   if (S.page === 'review') loadReview(S.revStore, false);
   if (S.page === 'products') loadReview(S.prodStore, false);
+  if (S.page === 'delivery') loadDelivery(S.delStore);
   if (S.page === 'incoming' || S.page === 'disposal') setTimeout(() => { const el = $('scan-input'); if (el) el.focus(); }, 50);
 }
 function flash(msg) { S.toast = msg; render(); clearTimeout(flash.t); flash.t = setTimeout(() => { S.toast = ''; render(); }, 2600); }
@@ -269,6 +272,7 @@ function pageHtml() {
     case 'review': return reviewHtml();
     case 'stock': return stockHtml();
     case 'products': return productsHtml();
+    case 'delivery': return deliveryHtml();
     case 'incoming': return workHtml('incoming');
     case 'disposal': return workHtml('disposal');
     default: return homeHtml();
@@ -278,7 +282,7 @@ function bindCommon() {
   document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   $('btn-logout').addEventListener('click', () => { if (confirm('ログアウトします。よろしいですか？')) logout(''); });
   $('month').addEventListener('change', (e) => { if (!e.target.value) return; S.month = e.target.value; S.review = {}; render(); onEnterPage(); });
-  $('btn-reload').addEventListener('click', () => { S.review = {}; onEnterPage(); flash('最新の情報にしました'); });
+  $('btn-reload').addEventListener('click', () => { S.review = {}; S.monthRev = {}; onEnterPage(); flash('最新の情報にしました'); });
 }
 
 // ---- ログイン ----
@@ -333,6 +337,7 @@ function homeHtml() {
     const d = S.review[s]; if (!d) return;
     const st = statsOf(d);
     if (st.status === '承認待ち') todos.push(['#F59E0B', s, monthShort(S.month) + 'の棚卸が承認待ちです', 'review']);
+    if (st.status === '承認済み') todos.push(['#059669', s, monthShort(S.month) + 'の棚卸は承認済み → 納品した商品の在庫を確かめる', 'delivery']);
     if (st.status === '差し戻し') todos.push(['#DC2626', s, '差し戻し中です（お店で数え直し待ち）', 'review']);
     if (st.status === '未実施') todos.push(['#9CA3AF', s, monthShort(S.month) + 'の棚卸はまだです', 'review']);
     if (st.qr) todos.push(['#2563EB', s, '在庫があるのにバーコード未登録の商品が ' + st.qr + '品あります', 'products']);
@@ -441,6 +446,83 @@ function productsHtml() {
     '<div class="foot-bar"><b style="font-weight:500">' + S.selected.size + '件 選択中</b><button class="btn btn-sm" id="btn-clear-sel" style="border:none; background:transparent; color:var(--sub)">選択を解除</button>' +
     '<span class="hint" style="font-size:12px">エーワン 31171（35×12mm・95面）／上の余白14.5mm</span>' +
     '<button class="btn btn-primary" id="btn-print-qr" style="margin-left:auto">QRラベルを印刷</button></div></div></div></div>';
+}
+
+// ---- 納品分の確認 ----
+// 2026-10-29決定：12月の棚卸までは「最新の棚卸の数＝在庫」で進めるが、10月以降に納品した商品の
+// 在庫は最低限そろえる。棚卸の承認のあとにここを開き、納品したのに在庫なしになっている商品を確かめる。
+// 取引ログは数千行あるので、店舗×月ごとの getStocktakeReview(入荷数・月末在庫入り)を合わせて計算する。
+const DELIVERY_FROM = '2026-10';
+function monthsFrom(from) {
+  const out = []; let [y, m] = from.split('-').map(Number);
+  const [ny, nm] = monthNow().split('-').map(Number);
+  while (y < ny || (y === ny && m <= nm)) { out.push(y + '-' + String(m).padStart(2, '0')); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+async function loadDelivery(store, force) {
+  const months = monthsFrom(DELIVERY_FROM);
+  const need = months.filter((m) => force || !S.monthRev[store + '|' + m]);
+  if (!need.length) { render(); return; }
+  S.loading['del|' + store] = true; S.errors['del|' + store] = ''; render();
+  try {
+    for (const m of need) S.monthRev[store + '|' + m] = await api('getStocktakeReview', { store, month: m });
+  } catch (e) {
+    if (isLoginError(e)) { logout(e.message); return; }
+    S.errors['del|' + store] = e.message;
+  } finally {
+    S.loading['del|' + store] = false; render();
+  }
+}
+function deliveryRows(store) {
+  const months = monthsFrom(DELIVERY_FROM);
+  if (!months.every((m) => S.monthRev[store + '|' + m])) return null;
+  const latest = S.monthRev[store + '|' + months[months.length - 1]];
+  const map = {};
+  months.forEach((m) => S.monthRev[store + '|' + m].items.forEach((i) => {
+    if (!i.incoming) return;
+    const k = String(i.code);
+    if (!map[k]) map[k] = { code: k, brand: i.brand, name: i.name, colorNo: i.colorNo, incoming: 0, stock: 0 };
+    map[k].incoming += i.incoming;
+  }));
+  latest.items.forEach((i) => { const k = String(i.code); if (map[k]) map[k].stock = i.currentStock; });
+  return Object.values(map).sort((a, b) => (a.stock > 0) - (b.stock > 0) || byBrand(a, b));
+}
+function deliveryHtml() {
+  const s = S.delStore;
+  const tabs = '<div class="seg">' + STORES.map((x) => '<button data-del-store="' + esc(x) + '" class="' + (x === s ? 'on' : '') + '">' + esc(x) + '</button>').join('') + '</div>';
+  const rows = deliveryRows(s);
+  const head = '<div class="row-flex">' + tabs + '<span class="hint">' + monthJa(DELIVERY_FROM) + '〜今月に納品した商品と、今の在庫</span>' +
+    '<button class="btn btn-sm" id="btn-del-csv" style="margin-left:auto"' + (rows ? '' : ' disabled') + '>CSVで保存</button></div>';
+  if (!rows) return '<div class="page">' + head + '<div class="card"><p class="hint">' + (S.errors['del|' + s] ? '読み込めませんでした：' + esc(S.errors['del|' + s]) : '読み込み中…（少し時間がかかります）') + '</p></div></div>';
+  const zero = rows.filter((r) => r.stock <= 0);
+  const shown = S.delFilter === 'zero' ? zero : rows;
+  const cols = 'grid-template-columns: 150px minmax(0,1fr) 110px 100px 120px';
+  return '<div class="page">' + head +
+    '<div class="grid4">' +
+    '<div class="stat"><div class="stat-label">納品した商品</div><div class="stat-num">' + rows.length + '品</div></div>' +
+    '<div class="stat"><div class="stat-label">納品した数（合計）</div><div class="stat-num">' + rows.reduce((n, r) => n + r.incoming, 0) + '個</div></div>' +
+    '<div class="stat"><div class="stat-label">在庫なしになっている</div><div class="stat-num" style="color:var(--amber)">' + zero.length + '品</div></div>' +
+    '<div class="stat"><div class="stat-label">在庫あり</div><div class="stat-num" style="color:var(--green)">' + (rows.length - zero.length) + '品</div></div></div>' +
+    '<p class="hint">「在庫なし」は、納品したのに棚卸で0になっている商品です。使い切った・数え漏れ・QRが読めなかった、のどれかなので、お店に確かめてください。</p>' +
+    '<div class="table"><div class="row-flex" style="padding:10px 12px; border-bottom:1px solid var(--line)">' +
+    '<button class="pill' + (S.delFilter === 'zero' ? ' on' : '') + '" data-del-filter="zero">在庫なしだけ（' + zero.length + '）</button>' +
+    '<button class="pill' + (S.delFilter === 'all' ? ' on' : '') + '" data-del-filter="all">すべて（' + rows.length + '）</button></div>' +
+    '<div class="thead" style="' + cols + '"><span>ブランド</span><span>商品</span><span class="r">納品した数</span><span class="r">今の在庫</span><span style="padding-left:16px">コード</span></div>' +
+    (shown.length ? shown.map((r) => '<div class="trow" style="' + cols + '"><span style="color:var(--sub)">' + esc(r.brand) + '</span><span style="font-weight:500">' + label(r) + '</span>' +
+      '<span class="r" style="color:var(--green)">+' + r.incoming + '</span>' +
+      '<span class="r">' + (r.stock > 0 ? '<b>' + r.stock + '</b>' : '<span class="zero">在庫なし</span>') + '</span>' +
+      '<span style="padding-left:16px"><span class="code-tag' + (isQr(r.code) ? ' qr' : '') + '">' + esc(r.code) + '</span></span></div>').join('')
+      : '<div class="empty">' + (S.delFilter === 'zero' ? '在庫なしになっている納品商品はありません' : '納品した商品はありません') + '</div>') +
+    '</div></div>';
+}
+function downloadDeliveryCsv() {
+  const rows = deliveryRows(S.delStore); if (!rows) return;
+  const csv = '﻿' + [['ブランド', '品名', 'カラーNO', 'コード', '納品した数', '今の在庫']].concat(rows.map((r) => [r.brand, r.name, r.colorNo, r.code, r.incoming, r.stock]))
+    .map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = '納品分の確認_' + S.delStore + '_' + monthNow() + '.csv';
+  a.click();
 }
 
 // ---- 入荷登録・廃棄登録（本社） ----
@@ -568,6 +650,7 @@ function bindPage() {
   document.querySelectorAll('[data-open-review]').forEach((b) => b.addEventListener('click', () => { S.revStore = b.dataset.openReview; go('review'); }));
   document.querySelectorAll('[data-todo-page]').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.todoPage === 'review') S.revStore = b.dataset.todoStore;
+    if (b.dataset.todoPage === 'delivery') S.delStore = b.dataset.todoStore;
     if (b.dataset.todoPage === 'products') { S.prodStore = b.dataset.todoStore; S.prodCode = 'qr'; S.selected = new Set(); }
     go(b.dataset.todoPage);
   }));
@@ -577,6 +660,9 @@ function bindPage() {
   if ($('btn-approve')) $('btn-approve').addEventListener('click', () => { S.modal = 'approve'; render(); });
   if ($('btn-reject')) $('btn-reject').addEventListener('click', () => { S.modal = 'reject'; render(); });
   if ($('btn-csv')) $('btn-csv').addEventListener('click', downloadCsv);
+  document.querySelectorAll('[data-del-store]').forEach((b) => b.addEventListener('click', () => { S.delStore = b.dataset.delStore; render(); loadDelivery(S.delStore); }));
+  document.querySelectorAll('[data-del-filter]').forEach((b) => b.addEventListener('click', () => { S.delFilter = b.dataset.delFilter; render(); }));
+  if ($('btn-del-csv')) $('btn-del-csv').addEventListener('click', downloadDeliveryCsv);
 
   if ($('stock-search')) $('stock-search').addEventListener('input', (e) => { S.stockSearch = e.target.value; render(); });
   document.querySelectorAll('[data-stock-zero]').forEach((b) => b.addEventListener('click', () => { S.stockOnlyZero = b.dataset.stockZero === '1'; render(); }));
