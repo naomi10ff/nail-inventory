@@ -152,6 +152,9 @@
   .lbl-info { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
   .lbl-code { font-size: 5pt; line-height: 1.1; color: #555; white-space: nowrap; }
   .lbl-text { font-size: 6pt; line-height: 1.15; word-break: break-word; }
+  .lbl-info { flex: 1; }
+  .lbl-write { display: flex; align-items: center; font-size: 11pt; line-height: 1; height: 7mm; margin-top: 0.5mm; }
+  .lbl-gap { flex: 1; }
 </style>
 </head>
 <body>
@@ -643,7 +646,7 @@ function bindBlankQr() {
         const a = new Uint8Array(4); crypto.getRandomValues(a);
         const code = 'QR-' + Array.from(a).map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
         if (used.has(code) || mine.has(code)) continue;
-        mine.add(code); list.push({ code, text: store + '（未登録）' });
+        mine.add(code); list.push({ code, text: store, write: true });
       }
       S.blankStore = store; S.modal = null; render();
       printLabelList(list);
@@ -674,7 +677,10 @@ function printLabelList(list) {
       const q = document.createElement('div'); q.className = 'lbl-qr'; cell.appendChild(q);
       new QRCode(q, { text: String(i.code), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
       const info = document.createElement('div'); info.className = 'lbl-info';
-      info.innerHTML = '<div class="lbl-code">' + esc(i.code) + '</div><div class="lbl-text">' + esc(i.text) + '</div>';
+      // 空のQRラベルは、ネイリストさんが商品名を手書きできるよう【　】の間を空けておく(11/4)
+      info.innerHTML = i.write
+        ? '<div class="lbl-code">' + esc(i.code) + '　' + esc(i.text) + '</div><div class="lbl-write"><span>【</span><span class="lbl-gap"></span><span>】</span></div>'
+        : '<div class="lbl-code">' + esc(i.code) + '</div><div class="lbl-text">' + esc(i.text) + '</div>';
       cell.appendChild(info); sheet.appendChild(cell);
     });
     page.appendChild(sheet); area.appendChild(page);
