@@ -110,6 +110,7 @@
   .prod-list { flex: 1; overflow-y: auto; }
   .code-tag { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 8px; background: #F3F4F6; color: #374151; }
   .code-tag.qr { background: var(--blue-bg); color: var(--blue-dark); }
+  .foot-bar button, .foot-bar b { white-space: nowrap; }
   .foot-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--soft); }
   label.trow { cursor: pointer; }
   .trow input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--blue); }
@@ -444,8 +445,9 @@ function productsHtml() {
       '<span><span class="code-tag' + (isQr(i.code) ? ' qr' : '') + '">' + esc(i.code) + '</span></span>' +
       '<span class="r" style="font-weight:700">' + (i.currentStock > 0 ? i.currentStock : '<span class="zero">在庫なし</span>') + '</span></label>').join('') : '<div class="empty">ありません</div>') + '</div>' +
     '<div class="foot-bar"><b style="font-weight:500">' + S.selected.size + '件 選択中</b><button class="btn btn-sm" id="btn-clear-sel" style="border:none; background:transparent; color:var(--sub)">選択を解除</button>' +
-    '<span class="hint" style="font-size:12px">エーワン 31171（35×12mm・95面）／上の余白14.5mm</span>' +
-    '<button class="btn btn-primary" id="btn-print-qr" style="margin-left:auto">QRラベルを印刷</button></div></div></div></div>';
+    
+    '<button class="btn" id="btn-blank-qr" style="margin-left:auto">お店に渡す空のQRラベルを作る</button>' +
+    '<button class="btn btn-primary" id="btn-print-qr">QRラベルを印刷</button></div></div></div></div>';
 }
 
 // ---- 納品分の確認 ----
@@ -586,6 +588,7 @@ async function onWorkCode(kind, raw) {
 
 // ---- ダイアログ ----
 function modalHtml() {
+  if (S.modal === 'blankqr') return blankQrHtml();
   const s = S.revStore, rej = S.modal === 'reject';
   return '<div class="overlay"><div class="dialog" role="dialog" aria-label="確認"><h3>' + esc(s) + (rej ? 'の棚卸を差し戻しますか？' : 'の' + monthShort(S.month) + 'の棚卸を承認しますか？') + '</h3>' +
     '<p class="hint">' + (rej ? 'お店でもう一度数えられるようになります。' : '承認すると、この月の在庫の数が確定します。あとから直すときは差し戻しが必要です。') + '</p>' +
@@ -594,6 +597,7 @@ function modalHtml() {
 }
 function bindModal() {
   if (!S.modal) return;
+  if (S.modal === 'blankqr') { bindBlankQr(); return; }
   $('btn-modal-cancel').addEventListener('click', () => { S.modal = null; render(); });
   $('btn-modal-ok').addEventListener('click', async (ev) => {
     const btn = ev.currentTarget, rej = S.modal === 'reject', store = S.revStore;
@@ -611,11 +615,55 @@ function bindModal() {
   });
 }
 
+// ---- お店に渡す空のQRラベル ----
+// 2026-11-04決定(テプラ案はやめ)：バーコードのない商品用に、本社が前もって「まだ商品につながっていないQR」を
+// 作って各店舗に渡しておく。お店は入荷のときにそのQRを商品に貼って読み、新しい商品として登録すると
+// QRと商品がつながる(お店の画面は QR- の知らないコードを読むと、その登録画面になる)。
+// A4 1枚=95枚をまるごと使うので、用紙もむだにならない。
+function blankQrHtml() {
+  const st = S.blankStore || S.prodStore;
+  return '<div class="overlay"><div class="dialog" role="dialog" aria-label="空のQRラベル"><h3>お店に渡す空のQRラベルを作る</h3>' +
+    '<p class="hint">まだ商品につながっていないQRを作って印刷します。お店で保管してもらい、バーコードのない商品が届いたら貼って「入荷登録」で読む → 商品名を入れて登録すると、QRと商品がつながります。</p>' +
+    '<label class="hint" style="display:flex; flex-direction:column; gap:6px; font-weight:500; color:var(--ink)">渡す店舗<select class="input" id="blank-store">' + STORES.map((x) => '<option' + (x === st ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label>' +
+    '<label class="hint" style="display:flex; flex-direction:column; gap:6px; font-weight:500; color:var(--ink)">枚数（A4 1枚＝95枚）<input class="input" id="blank-count" type="number" min="1" max="950" value="95"></label>' +
+    '<div class="error" id="modal-error"></div><div class="row-flex" style="justify-content:flex-end"><button class="btn" id="btn-modal-cancel">やめる</button><button class="btn btn-primary" id="btn-modal-ok">作って印刷する</button></div></div></div>';
+}
+function bindBlankQr() {
+  $('btn-modal-cancel').addEventListener('click', () => { S.modal = null; render(); });
+  $('btn-modal-ok').addEventListener('click', async (ev) => {
+    const store = $('blank-store').value, n = Math.floor(Number($('blank-count').value));
+    if (!(n >= 1 && n <= 950)) { $('modal-error').textContent = '枚数は1〜950で入れてください'; return; }
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '準備中…';
+    try {
+      // すでに使われている番号とかぶらないよう、その店の商品リストを読んでから作る
+      const d = await loadReview(store, false);
+      const used = new Set(((d && d.items) || []).map((i) => String(i.code)));
+      const list = [], mine = new Set();
+      while (list.length < n) {
+        const a = new Uint8Array(4); crypto.getRandomValues(a);
+        const code = 'QR-' + Array.from(a).map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+        if (used.has(code) || mine.has(code)) continue;
+        mine.add(code); list.push({ code, text: store + '（未登録）' });
+      }
+      S.blankStore = store; S.modal = null; render();
+      printLabelList(list);
+    } catch (e) {
+      $('modal-error').textContent = e.message;
+      btn.disabled = false; btn.textContent = '作って印刷する';
+    }
+  });
+}
+
 // ---- QRラベル印刷 ----
 function printLabels() {
   const d = S.review[S.prodStore];
   if (!d || !S.selected.size) { flash('印刷する商品を選んでください'); return; }
-  const list = d.items.filter((i) => S.selected.has(String(i.code))).sort(byBrand);
+  const list = d.items.filter((i) => S.selected.has(String(i.code))).sort(byBrand)
+    .map((i) => ({ code: i.code, text: (i.brand ? i.brand + ' ' : '') + i.name + (i.colorNo ? ' ' + i.colorNo : '') }));
+  printLabelList(list);
+}
+/** [{code, text}] をエーワン31171の面付けで印刷する(上14.5mm・左13.5mm・QR10mm)。 */
+function printLabelList(list) {
   const area = $('print-area');
   area.innerHTML = '';
   for (let s = 0; s < list.length; s += 95) {
@@ -626,7 +674,7 @@ function printLabels() {
       const q = document.createElement('div'); q.className = 'lbl-qr'; cell.appendChild(q);
       new QRCode(q, { text: String(i.code), width: 120, height: 120, correctLevel: QRCode.CorrectLevel.H });
       const info = document.createElement('div'); info.className = 'lbl-info';
-      info.innerHTML = '<div class="lbl-code">' + esc(i.code) + '</div><div class="lbl-text">' + esc((i.brand ? i.brand + ' ' : '') + i.name + (i.colorNo ? ' ' + i.colorNo : '')) + '</div>';
+      info.innerHTML = '<div class="lbl-code">' + esc(i.code) + '</div><div class="lbl-text">' + esc(i.text) + '</div>';
       cell.appendChild(info); sheet.appendChild(cell);
     });
     page.appendChild(sheet); area.appendChild(page);
@@ -676,6 +724,7 @@ function bindPage() {
   if ($('btn-select-shown')) $('btn-select-shown').addEventListener('click', () => { document.querySelectorAll('[data-sel]').forEach((c) => S.selected.add(c.dataset.sel)); render(); });
   if ($('btn-clear-sel')) $('btn-clear-sel').addEventListener('click', () => { S.selected = new Set(); render(); });
   if ($('btn-print-qr')) $('btn-print-qr').addEventListener('click', printLabels);
+  if ($('btn-blank-qr')) $('btn-blank-qr').addEventListener('click', () => { S.modal = 'blankqr'; render(); });
 
   if ($('work-store')) $('work-store').addEventListener('change', (e) => { S.workStore = e.target.value; lsSet('v2_hq_work_store', S.workStore); S.last = null; render(); const el = $('scan-input'); if (el) el.focus(); });
   if ($('scan-input')) {
