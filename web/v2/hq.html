@@ -354,6 +354,21 @@ function homeHtml() {
 }
 
 // ---- 棚卸の確認 ----
+// 承認の前に見る「確認リスト」(11/4)：あるはずの数(先月末＋今月の入荷−今月の廃棄)と棚卸の数を比べ、
+// 少ない・多い商品を理由の見当ごとに分ける。いちばん大事なのは「今月入荷したのに0」(数え漏れの可能性が高い)。
+const REV_CATS = [
+  ['in0', '今月入荷したのに0', '数え漏れの可能性が高い', '#B91C1C'],
+  ['gone', '先月あったのに0', '使い切り？ 数え漏れ？', '#B45309'],
+  ['less', '数が減っている', '数えまちがい？ 廃棄の書き忘れ？', '#92400E'],
+  ['more', '数が増えている', '数えまちがい？ 入荷の登録漏れ？', '#1E40AF']
+];
+function prevL0(d) { return monthShort(d.previousMonth || S.month) + '末'; }
+function revCat(i) {
+  if (i.diff === 0) return '';
+  if (i.diff > 0) return 'more';
+  if (i.currentStock <= 0) return i.incoming > 0 ? 'in0' : 'gone';
+  return 'less';
+}
 function reviewHtml() {
   const s = S.revStore, d = S.review[s];
   const tabs = '<div class="seg">' + STORES.map((x) => '<button data-rev-store="' + esc(x) + '" class="' + (x === s ? 'on' : '') + '">' + esc(x) + '</button>').join('') + '</div>';
@@ -361,11 +376,18 @@ function reviewHtml() {
   const st = statsOf(d), ms = d.monthlyStatus || {};
   const items = d.items.slice().sort(byBrand);
   const words = norm(S.revSearch).split(/\s+/).filter(Boolean);
-  const shown = items.filter((i) => (S.revFilter === 'all' || i.diff !== 0) && (!words.length || words.every((w) => norm([i.brand, i.name, i.colorNo, i.code].join(' ')).includes(w))));
+  const order = { in0: 0, gone: 1, less: 2, more: 3, '': 4 };
+  const shown = items.filter((i) => (S.revFilter === 'all' || (S.revFilter === 'diff' ? i.diff !== 0 : revCat(i) === S.revFilter)) && (!words.length || words.every((w) => norm([i.brand, i.name, i.colorNo, i.code].join(' ')).includes(w))))
+    .sort((a, b) => order[revCat(a)] - order[revCat(b)] || byBrand(a, b));
+  const catCount = {}; items.forEach((i) => { const c = revCat(i); if (c) catCount[c] = (catCount[c] || 0) + 1; });
   const ev = d.stocktakeEvents || [];
   const latest = ev.length ? ev[ev.length - 1] : null;
   const dateStr = ms.implementedDate ? new Date(ms.implementedDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' }) : '—';
-  const cols = 'grid-template-columns: 150px minmax(0,1fr) 80px 70px 70px 80px 90px';
+  const cols = 'grid-template-columns: 130px minmax(0,1fr) 70px 60px 60px 70px 80px 150px';
+  const catInfo = (c) => REV_CATS.find((x) => x[0] === c);
+  const checkCard = '<div class="card" style="display:flex; flex-direction:column; gap:10px"><b style="font-size:15px">承認の前の確認リスト</b>' +
+    '<p class="hint">「あるはずの数（' + prevL0(d) + '＋今月の入荷−今月の廃棄）」と「棚卸で数えた数」がちがう商品です。押すと下の表がしぼられます。</p>' +
+    '<div class="grid4">' + REV_CATS.map((c) => '<button class="stat" data-rev-filter="' + c[0] + '" style="text-align:left; cursor:pointer;' + (S.revFilter === c[0] ? ' outline:2px solid var(--blue);' : '') + '"><div class="stat-label">' + c[1] + '</div><div class="stat-num" style="color:' + c[3] + '">' + (catCount[c[0]] || 0) + '品</div><div class="stat-label">' + c[2] + '</div></button>').join('') + '</div></div>';
   const prevL = monthShort(d.previousMonth || S.month) + '末', curL = monthShort(S.month) + '末';
   const note = ms.status === '承認済み' ? '<p class="hint">' + esc(ms.approver || '') + ' が承認済みです。直すときは「差し戻す」を押すと、お店でもう一度数えられるようになります。</p>'
     : ms.status === '差し戻し' ? '<p class="hint" style="color:var(--red)">差し戻し中：' + esc(ms.rejectedReason || '理由の記載なし') + '</p>' : '';
@@ -377,15 +399,17 @@ function reviewHtml() {
     '<div class="stat"><div class="stat-label">棚卸の実施日</div><div class="stat-num">' + esc(dateStr) + '</div></div>' +
     '<div class="stat"><div class="stat-label">差異のある商品</div><div class="stat-num" style="color:var(--amber)">' + st.diff + '品</div></div>' +
     '<div class="stat"><div class="stat-label">多かった / 少なかった</div><div class="stat-num">' + items.filter((i) => i.diff > 0).length + ' / ' + items.filter((i) => i.diff < 0).length + '</div></div>' +
-    '<div class="stat"><div class="stat-label">送信（最新の担当）</div><div class="stat-num" style="font-size:15px">' + ev.length + '回' + (latest ? '（' + esc(latest.staffName || '不明') + '）' : '') + '</div></div></div>' +
+    '<div class="stat"><div class="stat-label">送信（最新の担当）</div><div class="stat-num" style="font-size:15px">' + ev.length + '回' + (latest ? '（' + esc(latest.staffName || '不明') + '）' : '') + '</div></div></div>' + checkCard +
     '<div class="table"><div class="row-flex" style="padding:10px 12px; border-bottom:1px solid var(--line)">' +
     '<button class="pill' + (S.revFilter === 'diff' ? ' on' : '') + '" data-rev-filter="diff">差異のある商品だけ</button>' +
+    (catInfo(S.revFilter) ? '<button class="pill on" data-rev-filter="' + S.revFilter + '">' + catInfo(S.revFilter)[1] + '</button>' : '') +
     '<button class="pill' + (S.revFilter === 'all' ? ' on' : '') + '" data-rev-filter="all">すべて</button>' +
     '<input class="input" id="rev-search" placeholder="品名・カラー番号で探す" value="' + esc(S.revSearch) + '" style="margin-left:auto; width:260px"></div>' +
-    '<div class="thead" style="' + cols + '"><span>ブランド</span><span>商品</span><span class="r">' + prevL + '</span><span class="r">入荷</span><span class="r">破棄</span><span class="r">' + curL + '</span><span class="r">差異</span></div>' +
+    '<div class="thead" style="' + cols + '"><span>ブランド</span><span>商品</span><span class="r">' + prevL + '</span><span class="r">入荷</span><span class="r">破棄</span><span class="r">' + curL + '</span><span class="r">差異</span><span style="padding-left:12px">見当</span></div>' +
     (shown.length ? shown.map((i) => '<div class="trow" style="' + cols + '"><span style="color:var(--sub)">' + esc(i.brand) + '</span><span style="font-weight:500">' + label(i) + '</span>' +
       '<span class="r">' + i.prevStock + '</span><span class="r" style="color:var(--green)">' + (i.incoming ? '+' + i.incoming : '—') + '</span><span class="r" style="color:var(--amber)">' + (i.disposal ? '−' + i.disposal : '—') + '</span>' +
-      '<span class="r" style="font-weight:700">' + i.currentStock + '</span><span class="r">' + (i.diff === 0 ? '<span class="muted">0</span>' : '<span class="diff ' + (i.diff > 0 ? 'plus">+' + i.diff : 'minus">−' + Math.abs(i.diff)) + '</span>') + '</span></div>').join('')
+      '<span class="r" style="font-weight:700">' + i.currentStock + '</span><span class="r">' + (i.diff === 0 ? '<span class="muted">0</span>' : '<span class="diff ' + (i.diff > 0 ? 'plus">+' + i.diff : 'minus">−' + Math.abs(i.diff)) + '</span>') + '</span>' +
+      '<span style="padding-left:12px; font-size:12px; color:' + (catInfo(revCat(i)) ? catInfo(revCat(i))[3] : 'var(--sub)') + '">' + (catInfo(revCat(i)) ? catInfo(revCat(i))[1] : '') + '</span></div>').join('')
       : '<div class="empty">' + (S.revFilter === 'diff' && !words.length ? '差異のある商品はありません' : '見つかりませんでした') + '</div>') +
     '</div></div>';
 }
@@ -690,8 +714,8 @@ function printLabelList(list) {
 
 function downloadCsv() {
   const d = S.review[S.revStore]; if (!d) return;
-  const rows = [['ブランド', '品名', 'カラーNO', 'コード', monthShort(d.previousMonth || S.month) + '末', '入荷', '廃棄', monthShort(S.month) + '末', '差異']]
-    .concat(d.items.slice().sort(byBrand).map((i) => [i.brand, i.name, i.colorNo, i.code, i.prevStock, i.incoming, i.disposal, i.currentStock, i.diff]));
+  const rows = [['ブランド', '品名', 'カラーNO', 'コード', monthShort(d.previousMonth || S.month) + '末', '入荷', '廃棄', monthShort(S.month) + '末', '差異', '見当']]
+    .concat(d.items.slice().sort(byBrand).map((i) => [i.brand, i.name, i.colorNo, i.code, i.prevStock, i.incoming, i.disposal, i.currentStock, i.diff, (REV_CATS.find((x) => x[0] === revCat(i)) || ['', ''])[1]]));
   const csv = '﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
