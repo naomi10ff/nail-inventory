@@ -551,8 +551,22 @@ function recordDisposal_(session, p) {
  * mode: 'add'なら今月すでに記録されている数量に加算、'overwrite'(省略時のデフォルト)なら
  * 今回数えた数でそのまま置き換える。承認済みの月への送信はロックされ、エラーになる
  * (差し戻しを受けるまで再送信できない)。
+ * item.zero が true の行は「数えていない商品を在庫0として送る」で足された0で、今月すでに
+ * 棚卸の数がある商品には書かない(2人以上で数えたとき、先に送った人の数を0で消さないため)。
  */
 function submitStocktake_(session, p) {
+  // 2台が同じ秒に送ると、お互いの送信がまだ書かれていない状態で判定してしまう
+  // (2026-10-28 生駒店で実際に起きた)。送信を1件ずつ順番に処理する。
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('ほかの人が送信中です。少し待ってからもう一度押してください');
+  try {
+    return submitStocktakeLocked_(session, p);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function submitStocktakeLocked_(session, p) {
   var store = session.role === 'hq' ? p.store : session.store;
   requireStoreAccess_(session, store);
 
@@ -565,9 +579,10 @@ function submitStocktake_(session, p) {
   var mode = p.mode === 'add' ? 'add' : 'overwrite';
   // 加算モードのときだけ、今月のこの店舗の棚卸ログを1回だけ読み込んで商品ごとの最新数量を
   // マップ化する。商品ごとに毎回シートを読み直すと件数分だけ遅くなるため。
-  var thisMonthQtyByCode = mode === 'add' ? getThisMonthStocktakeMap_(store, month) : {};
-
   var items = p.items || [];
+  var hasZeroFill = items.some(function (item) { return item.zero; });
+  var thisMonthQtyByCode = mode === 'add' || hasZeroFill ? getThisMonthStocktakeMap_(store, month) : {};
+  var skippedZero = 0;
   // 商品マスタを1回だけ読み込んでマップ化する。棚卸は1回の送信で多数の商品(場合によっては
   // 数百件)を扱うため、商品ごとにlookupProduct_で毎回シートを読み直すと件数分だけ遅くなる。
   var productMap = getProductMap_(store);
@@ -579,6 +594,10 @@ function submitStocktake_(session, p) {
     var product = productMap[String(item.code)];
     if (!product) {
       unknownCodes.push(item.code);
+      return;
+    }
+    if (item.zero && hasKey_(thisMonthQtyByCode, item.code)) {
+      skippedZero++;
       return;
     }
     var qty = mode === 'add' && hasKey_(thisMonthQtyByCode, item.code)
@@ -604,7 +623,8 @@ function submitStocktake_(session, p) {
 
   return {
     recorded: recorded,
-    unknownCodes: unknownCodes
+    unknownCodes: unknownCodes,
+    skippedZero: skippedZero
   };
 }
 

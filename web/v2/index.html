@@ -1351,7 +1351,7 @@ $('btn-send').addEventListener('click', async (ev) => {
   const items = Object.values(S.tally).map((t) => ({ code: t.code, count: t.count }));
   if (!items.length) return;
   const zero = S.mode === 'overwrite' && $('zero-unscanned').checked;
-  const zeros = zero ? S.products.filter((p) => !S.tally[String(p.code)]).map((p) => ({ code: String(p.code), count: 0 })) : [];
+  const zeros = zero ? S.products.filter((p) => !S.tally[String(p.code)]).map((p) => ({ code: String(p.code), count: 0, zero: true })) : [];
   const total = items.reduce((n, t) => n + t.count, 0);
   const msg = items.length + '品目・' + total + '個を本社へ送信します。' + (zero ? '\n数えていない ' + zeros.length + '品目は在庫0として送ります。' : '') + '\nよろしいですか？';
   if (!confirm(msg)) return;
@@ -1362,7 +1362,8 @@ $('btn-send').addEventListener('click', async (ev) => {
     const d = await api('submitStocktake', { staffName: S.staff, items: items.concat(zeros), mode: S.mode });
     clearDraft();
     $('done-text').innerHTML = esc(items.length) + '品目・' + esc(total) + '個を記録しました' +
-      (zero ? '<br>数えていない ' + esc(zeros.length) + '品目は0にしました' : '') +
+      (zero ? '<br>数えていない ' + esc(zeros.length - (d.skippedZero || 0)) + '品目は0にしました' : '') +
+      (d.skippedZero ? '<br>ほかの人が今月もう数えた ' + esc(d.skippedZero) + '品目は、その数のまま残しました' : '') +
       (d.unknownCodes && d.unknownCodes.length ? '<br>登録されていないコード：' + esc(d.unknownCodes.join('、')) : '') +
       '<br>本社の確認をお待ちください';
     S.tally = {}; S.mode = 'add'; S.stock = null;
