@@ -1122,7 +1122,8 @@ pullToRefresh('s-stock', loadStock);
 // ---- カメラ(棚卸・入荷・破棄・在庫を調べる で共通) ----
 // Androidはスマホに入っているバーコード読み取り機能(BarcodeDetector)を直接使う。
 // 向きに強く、写っているコードの位置もわかるので、いちばん大きく写っているもの
-// (=手に持っている商品)を選ぶ。使えない機種(iPhoneなど)だけhtml5-qrcodeに切り替える。
+// (=手に持っている商品)を選ぶ。iPhoneは同じ機能の代わりの部品を読み込んで使い、
+// それも読み込めないときだけhtml5-qrcodeに切り替える。
 // 右上の「カメラ切替」「ズーム」は、iPhoneのPro機種で近くにピントが合わず小さいQRが
 // 読めなかったため(10/28 生駒店)。選んだカメラ・ズームはスマホに覚えておく。
 const CAM = { box: null, boxId: null, handler: null, pausedText: '', stream: null, detector: null, timer: null, running: false, paused: false, ignore: null, ignoreSeen: 0, fallback: null };
@@ -1164,11 +1165,20 @@ async function startCamera(boxId, handler, pausedText) {
     msg.textContent = 'カメラを起動できませんでした。下の「コードを手で入れる」も使えます';
   }
 }
+// iPhoneにはBarcodeDetectorがないため、同じ使い方ができる読み取り部品(中身はzxing-cpp)を読み込む。
+// html5-qrcodeは線のバーコードにとても弱く、iPhone 17eでズームしても読めない商品があった(11/7 中西さん)。
+const DETECTOR_POLYFILL = 'https://cdn.jsdelivr.net/npm/barcode-detector@2.2.2/+esm';
+async function getDetectorClass() {
+  if ('BarcodeDetector' in window) return window.BarcodeDetector;
+  try { return (await import(DETECTOR_POLYFILL)).BarcodeDetector; } catch (e) { console.error(e); return null; }
+}
 async function openCamera(box) {
-  if ('BarcodeDetector' in window) {
-    const supported = await window.BarcodeDetector.getSupportedFormats();
+  const Detector = await getDetectorClass();
+  if (CAM.box !== box || !CAM.running) return;
+  if (Detector) {
+    const supported = await Detector.getSupportedFormats();
     const formats = WANTED.filter((f) => supported.includes(f));
-    CAM.detector = new window.BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
+    CAM.detector = new Detector({ formats: formats.length ? formats : ['qr_code'] });
     const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
     if (CAM.box !== box || !CAM.running) { stream.getTracks().forEach((t) => t.stop()); return; } // 起動中に別の画面へ移った
     CAM.stream = stream;
