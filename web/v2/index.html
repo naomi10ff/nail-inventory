@@ -1167,7 +1167,7 @@ async function startCamera(boxId, handler, pausedText) {
     '<div class="cam-frame"></div><div class="cam-line"></div><div class="cam-msg">カメラを起動しています…</div><div class="cam-paused">' + esc(pausedText) + '</div>' +
     '<div class="cam-ctrl"><button type="button" class="cam-zoom" style="display:none">ズーム 1倍</button><button type="button" class="cam-switch" style="display:none">カメラ切替</button></div>';
   box.classList.remove('paused');
-  Object.assign(CAM, { box, boxId, handler, pausedText, running: true, paused: false, ignore: null });
+  Object.assign(CAM, { box, boxId, handler, pausedText, running: true, paused: false, ignore: null, cand: null });
   const msg = box.querySelector('.cam-msg');
   try {
     try {
@@ -1288,7 +1288,12 @@ function handleFound(list) {
   }
   if (!list.length) return;
   list.sort((a, b) => b.area - a.area);
-  CAM.handler(list[0].value);
+  // 同じ番号が続けて2回読めたときだけ受け付ける。バーコードの一部だけが別の短い番号に
+  // 読みまちがえられることがある(11/10 木津店：4580011682380 が 15800114 と読まれて二重登録)。
+  const v = list[0].value;
+  if (!CAM.cand || CAM.cand.value !== v || now - CAM.cand.time > 1500) { CAM.cand = { value: v, time: now }; return; }
+  CAM.cand = null;
+  CAM.handler(v);
 }
 function pauseCamera(p) {
   CAM.paused = p;
