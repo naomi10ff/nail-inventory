@@ -1199,7 +1199,19 @@ async function getDetectorClass() {
       if (s.includes('ean_13')) { CAM.mode = 'A'; return window.BarcodeDetector; }
     } catch (e) { console.error(e); }
   }
-  try { const D = (await import(DETECTOR_POLYFILL)).BarcodeDetector; CAM.mode = 'B'; return D; } catch (e) { console.error(e); CAM.mode = 'C'; return null; }
+  // 部品と中身(wasm)はこのアプリと同じ場所に置いたものを使う。ネット上の配布元(jsdelivr)から毎回取りに行くと、
+  // 下地さんのiPhone 17で取り込めず読めない・遅いことがあった(11/10)
+  try {
+    if (!window.BarcodeDetectionAPI) await loadScript('lib/barcode-detector-2.2.2.js');
+    const api = window.BarcodeDetectionAPI;
+    if (!api.__set) {
+      const wasmUrl = new URL('lib/zxing_reader-1.1.3.wasm', location.href).href;
+      api.setZXingModuleOverrides({ locateFile: (path, prefix) => (path.endsWith('.wasm') ? wasmUrl : prefix + path) });
+      api.__set = true;
+    }
+    CAM.mode = 'B'; return api.BarcodeDetector;
+  } catch (e) { console.error(e); }
+  try { const D = (await import(DETECTOR_POLYFILL)).BarcodeDetector; CAM.mode = 'B2'; return D; } catch (e) { console.error(e); CAM.mode = 'C'; return null; }
 }
 async function openCamera(box) {
   const Detector = await getDetectorClass();
