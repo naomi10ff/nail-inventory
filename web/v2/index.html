@@ -331,11 +331,11 @@
           <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-incoming">追加</button>
         </div>
       </details>
-      <p class="h2" style="margin-top:4px">今回入荷した商品 <span class="badge" id="incoming-total">0個</span></p>
+      <p class="h2" style="margin-top:4px"><span id="incoming-store" style="color:var(--blue, #2563EB)"></span> に今回入荷した商品 <span class="badge" id="incoming-total">0個</span></p>
       <div class="list" id="incoming-list"><div class="empty">まだありません</div></div>
-      <p class="hint" style="font-size:12px">数を間違えたときは、本社に連絡してください（本社で直せます）。</p>
+      <p class="hint" style="font-size:12px">数を間違えたときは「−」で1個ずつ取り消せます（0個にすると一覧から消えます）。</p>
       <p class="hint">読んだ商品は、その場で本社に登録されています。全部読んだら下のボタンで終わってください。</p>
-      <button class="btn btn-primary back-home">入荷登録を終わる</button>
+      <button class="btn btn-primary" id="btn-incoming-finish">入荷登録を終わる</button>
     </div>
   </section>
 
@@ -899,22 +899,42 @@ function toIncoming() {
   renderIncomingList();
   startCamera('cam-incoming', onIncomingScan, '「次の商品へ」を押すと読み取ります');
 }
+// 一覧の −/＋ で数を直せる(−は「入荷 −1」を記録して取り消す。0個にすると一覧から消える)。
+// 店舗を間違えて入荷した(11/10 本社アカウントで宝来店に登録)ときに、その場で取り消せるようにするため。
 function renderIncomingList() {
-  const items = Object.entries(S.incoming);
+  const items = Object.entries(S.incoming).filter(([, t]) => t.count > 0);
   const total = items.reduce((n, [, t]) => n + t.count, 0);
   $('incoming-total').textContent = total + '個';
-  $('incoming-list').innerHTML = items.length
-    ? items.map(([, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div></div><div class="row-count">' + t.count + '個</div></div>').reverse().join('')
+  $('incoming-store').textContent = S.store || '';
+  const list = $('incoming-list');
+  list.innerHTML = items.length
+    ? items.map(([k, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div></div>' +
+      '<div class="stepper"><button data-code="' + esc(k) + '" data-d="-1" aria-label="1つ取り消す">−</button><span class="num">' + t.count + '</span><button data-code="' + esc(k) + '" data-d="1" aria-label="1つ増やす">＋</button></div></div>').reverse().join('')
     : '<div class="empty">まだありません</div>';
+  list.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', async () => {
+    const t = S.incoming[b.dataset.code]; if (!t || S.busy) return;
+    const d = Number(b.dataset.d);
+    if (d < 0 && !confirm('「' + t.name + '」の入荷を1個取り消しますか？')) return;
+    S.busy = true;
+    list.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    try { await recordIncomingOne(t.product, d); } catch (e) { alert('直せませんでした：' + e.message); renderIncomingList(); } finally { S.busy = false; }
+  }));
 }
-async function recordIncomingOne(product) {
-  await api('recordIncoming', { code: product.code, quantity: 1, staffName: S.staff });
+async function recordIncomingOne(product, quantity) {
+  const q = quantity || 1;
+  await api('recordIncoming', { code: product.code, quantity: q, staffName: S.staff, memo: q < 0 ? '入荷の取り消し' : '' });
   const key = String(product.code);
-  if (!S.incoming[key]) S.incoming[key] = { name: (product.name || '') + (product.colorNo ? '（' + product.colorNo + '）' : ''), brand: product.brand, count: 0 };
-  S.incoming[key].count += 1;
+  if (!S.incoming[key]) S.incoming[key] = { name: (product.name || '') + (product.colorNo ? '（' + product.colorNo + '）' : ''), brand: product.brand, count: 0, product };
+  S.incoming[key].count += q;
   S.stock = null; // 在庫の一覧は次に開いたときに読み直す
   renderIncomingList();
 }
+$('btn-incoming-finish').addEventListener('click', () => {
+  const total = Object.values(S.incoming).reduce((n, t) => n + Math.max(0, t.count), 0);
+  if (total && !confirm((S.store || '') + ' に、' + total + '個の入荷を登録しました。\n\n店舗と数が合っていれば「OK」で終わります。\nちがうときは「キャンセル」で戻り、一覧の − で取り消してください。')) return;
+  S.incoming = {};
+  toHome();
+});
 async function onIncomingScan(code) {
   if (S.busy) return;
   S.busy = true;
