@@ -1190,8 +1190,14 @@ async function startCamera(boxId, handler, pausedText) {
 // iPhoneにはBarcodeDetectorがないため、同じ使い方ができる読み取り部品(中身はzxing-cpp)を読み込む。
 // html5-qrcodeは線のバーコードにとても弱く、iPhone 17eでズームしても読めない商品があった(11/7 中西さん)。
 const DETECTOR_POLYFILL = 'https://cdn.jsdelivr.net/npm/barcode-detector@2.2.2/+esm';
+// スマホの読み取り機能があっても、線のバーコード(ean_13)に対応していない機種はこの部品を使う(11/10 下地さん)。
 async function getDetectorClass() {
-  if ('BarcodeDetector' in window) return window.BarcodeDetector;
+  if ('BarcodeDetector' in window) {
+    try {
+      const s = await window.BarcodeDetector.getSupportedFormats();
+      if (s.includes('ean_13')) return window.BarcodeDetector;
+    } catch (e) { console.error(e); }
+  }
   try { return (await import(DETECTOR_POLYFILL)).BarcodeDetector; } catch (e) { console.error(e); return null; }
 }
 async function openCamera(box) {
