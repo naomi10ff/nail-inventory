@@ -1180,7 +1180,7 @@ async function startCamera(boxId, handler, pausedText) {
       await openCamera(box);
     }
     if (CAM.box !== box || !CAM.running) return;
-    msg.textContent = 'バーコード・QRを枠に入れてください';
+    msg.textContent = 'バーコード・QRを枠に入れてください（' + (CAM.mode || '-') + '）';
     await setupCameraControls(box);
   } catch (e) {
     console.error(e);
@@ -1191,14 +1191,15 @@ async function startCamera(boxId, handler, pausedText) {
 // html5-qrcodeは線のバーコードにとても弱く、iPhone 17eでズームしても読めない商品があった(11/7 中西さん)。
 const DETECTOR_POLYFILL = 'https://cdn.jsdelivr.net/npm/barcode-detector@2.2.2/+esm';
 // スマホの読み取り機能があっても、線のバーコード(ean_13)に対応していない機種はこの部品を使う(11/10 下地さん)。
+// 画面に出す読み取り方の記号：A=スマホの機能 / B=代わりの部品 / C=html5-qrcode（読めないときの原因さがし用）
 async function getDetectorClass() {
   if ('BarcodeDetector' in window) {
     try {
       const s = await window.BarcodeDetector.getSupportedFormats();
-      if (s.includes('ean_13')) return window.BarcodeDetector;
+      if (s.includes('ean_13')) { CAM.mode = 'A'; return window.BarcodeDetector; }
     } catch (e) { console.error(e); }
   }
-  try { return (await import(DETECTOR_POLYFILL)).BarcodeDetector; } catch (e) { console.error(e); return null; }
+  try { const D = (await import(DETECTOR_POLYFILL)).BarcodeDetector; CAM.mode = 'B'; return D; } catch (e) { console.error(e); CAM.mode = 'C'; return null; }
 }
 async function openCamera(box) {
   const Detector = await getDetectorClass();
@@ -1214,6 +1215,7 @@ async function openCamera(box) {
     video.style.display = 'block';
     video.srcObject = stream;
     await video.play();
+    CAM.errors = 0;
     tick();
   } else {
     await startFallback(box);
@@ -1277,8 +1279,24 @@ async function tick() {
   if (!CAM.paused && CAM.detector && video && video.readyState >= 2) {
     try {
       const found = await CAM.detector.detect(video);
+      CAM.errors = 0;
       handleFound(found.map((b) => ({ value: b.rawValue, area: b.boundingBox ? b.boundingBox.width * b.boundingBox.height : 0 })));
-    } catch (e) { /* 1フレーム読めないだけなので続ける */ }
+    } catch (e) {
+      // 1フレーム読めないだけなら続ける。ずっと失敗する(部品の読み込みに失敗など)ときは html5-qrcode に切り替える
+      // (11/10 下地さん iPhone 17：映るのに何も読まない)
+      CAM.errors = (CAM.errors || 0) + 1;
+      if (CAM.errors === 1 || CAM.errors === 20) console.error(e);
+      if (CAM.errors >= 20) {
+        const box = CAM.box;
+        if (CAM.stream) { CAM.stream.getTracks().forEach((t) => t.stop()); CAM.stream = null; }
+        CAM.detector = null; CAM.mode = 'C';
+        startFallback(box).then(() => {
+          const m = box.querySelector('.cam-msg');
+          if (m) m.textContent = '読み取り方を切り替えました（C）';
+        }).catch((err) => console.error(err));
+        return;
+      }
+    }
   }
   CAM.timer = setTimeout(tick, 120);
 }
