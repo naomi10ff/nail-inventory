@@ -1326,10 +1326,22 @@ function handleFound(list) {
   list.sort((a, b) => b.area - a.area);
   // 同じ番号が続けて2回読めたときだけ受け付ける。バーコードの一部だけが別の短い番号に
   // 読みまちがえられることがある(11/10 木津店：4580011682380 が 15800114 と読まれて二重登録)。
+  // 11/13〜 QRと、チェック数字が正しい長いバーコード(13桁/12桁)は1回で受け付ける(速くするため)。
+  // 短い番号(8桁など)だけ2回確認する。
   const v = list[0].value;
-  if (!CAM.cand || CAM.cand.value !== v || now - CAM.cand.time > 1500) { CAM.cand = { value: v, time: now }; return; }
+  if (!isTrustedCode(v) && (!CAM.cand || CAM.cand.value !== v || now - CAM.cand.time > 1500)) { CAM.cand = { value: v, time: now }; return; }
   CAM.cand = null;
   CAM.handler(v);
+}
+function isTrustedCode(v) {
+  v = String(v || '');
+  if (/^QR-/i.test(v)) return true;
+  if (!/^\d{12,13}$/.test(v)) return false;
+  // EAN-13 / UPC-A のチェック数字を確かめる(読みまちがいなら合わない)
+  const d = v.padStart(13, '0').split('').map(Number);
+  let s = 0;
+  for (let i = 0; i < 12; i++) s += d[i] * (i % 2 ? 3 : 1);
+  return (10 - (s % 10)) % 10 === d[12];
 }
 function pauseCamera(p) {
   CAM.paused = p;
