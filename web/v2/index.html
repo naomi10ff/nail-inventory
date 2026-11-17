@@ -118,6 +118,20 @@
   .row-name { flex: 1; min-width: 0; font-size: 14px; line-height: 1.4; }
   .row .stepper { gap: 8px; }
   .row .stepper button { width: 36px; height: 36px; border-radius: 18px; font-size: 18px; }
+  /* 届く予定・理由(発注と入荷の紐づけ) */
+  .plan-head { padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .plan-bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .plan-bar > div { height: 8px; background: var(--blue); border-radius: 999px; }
+  .plan-dot { width: 26px; height: 26px; border-radius: 13px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .plan-dot.done { background: var(--green-bg); }
+  .plan-dot.wait { border: 2px dashed #CBD5E1; box-sizing: border-box; }
+  .plan-cnt { font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .plan-note { font-size: 11px; color: var(--sub); }
+  .reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .reason-grid button { min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 13px; cursor: pointer; padding: 6px 8px; }
+  .reason-grid button.on { border: 2px solid var(--blue); background: var(--blue-bg); color: var(--blue-dark); font-weight: 700; }
+  .reason-count { background: var(--blue-bg); color: var(--blue-dark); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+  .reason-memo { width: 100%; box-sizing: border-box; border: 1px solid #CBD5E1; border-radius: 10px; padding: 8px 10px; font-size: 14px; font-family: inherit; resize: none; }
   .row .stepper .num { font-size: 16px; min-width: 28px; }
   .row-count { font-size: 16px; font-weight: 700; min-width: 44px; text-align: right; }
   .row-count.zero { color: var(--red); font-size: 13px; }
@@ -324,6 +338,7 @@
       <p class="hint">届いた商品を1つずつ読み取ります。読むと<b>1個入荷</b>として記録されます。</p>
       <div class="camera" id="cam-incoming"></div>
       <div id="incoming-card-wrap"></div>
+      <div id="plan-wrap"></div>
       <details>
         <summary class="link-btn" style="list-style:none">バーコードが読めないときは、コードを手で入れる</summary>
         <div style="display:flex; gap:8px; margin-top:8px;">
@@ -336,6 +351,20 @@
       <p class="hint" style="font-size:12px">数を間違えたときは「−」で1個ずつ取り消せます（0個にすると一覧から消えます）。</p>
       <p class="hint">読んだ商品は、その場で本社に登録されています。全部読んだら下のボタンで終わってください。</p>
       <button class="btn btn-primary" id="btn-incoming-finish">入荷登録を終わる</button>
+    </div>
+  </section>
+
+  <!-- 届いていない商品の理由(発注と入荷の紐づけ 2026-11-17〜) -->
+  <section class="screen" id="s-incoming-reason">
+    <div class="topbar"><div class="topbar-row">
+      <button class="icon-btn" id="btn-reason-back" aria-label="入荷登録にもどる"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="topbar-title">届いていない商品</div><div class="topbar-sub who"></div>
+    </div></div>
+    <div class="body">
+      <div class="scan-card ng" style="gap:4px"><div style="font-size:13px; line-height:1.7; color:#92400E" id="reason-lead"></div></div>
+      <div id="reason-list" style="display:flex; flex-direction:column; gap:12px"></div>
+      <p class="hint" style="text-align:center" id="reason-status"></p>
+      <button class="btn btn-primary" id="btn-reason-send" disabled>本社に報告して終わる</button>
     </div>
   </section>
 
@@ -896,9 +925,148 @@ function toIncoming() {
   show('s-incoming');
   loadProducts();
   $('incoming-card-wrap').innerHTML = '';
+  S.planTouched = {};
   renderIncomingList();
+  loadPlan();
   startCamera('cam-incoming', onIncomingScan, '「次の商品へ」を押すと読み取ります');
 }
+
+// ---- 届く予定の商品(発注と入荷の紐づけ 2026-11-17〜) ----
+// 本社が発注表で「発注済み」にした商品を、入荷画面に「届く予定」として出す。読み取った分は
+// 自動で✓がつく。棚卸しの商品とつながらない商品(楽天・Amazonなど)は「届いた」ボタンで記録する。
+// 入荷登録を終わるとき、今回届いた発注のうち足りない商品は、理由と追記を本社に報告してもらう。
+const REASON_HINTS = {
+  '欠品・入荷待ち': '例：納品書に「欠品」と書いてあった',
+  '数がちがう': '例：納品書は2個、箱には1個だけ',
+  '別の商品が届いた': '例：D204ではなくD205が入っていた',
+  '破損していた': '例：容器が割れて中身がもれていた',
+  'その他': '例：箱ごと届いていない'
+};
+const monthLabel = (m) => m ? Number(m.slice(5, 7)) + '月' : '';
+async function loadPlan() {
+  const wrap = $('plan-wrap');
+  wrap.innerHTML = '<p class="hint">届く予定の商品を読みこんでいます…</p>';
+  try {
+    const r = await api('getDeliveryPlan', {});
+    S.plan = r.lines || [];
+    S.reasons = r.reasons || Object.keys(REASON_HINTS);
+  } catch (e) {
+    S.plan = null; // 発注表が読めないときは、これまでどおりの入荷登録だけで使える
+  }
+  renderPlan();
+}
+function renderPlan() {
+  const wrap = $('plan-wrap');
+  if (!S.plan || !S.plan.length) { wrap.innerHTML = ''; return; }
+  const months = [...new Set(S.plan.map((l) => l.month))];
+  wrap.innerHTML = months.map((m) => {
+    const lines = S.plan.filter((l) => l.month === m).slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    const done = lines.filter((l) => l.done).length;
+    const pct = Math.round(done / lines.length * 100);
+    return '<div class="list" style="margin-top:4px"><div class="plan-head">' +
+      '<div style="display:flex; justify-content:space-between; align-items:baseline"><span class="h2" style="font-size:15px">' + monthLabel(m) + 'の発注分・届く予定</span>' +
+      '<span style="font-size:14px; color:var(--sub)"><b style="color:var(--blue); font-size:20px">' + done + '</b> / ' + lines.length + '品 届いた</span></div>' +
+      '<div class="plan-bar"><div style="width:' + pct + '%"></div></div></div>' +
+      lines.map((l) => {
+        const dot = l.done
+          ? '<div class="plan-dot done"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>'
+          : '<div class="plan-dot wait"></div>';
+        const note = l.reason ? '報告ずみ：' + l.reason.reason : (!l.code ? l.vendor + '・読み取りではなく「届いた」を押す' : '');
+        const btn = (!l.done && !l.code) ? '<button class="btn btn-ghost btn-small" style="width:auto; padding:0 12px" data-arrive="' + esc(l.key) + '">届いた</button>' : '';
+        return '<div class="row">' + dot + '<div class="row-name"><div class="scan-brand">' + esc(l.brand || l.vendor || '') + '</div>' + esc(l.displayName) +
+          (note ? '<div class="plan-note">' + esc(note) + '</div>' : '') + '</div>' +
+          '<span class="plan-cnt" style="color:' + (l.done ? '#059669' : '#B45309') + '">' + l.got + ' / ' + l.qty + '</span>' + btn + '</div>';
+      }).join('') + '</div>';
+  }).join('');
+  wrap.querySelectorAll('button[data-arrive]').forEach((b) => b.addEventListener('click', async () => {
+    const l = S.plan.find((x) => x.key === b.dataset.arrive); if (!l || S.busy) return;
+    if (!confirm('「' + l.displayName + '」が' + (l.qty - l.got) + '個届いたことを記録しますか？')) return;
+    S.busy = true; b.disabled = true; b.textContent = '記録中…';
+    try {
+      await api('reportDelivery', { items: [{ key: l.key, arrived: l.qty - l.got }], staffName: S.staff });
+      l.got = l.qty; l.done = true; S.planTouched[l.month] = true;
+    } catch (e) { alert('記録できませんでした：' + e.message); }
+    finally { S.busy = false; renderPlan(); }
+  }));
+}
+// 読み取った商品を、届く予定に当てはめる(古い発注から順に)。取り消し(−)は新しい方から戻す。
+function planOnScan(code, q) {
+  if (!S.plan) return;
+  const mine = S.plan.filter((l) => String(l.code) === String(code));
+  if (!mine.length) return;
+  if (q > 0) {
+    const l = mine.find((x) => !x.done);
+    if (!l) return;
+    l.got = Math.min(l.qty, l.got + q); l.done = l.got >= l.qty; S.planTouched[l.month] = true;
+  } else {
+    const l = mine.slice().reverse().find((x) => x.got > 0);
+    if (!l) return;
+    l.got = Math.max(0, l.got + q); l.done = l.got >= l.qty;
+  }
+  renderPlan();
+}
+function shortLines() {
+  if (!S.plan) return [];
+  return S.plan.filter((l) => S.planTouched[l.month] && !l.done && !l.reason);
+}
+function toReason(lines) {
+  S.reasonLines = lines;
+  S.reasonPick = {};
+  show('s-incoming-reason');
+  $('reason-lead').innerHTML = '<b>' + lines.length + '品</b>がまだそろっていません。それぞれ理由を選んで、追記を書いてください。<br>届いた分は、もう入荷登録されています。';
+  renderReason();
+}
+function renderReason() {
+  const list = $('reason-list');
+  list.innerHTML = S.reasonLines.map((l, i) => {
+    const pick = S.reasonPick[l.key] || {};
+    return '<div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px 14px">' +
+      '<div style="display:flex; justify-content:space-between; gap:8px"><div class="row-name"><div class="scan-brand">' + esc(l.brand || l.vendor || '') + '</div><b>' + esc(l.displayName) + '</b></div>' +
+      '<span class="plan-cnt" style="color:#B45309">' + l.got + ' / ' + l.qty + '個</span></div>' +
+      '<div class="reason-grid">' + S.reasons.map((r) => '<button data-i="' + i + '" data-r="' + esc(r) + '" class="' + (pick.reason === r ? 'on' : '') + '" aria-pressed="' + (pick.reason === r) + '">' + esc(r) + '</button>').join('') + '</div>' +
+      (pick.reason === '数がちがう' ? '<div class="reason-count">届いた <b>' + l.got + '個</b> ・ 足りない <b>' + (l.qty - l.got) + '個</b>（自動で計算）</div>' : '') +
+      (pick.reason ? '<label style="font-size:12px; font-weight:700" for="memo-' + i + '">追記（必ず書いてください）</label><textarea class="reason-memo" rows="2" id="memo-' + i + '" data-i="' + i + '" placeholder="' + esc(REASON_HINTS[pick.reason] || '') + '">' + esc(pick.memo || '') + '</textarea>' : '') +
+      '</div>';
+  }).join('');
+  list.querySelectorAll('.reason-grid button').forEach((b) => b.addEventListener('click', () => {
+    const l = S.reasonLines[Number(b.dataset.i)];
+    S.reasonPick[l.key] = Object.assign({}, S.reasonPick[l.key], { reason: b.dataset.r });
+    renderReason();
+  }));
+  list.querySelectorAll('textarea').forEach((t) => t.addEventListener('input', () => {
+    const l = S.reasonLines[Number(t.dataset.i)];
+    S.reasonPick[l.key] = Object.assign({}, S.reasonPick[l.key], { memo: t.value });
+    updateReasonStatus();
+  }));
+  updateReasonStatus();
+}
+function updateReasonStatus() {
+  const left = S.reasonLines.filter((l) => { const p = S.reasonPick[l.key]; return !p || !p.reason || !(p.memo || '').trim(); }).length;
+  $('reason-status').textContent = left ? 'あと ' + left + '品 入力してください（理由・追記）' : 'すべて入力しました';
+  $('btn-reason-send').disabled = left > 0;
+}
+$('btn-reason-send').addEventListener('click', async () => {
+  const btn = $('btn-reason-send');
+  btn.disabled = true; btn.textContent = '送っています…';
+  try {
+    await api('reportDelivery', { staffName: S.staff, items: S.reasonLines.map((l) => ({ key: l.key, reason: S.reasonPick[l.key].reason, memo: S.reasonPick[l.key].memo })) });
+    alert('本社に報告しました。ありがとうございました。');
+    S.incoming = {};
+    toHome();
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    alert('送れませんでした：' + e.message);
+  } finally {
+    btn.textContent = '本社に報告して終わる';
+    updateReasonStatus();
+  }
+});
+$('btn-reason-back').addEventListener('click', () => {
+  show('s-incoming');
+  renderIncomingList();
+  renderPlan();
+  startCamera('cam-incoming', onIncomingScan, '「次の商品へ」を押すと読み取ります');
+});
 // 一覧の −/＋ で数を直せる(−は「入荷 −1」を記録して取り消す。0個にすると一覧から消える)。
 // 店舗を間違えて入荷した(11/10 本社アカウントで宝来店に登録)ときに、その場で取り消せるようにするため。
 function renderIncomingList() {
@@ -928,10 +1096,13 @@ async function recordIncomingOne(product, quantity) {
   S.incoming[key].count += q;
   S.stock = null; // 在庫の一覧は次に開いたときに読み直す
   renderIncomingList();
+  planOnScan(product.code, q);
 }
 $('btn-incoming-finish').addEventListener('click', () => {
   const total = Object.values(S.incoming).reduce((n, t) => n + Math.max(0, t.count), 0);
   if (total && !confirm((S.store || '') + ' に、' + total + '個の入荷を登録しました。\n\n店舗と数が合っていれば「OK」で終わります。\nちがうときは「キャンセル」で戻り、一覧の − で取り消してください。')) return;
+  const short = shortLines();
+  if (short.length) { toReason(short); return; } // 足りない商品があれば、理由を聞いてから終わる
   S.incoming = {};
   toHome();
 });

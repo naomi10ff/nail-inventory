@@ -168,7 +168,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwGwA8PfZjVi_IgDPvjcQkJ
 const STORES = ['生駒店', '西大寺宝来店', '木津店'];
 const PAGES = [
   ['home', 'ホーム'], ['review', '棚卸の確認'], ['stock', '在庫（3店舗の比較）'], ['products', '商品・QRコード'],
-  ['delivery', '納品分の確認'], ['incoming', '入荷登録'], ['disposal', '廃棄登録']
+  ['orders', '発注と入荷'], ['delivery', '納品分の確認'], ['incoming', '入荷登録'], ['disposal', '廃棄登録']
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -194,7 +194,8 @@ const S = {
   stockSearch: '', stockOnlyZero: false, openBrand: '',
   prodStore: STORES[0], prodBrand: 'すべて', prodCode: 'qr', prodSearch: '', selected: new Set(),
   workStore: lsGet('v2_hq_work_store') || '', log: [], last: null, busy: false,
-  modal: null, toast: ''
+  modal: null, toast: '',
+  ord: null, ordMonth: '', ordAll: false   // 発注と入荷(getDeliveryOverview の結果)
 };
 
 async function api(action, payload) {
@@ -242,6 +243,7 @@ function onEnterPage() {
   if (S.page === 'review') loadReview(S.revStore, false);
   if (S.page === 'products') loadReview(S.prodStore, false);
   if (S.page === 'delivery') loadDelivery(S.delStore);
+  if (S.page === 'orders') loadOrders(S.ordMonth);
   if (S.page === 'incoming' || S.page === 'disposal') setTimeout(() => { const el = $('scan-input'); if (el) el.focus(); }, 50);
 }
 function flash(msg) { S.toast = msg; render(); clearTimeout(flash.t); flash.t = setTimeout(() => { S.toast = ''; render(); }, 2600); }
@@ -277,6 +279,7 @@ function pageHtml() {
     case 'stock': return stockHtml();
     case 'products': return productsHtml();
     case 'delivery': return deliveryHtml();
+    case 'orders': return ordersHtml();
     case 'incoming': return workHtml('incoming');
     case 'disposal': return workHtml('disposal');
     default: return homeHtml();
@@ -516,6 +519,60 @@ function deliveryRows(store) {
   latest.items.forEach((i) => { const k = String(i.code); if (map[k]) map[k].stock = i.currentStock; });
   return Object.values(map).sort((a, b) => (a.stock > 0) - (b.stock > 0) || byBrand(a, b));
 }
+// ---- 発注と入荷(2026-11-17〜) ----
+// 各店舗の発注表で「発注済み」「欠品・入荷待ち」にした商品が、全部届いたかを発注月ごとに見る。
+// 届いた数は入荷登録から自動で数え、足りない商品はお店が選んだ理由と追記を出す。
+async function loadOrders(month) {
+  S.errors.orders = '';
+  try {
+    const r = await api('getDeliveryOverview', { month: month || '' });
+    S.ord = r; S.ordMonth = r.month;
+  } catch (e) {
+    if (/ログイン|セッション/.test(e.message)) { logout(e.message); return; }
+    S.errors.orders = e.message;
+  }
+  render();
+}
+function ordersHtml() {
+  const d = S.ord;
+  if (!d) return '<div class="page"><div class="card"><p class="hint">' + (S.errors.orders ? '読み込めませんでした：' + esc(S.errors.orders) : '3店舗の発注表を読みこんでいます…（少し時間がかかります）') + '</p></div></div>';
+  const months = d.months || [];
+  const sel = months.length
+    ? '<label class="hint" for="ord-month">発注月</label><select class="input" id="ord-month" style="height:36px; width:auto">' + months.map((m) => '<option value="' + m + '"' + (m === d.month ? ' selected' : '') + '>' + monthJa(m) + '</option>').join('') + '</select>'
+    : '';
+  const head = '<div class="row-flex">' + sel + '<span class="hint">各店舗の発注表で、状態を「発注済み」「欠品・入荷待ち」にした商品です。届くと自動で入荷済みになります。</span></div>';
+  if (!d.month) return '<div class="page">' + head + '<div class="card"><p class="hint">まだ「発注済み」の商品がありません。発注表の状態を「発注済み」にすると、ここに出ます。</p></div></div>';
+  const cards = '<div class="grid4" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">' + d.stores.map((s) => {
+    if (s.error) return '<div class="stat"><div class="stat-label">' + esc(s.store) + '</div><p class="hint" style="color:var(--red)">発注表を読めませんでした：' + esc(s.error) + '</p></div>';
+    const chip = !s.total ? '<span class="chip">発注なし</span>'
+      : s.open === 0 ? '<span class="chip ok">入荷完了</span>'
+      : s.noReason ? '<span class="chip ng">理由がまだ ' + s.noReason + '品</span>'
+      : '<span class="chip wait">入荷待ち ' + s.open + '品</span>';
+    const pct = s.total ? Math.round(s.got / s.total * 100) : 0;
+    return '<div class="stat"><div class="row-flex" style="justify-content:space-between"><b>' + esc(s.store) + '</b>' + chip + '</div>' +
+      '<div class="stat-num">' + s.got + ' <span class="hint">/ ' + s.total + '品 届いた</span></div>' +
+      '<div style="height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin-top:6px"><div style="height:8px; width:' + pct + '%; background:' + (s.open === 0 && s.total ? 'var(--green)' : 'var(--blue)') + '"></div></div></div>';
+  }).join('') + '</div>';
+  const lines = (d.lines || []).filter((l) => S.ordAll || !l.done);
+  const cols = 'grid-template-columns: 110px 100px minmax(0,1.6fr) 80px 90px minmax(0,1.6fr) 70px';
+  const table = '<div class="table"><div class="row-flex" style="padding:10px 12px; border-bottom:1px solid var(--line)">' +
+    '<b style="font-size:14px">' + (S.ordAll ? 'この月の発注（すべて）' : 'まだ届いていない商品') + '</b>' +
+    '<div class="seg" style="margin-left:auto"><button data-ord-all="0" class="' + (S.ordAll ? '' : 'on') + '">まだの商品</button><button data-ord-all="1" class="' + (S.ordAll ? 'on' : '') + '">すべて</button></div></div>' +
+    '<div class="thead" style="' + cols + '"><span>店舗</span><span>発注先</span><span>ブランド・商品名</span><span>TAT品番</span><span class="r">届いた / 発注</span><span>お店の報告</span><span>発注日</span></div>' +
+    (lines.length ? lines.map((l) => {
+      const rep = l.reason
+        ? '<span class="chip">' + esc(l.reason.reason) + '</span> ' + esc(l.reason.memo) + '<div class="hint" style="font-size:11px">' + esc(l.reason.at || '') + ' ' + esc(l.reason.by || '') + '</div>'
+        : (l.done ? '<span class="chip ok">入荷済み</span>' : '<span class="chip ng">理由がまだ</span>');
+      return '<div class="trow" style="' + cols + '"><span>' + esc(l.store) + '</span><span>' + esc(l.vendor) + '</span>' +
+        '<span><span class="hint" style="font-size:11px">' + esc(l.brand || l.type || '') + '</span><br>' + esc(l.displayName) + '</span>' +
+        '<span class="muted">' + esc(l.itemNumber || '—') + '</span>' +
+        '<span class="r" style="font-weight:700; color:' + (l.done ? 'var(--green)' : 'var(--amber)') + '">' + l.got + ' / ' + l.qty + '</span>' +
+        '<span>' + rep + '</span><span>' + esc(l.orderDate) + '</span></div>';
+    }).join('') : '<div class="empty">' + (S.ordAll ? 'この月の発注はありません' : 'この月の発注分は、すべて届いています') + '</div>') + '</div>';
+  return '<div class="page">' + head + cards + table +
+    '<p class="hint">「理由がまだ」は、届いた発注のうち、お店がまだ理由を報告していない商品です。届いていない商品の対応が済んだら、発注表の状態を「入荷済み」「とりやめ」などに変えると、ここから消えます。</p></div>';
+}
+
 function deliveryHtml() {
   const s = S.delStore;
   const tabs = '<div class="seg">' + STORES.map((x) => '<button data-del-store="' + esc(x) + '" class="' + (x === s ? 'on' : '') + '">' + esc(x) + '</button>').join('') + '</div>';
@@ -741,6 +798,8 @@ function bindPage() {
   document.querySelectorAll('[data-del-store]').forEach((b) => b.addEventListener('click', () => { S.delStore = b.dataset.delStore; render(); loadDelivery(S.delStore); }));
   document.querySelectorAll('[data-del-filter]').forEach((b) => b.addEventListener('click', () => { S.delFilter = b.dataset.delFilter; render(); }));
   if ($('btn-del-csv')) $('btn-del-csv').addEventListener('click', downloadDeliveryCsv);
+  if ($('ord-month')) $('ord-month').addEventListener('change', (e) => { S.ord = null; render(); loadOrders(e.target.value); });
+  document.querySelectorAll('[data-ord-all]').forEach((b) => b.addEventListener('click', () => { S.ordAll = b.dataset.ordAll === '1'; render(); }));
 
   if ($('stock-search')) $('stock-search').addEventListener('input', (e) => { S.stockSearch = e.target.value; render(); });
   document.querySelectorAll('[data-stock-zero]').forEach((b) => b.addEventListener('click', () => { S.stockOnlyZero = b.dataset.stockZero === '1'; render(); }));

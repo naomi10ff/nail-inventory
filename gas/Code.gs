@@ -104,6 +104,12 @@ function routeAction_(action, p) {
       return getStocktakeStatusForClient_(validateToken_(p.token), p.store, p.month);
     case 'resetStocktakeThisMonth':
       return resetStocktakeThisMonth_(validateToken_(p.token), p);
+    case 'getDeliveryPlan':
+      return getDeliveryPlan_(validateToken_(p.token), p);
+    case 'reportDelivery':
+      return reportDelivery_(validateToken_(p.token), p);
+    case 'getDeliveryOverview':
+      return getDeliveryOverview_(validateToken_(p.token), p);
     default:
       throw new Error('不明なactionです: ' + action);
   }
