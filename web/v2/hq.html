@@ -546,8 +546,7 @@ function ordersHtml() {
     if (s.error) return '<div class="stat"><div class="stat-label">' + esc(s.store) + '</div><p class="hint" style="color:var(--red)">発注表を読めませんでした：' + esc(s.error) + '</p></div>';
     const chip = !s.total ? '<span class="chip">発注なし</span>'
       : s.open === 0 ? '<span class="chip ok">入荷完了</span>'
-      : s.noReason ? '<span class="chip ng">理由がまだ ' + s.noReason + '品</span>'
-      : '<span class="chip wait">入荷待ち ' + s.open + '品</span>';
+      : '<span class="chip wait">入荷待ち ' + s.open + '品' + (s.open - s.noReason ? '（理由あり ' + (s.open - s.noReason) + '）' : '') + '</span>';
     const pct = s.total ? Math.round(s.got / s.total * 100) : 0;
     return '<div class="stat"><div class="row-flex" style="justify-content:space-between"><b>' + esc(s.store) + '</b>' + chip + '</div>' +
       '<div class="stat-num">' + s.got + ' <span class="hint">/ ' + s.total + '品 届いた</span></div>' +
@@ -562,7 +561,7 @@ function ordersHtml() {
     (lines.length ? lines.map((l) => {
       const rep = l.reason
         ? '<span class="chip">' + esc(l.reason.reason) + '</span> ' + esc(l.reason.memo) + '<div class="hint" style="font-size:11px">' + esc(l.reason.at || '') + ' ' + esc(l.reason.by || '') + '</div>'
-        : (l.done ? '<span class="chip ok">入荷済み</span>' : '<span class="chip ng">理由がまだ</span>');
+        : (l.done ? '<span class="chip ok">入荷済み</span>' : '<span class="hint">報告なし（まだ届いていない）</span>');
       return '<div class="trow" style="' + cols + '"><span>' + esc(l.store) + '</span><span>' + esc(l.vendor) + '</span>' +
         '<span><span class="hint" style="font-size:11px">' + esc(l.brand || l.type || '') + '</span><br>' + esc(l.displayName) + '</span>' +
         '<span class="muted">' + esc(l.itemNumber || '—') + '</span>' +
@@ -570,7 +569,7 @@ function ordersHtml() {
         '<span>' + rep + '</span><span>' + esc(l.orderDate) + '</span></div>';
     }).join('') : '<div class="empty">' + (S.ordAll ? 'この月の発注はありません' : 'この月の発注分は、すべて届いています') + '</div>') + '</div>';
   return '<div class="page">' + head + cards + table +
-    '<p class="hint">「理由がまだ」は、届いた発注のうち、お店がまだ理由を報告していない商品です。届いていない商品の対応が済んだら、発注表の状態を「入荷済み」「とりやめ」などに変えると、ここから消えます。</p></div>';
+    '<p class="hint">お店が入荷登録で足りない商品を見つけると、理由と追記がここに出ます。届いていない商品の対応が済んだら、発注表の状態を「入荷済み」「とりやめ」などに変えると、ここから消えます。</p></div>';
 }
 
 function deliveryHtml() {
