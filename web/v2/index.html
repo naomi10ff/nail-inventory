@@ -1016,7 +1016,7 @@ function toReason(lines) {
   S.reasonLines = lines;
   S.reasonPick = {};
   show('s-incoming-reason');
-  $('reason-lead').innerHTML = '<b>' + lines.length + '品</b>がまだそろっていません。それぞれ理由を選んで、追記を書いてください。<br>届いた分は、もう入荷登録されています。';
+  $('reason-lead').innerHTML = '<b>' + lines.length + '品</b>がまだそろっていません。それぞれ理由を選んでください。「欠品・入荷待ち」以外は追記も書いてください。<br>届いた分は、もう入荷登録されています。';
   renderReason();
 }
 function renderReason() {
@@ -1028,7 +1028,7 @@ function renderReason() {
       '<span class="plan-cnt" style="color:#B45309">' + l.got + ' / ' + l.qty + '個</span></div>' +
       '<div class="reason-grid">' + S.reasons.map((r) => '<button data-i="' + i + '" data-r="' + esc(r) + '" class="' + (pick.reason === r ? 'on' : '') + '" aria-pressed="' + (pick.reason === r) + '">' + esc(r) + '</button>').join('') + '</div>' +
       (pick.reason === '数がちがう' ? '<div class="reason-count">届いた <b>' + l.got + '個</b> ・ 足りない <b>' + (l.qty - l.got) + '個</b>（自動で計算）</div>' : '') +
-      (pick.reason ? '<label style="font-size:12px; font-weight:700" for="memo-' + i + '">追記（必ず書いてください）</label><textarea class="reason-memo" rows="2" id="memo-' + i + '" data-i="' + i + '" placeholder="' + esc(REASON_HINTS[pick.reason] || '') + '">' + esc(pick.memo || '') + '</textarea>' : '') +
+      (pick.reason ? '<label style="font-size:12px; font-weight:700" for="memo-' + i + '">' + (memoRequired(pick.reason) ? '追記（必ず書いてください）' : '追記（あれば）') + '</label><textarea class="reason-memo" rows="2" id="memo-' + i + '" data-i="' + i + '" placeholder="' + esc(REASON_HINTS[pick.reason] || '') + '">' + esc(pick.memo || '') + '</textarea>' : '') +
       '</div>';
   }).join('');
   list.querySelectorAll('.reason-grid button').forEach((b) => b.addEventListener('click', () => {
@@ -1043,8 +1043,10 @@ function renderReason() {
   }));
   updateReasonStatus();
 }
+// 「欠品・入荷待ち」は選ぶだけでよい(納品書に書いてあるので追記は任意)。ほかの理由は追記が必須(11/17)。
+const memoRequired = (reason) => reason !== '欠品・入荷待ち';
 function updateReasonStatus() {
-  const left = S.reasonLines.filter((l) => { const p = S.reasonPick[l.key]; return !p || !p.reason || !(p.memo || '').trim(); }).length;
+  const left = S.reasonLines.filter((l) => { const p = S.reasonPick[l.key]; return !p || !p.reason || (memoRequired(p.reason) && !(p.memo || '').trim()); }).length;
   $('reason-status').textContent = left ? 'あと ' + left + '品 入力してください（理由・追記）' : 'すべて入力しました';
   $('btn-reason-send').disabled = left > 0;
 }
@@ -1052,7 +1054,7 @@ $('btn-reason-send').addEventListener('click', async () => {
   const btn = $('btn-reason-send');
   btn.disabled = true; btn.textContent = '送っています…';
   try {
-    await api('reportDelivery', { staffName: S.staff, items: S.reasonLines.map((l) => ({ key: l.key, reason: S.reasonPick[l.key].reason, memo: S.reasonPick[l.key].memo })) });
+    await api('reportDelivery', { staffName: S.staff, items: S.reasonLines.map((l) => ({ key: l.key, reason: S.reasonPick[l.key].reason, memo: (S.reasonPick[l.key].memo || '').trim() || '（追記なし）' })) });
     alert('本社に報告しました。ありがとうございました。');
     S.incoming = {};
     toHome();
