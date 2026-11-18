@@ -110,6 +110,12 @@ function routeAction_(action, p) {
       return reportDelivery_(validateToken_(p.token), p);
     case 'getDeliveryOverview':
       return getDeliveryOverview_(validateToken_(p.token), p);
+    case 'getOrderList':
+      return getOrderList_(validateToken_(p.token), p);
+    case 'addOrderLine':
+      return addOrderLine_(validateToken_(p.token), p);
+    case 'addOrderLines':
+      return addOrderLines_(validateToken_(p.token), p);
     default:
       throw new Error('不明なactionです: ' + action);
   }

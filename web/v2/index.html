@@ -248,6 +248,7 @@
         <button class="tile" id="tile-lookup"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>在庫を調べる<small>商品を読んで数を見る</small></button>
         <button class="tile" id="tile-disposal"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg></span>破棄登録<small>使えない商品を減らす</small></button>
         <button class="tile" id="tile-stock"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg></span>在庫の一覧<small>お店の在庫を全部見る</small></button>
+        <button class="tile" id="tile-order" style="grid-column: span 2"><span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1 1 0 001 .8h9.7a1 1 0 001-.8L21 7H6"/></svg></span>発注<small>ほしい商品を読んで、発注表に入れる</small></button>
       </div>
       <p class="hint center" style="font-size:12px">下に引っぱると、最新の情報に更新します</p>
     </div>
@@ -391,6 +392,32 @@
     </div>
   </section>
 
+  <!-- 発注(読み取り→発注表) -->
+  <section class="screen" id="s-order">
+    <div class="topbar"><div class="topbar-row">
+      <button class="icon-btn" id="btn-order-back" aria-label="戻る"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="topbar-title">発注</div><div class="topbar-sub who"></div>
+    </div></div>
+    <div class="body">
+      <p class="hint" id="order-period"></p>
+      <div class="camera" id="cam-order"></div>
+      <div id="order-card-wrap"></div>
+      <details>
+        <summary class="manual-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>コードを手で入れる（読めないとき）</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input" id="manual-order" style="flex:1" inputmode="text" autocapitalize="characters" placeholder="例：QR-1A2B3C4D">
+          <button class="btn btn-ghost btn-small" style="width:auto; padding:0 16px" data-manual="manual-order">調べる</button>
+        </div>
+      </details>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px"><span class="h2">送る前のリスト</span><span class="badge" id="order-draft-count">0品</span></div>
+      <div class="list" id="order-draft"><div class="empty">まだありません</div></div>
+      <button class="btn btn-primary" id="btn-order-send" disabled>発注表に送る</button>
+      <div class="h2" style="margin-top:10px">今月の発注表に入っている商品</div>
+      <div class="list" id="order-list"><div class="empty">読み込み中…</div></div>
+      <p class="hint" style="font-size:12px">お店にない新しい商品は、これまでどおり発注表にURLを貼ってください。個数を減らす・取り消すときも発注表で直せます。</p>
+    </div>
+  </section>
+
   <!-- 在庫を調べる(読み取り) -->
   <section class="screen" id="s-lookup">
     <div class="topbar"><div class="topbar-row">
@@ -438,6 +465,7 @@
         <button class="menu-item" data-go="disposal">破棄登録<span class="chev">›</span></button>
         <button class="menu-item" data-go="lookup">在庫を調べる（読み取り）<span class="chev">›</span></button>
         <button class="menu-item" data-go="stocktake">棚卸<span class="chev">›</span></button>
+        <button class="menu-item" data-go="order">発注<span class="chev">›</span></button>
       </div>
       <div class="menu-list">
         <button class="menu-item" id="btn-menu-staff">担当者を変える<span class="chev">›</span></button>
@@ -530,6 +558,7 @@ function go(where) {
   else if (where === 'incoming') toIncoming();
   else if (where === 'disposal') toDisposal();
   else if (where === 'lookup') toLookup('s-home');
+  else if (where === 'order') toOrder();
 }
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => go(t.dataset.tab)));
 document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
@@ -660,6 +689,10 @@ async function toHome() {
   $('home-store').textContent = S.store || '';
   $('home-staff').textContent = (S.staff || '') + ' さん';
   renderDisposalLock();
+  const unsent = Object.keys(loadOrderDraft()).length;
+  $('tile-order').querySelector('small').innerHTML = unsent
+    ? '<b style="color:var(--amber)">まだ送っていない商品が ' + unsent + '品 あります</b>'
+    : 'ほしい商品を読んで、発注表に入れる';
   $('link-hq').style.display = S.role === 'hq' ? 'flex' : 'none';
   loadProducts();
   await loadHomeStatus();
@@ -694,6 +727,7 @@ $('tile-incoming').addEventListener('click', toIncoming);
 $('tile-lookup').addEventListener('click', () => toLookup('s-home'));
 $('tile-disposal').addEventListener('click', toDisposal);
 $('tile-stock').addEventListener('click', toStock);
+$('tile-order').addEventListener('click', () => toOrder());
 
 async function loadProducts(force) {
   if (!force && S.productsLoaded && S.productsStore === S.store) return;
@@ -1229,6 +1263,159 @@ async function onDisposalScan(code) {
     S.busy = false;
   }
 }
+
+// ---- 発注(読み取り→送る前のリスト→「発注表に送る」でまとめて発注表へ) ----
+// お店の商品リストにある商品だけ。新しい商品は発注表にURLを貼る(これまでどおり)。
+// 送る前のリストはこのスマホの中に残る(閉じても消えない)。送ったあと、今月の発注表に
+// もう入っていた商品は入れずに知らせ、「◯個に書きかえる」を選べる。
+let orderFrom = 's-home';
+let orderSent = [];   // 今月の発注表に入っている行(getOrderList)
+const orderKey = () => 'v2_order_' + (S.store || '');
+function loadOrderDraft() { try { const r = localStorage.getItem(orderKey()); return r ? JSON.parse(r) : {}; } catch (e) { return {}; } }
+function saveOrderDraft(d) { try { localStorage.setItem(orderKey(), JSON.stringify(d)); } catch (e) { /* 続行 */ } }
+const orderLabel = (p) => { let n = String(p.name || ''); if (p.colorNo && n.indexOf(String(p.colorNo)) === -1) n += '（' + p.colorNo + '）'; return (p.brand ? p.brand + ' ' : '') + n; };
+const orderNorm = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+function orderPeriodText() {
+  const d = new Date();
+  const m = new Date(d.getFullYear(), d.getMonth() + (d.getDate() <= 7 ? 0 : 1), 1);
+  return (m.getMonth() + 1) + '月の発注分（入力は ' + (m.getMonth() === 0 ? 12 : m.getMonth()) + '/8〜' + (m.getMonth() + 1) + '/7）';
+}
+function toOrder() {
+  orderFrom = document.querySelector('.screen.active')?.id === 's-menu' ? 's-menu' : 's-home';
+  show('s-order');
+  $('order-period').innerHTML = '<b>' + esc(orderPeriodText()) + '</b><br>ほしい商品を読んでリストに入れ、最後に「発注表に送る」を押してください。';
+  $('order-card-wrap').innerHTML = '';
+  renderOrderDraft();
+  loadOrderList();
+  startCamera('cam-order', onOrderScan, '「次の商品へ」を押すと読み取ります');
+}
+$('btn-order-back').addEventListener('click', () => {
+  const n = Object.keys(loadOrderDraft()).length;
+  if (n && !confirm('まだ送っていない商品が ' + n + '品 あります（このスマホに残しておきます）。\n画面を閉じてもよろしいですか？')) return;
+  if (orderFrom === 's-menu') show('s-menu'); else toHome();
+});
+function renderOrderDraft() {
+  const d = loadOrderDraft();
+  const items = Object.values(d);
+  $('order-draft-count').textContent = items.length + '品';
+  $('btn-order-send').disabled = !items.length;
+  $('btn-order-send').textContent = items.length ? '発注表に送る（' + items.length + '品）' : '発注表に送る';
+  const list = $('order-draft');
+  list.innerHTML = items.length
+    ? items.slice().reverse().map((t) => '<div class="row"><div class="row-name">' + esc(t.label) + '</div>' +
+      '<div class="stepper"><button data-code="' + esc(t.code) + '" data-d="-1" aria-label="1つ減らす">−</button><span class="num">' + t.qty + '</span><button data-code="' + esc(t.code) + '" data-d="1" aria-label="1つ増やす">＋</button></div></div>').join('')
+    : '<div class="empty">まだありません</div>';
+  list.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', () => {
+    const dd = loadOrderDraft(); const t = dd[b.dataset.code]; if (!t) return;
+    t.qty += Number(b.dataset.d);
+    if (t.qty <= 0) {
+      if (!confirm('「' + t.label + '」をリストから消しますか？')) return;
+      delete dd[t.code];
+    }
+    saveOrderDraft(dd); renderOrderDraft();
+  }));
+}
+async function loadOrderList() {
+  const list = $('order-list');
+  try {
+    const r = await api('getOrderList', {});
+    orderSent = r.lines;
+    list.innerHTML = r.lines.length
+      ? r.lines.slice().reverse().map((l) => '<div class="row"><div class="row-name">' + esc(l.name) + '<div class="scan-brand">' + esc(l.who || '') + '</div></div><b>' + esc(l.qty) + '個</b></div>').join('')
+      : '<div class="empty">まだありません</div>';
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    list.innerHTML = '<div class="empty">読み込めませんでした：' + esc(e.message) + '</div>';
+  }
+}
+async function onOrderScan(code) {
+  if (S.busy) return;
+  S.busy = true;
+  pauseCamera(true);
+  if (navigator.vibrate) navigator.vibrate(60);
+  const wrap = $('order-card-wrap');
+  const next = () => { wrap.innerHTML = ''; resumeCameraIgnoring(code); };
+  wrap.innerHTML = '<div class="scan-card info"><div class="hint">調べています…</div></div>';
+  try {
+    const r = await api('lookupCurrentStock', { code });
+    if (!r.found) {
+      wrap.innerHTML = '<div class="scan-card ng"><div class="scan-name">お店の商品リストにない商品です</div><div style="font-size:20px; font-weight:700">' + esc(code) + '</div>' +
+        '<div class="hint">新しい商品は、これまでどおり発注表にURLを貼ってください。</div><button class="btn btn-ghost" id="btn-next">次の商品へ</button></div>';
+      $('btn-next').addEventListener('click', next);
+      return;
+    }
+    const label = orderLabel(r);
+    const sent = orderSent.find((l) => orderNorm(l.name) === orderNorm(label));
+    const inDraft = loadOrderDraft()[r.code];
+    let qty = 1;
+    wrap.innerHTML = '<div class="scan-card info"><div><div class="scan-name">' + productLabel(r) + '</div><div class="scan-brand">' + esc(r.brand || '') + '</div></div>' +
+      '<div class="hint">今の在庫：<b>' + esc(r.currentStock) + '個</b></div>' +
+      (sent ? '<div class="hint" style="color:var(--amber); font-weight:700">今月の発注表にもう入っています（' + esc(sent.qty) + '個' + (sent.who ? '・' + esc(sent.who) + 'さん' : '') + '）</div>' : '') +
+      (inDraft ? '<div class="hint" style="color:var(--amber); font-weight:700">リストに ' + inDraft.qty + '個 入っています（足した数になります）</div>' : '') +
+      '<div style="display:flex; align-items:center; justify-content:space-between"><span class="hint">発注する数</span>' +
+      '<div class="stepper"><button id="ord-minus" aria-label="1つ減らす">−</button><span class="num" id="ord-num">1</span><button id="ord-plus" aria-label="1つ増やす">＋</button></div></div>' +
+      '<button class="btn btn-primary" id="btn-ord-add">リストに入れる</button>' +
+      '<button class="btn btn-ghost" id="btn-next">入れないで次へ</button></div>';
+    $('ord-minus').addEventListener('click', () => { qty = Math.max(1, qty - 1); $('ord-num').textContent = qty; });
+    $('ord-plus').addEventListener('click', () => { qty += 1; $('ord-num').textContent = qty; });
+    $('btn-next').addEventListener('click', next);
+    $('btn-ord-add').addEventListener('click', () => {
+      const d = loadOrderDraft();
+      const t = d[r.code] || (d[r.code] = { code: r.code, label: label, qty: 0 });
+      t.qty += qty;
+      saveOrderDraft(d); renderOrderDraft();
+      next();
+    });
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    wrap.innerHTML = '<div class="scan-card warn"><div class="scan-name">調べられませんでした</div><div class="hint">' + esc(e.message) + '</div><button class="btn btn-ghost" id="btn-next">もう一度読む</button></div>';
+    $('btn-next').addEventListener('click', next);
+  } finally {
+    S.busy = false;
+  }
+}
+$('btn-order-send').addEventListener('click', async (ev) => {
+  const d = loadOrderDraft();
+  const items = Object.values(d);
+  if (!items.length) return;
+  if (!confirm(items.length + '品を発注表に送ります。よろしいですか？')) return;
+  const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '送っています…';
+  pauseCamera(true);
+  const wrap = $('order-card-wrap');
+  const closeCard = () => { wrap.innerHTML = ''; resumeCameraIgnoring(null); };
+  try {
+    const res = await api('addOrderLines', { items: items.map((t) => ({ code: t.code, quantity: t.qty })), staffName: S.staff });
+    const added = res.results.filter((x) => x.status === 'added');
+    const dups = res.results.filter((x) => x.status === 'duplicate');
+    const errs = res.results.filter((x) => x.status === 'error');
+    // 入れた商品・もう入っていた商品はリストから消す(うまくいかなかった商品だけ残す)
+    res.results.forEach((x) => { if (x.status !== 'error') delete d[x.code]; });
+    saveOrderDraft(d);
+    wrap.innerHTML = '<div class="scan-card ' + (errs.length ? 'warn' : 'ok') + '">' +
+      (added.length ? '<div style="display:flex; gap:12px; align-items:center">' + OK_ICON + '<div class="scan-name">' + added.length + '品を発注表に送りました</div></div>' : '') +
+      dups.map((x, i) => '<div class="hint"><b>' + esc(x.label) + '</b> は今月の発注表にもう入っていました（' + esc(x.existingQty) + '個' + (x.existingWho ? '・' + esc(x.existingWho) + 'さん' : '') + '）。</div>' +
+        '<button class="btn btn-ghost" data-dup="' + i + '">' + x.quantity + '個に書きかえる</button>').join('') +
+      errs.map((x) => '<div class="hint" style="color:var(--red)">' + esc(x.label || x.code) + '：' + esc(x.error) + '（リストに残しました）</div>').join('') +
+      '<button class="btn btn-primary" id="btn-next2">閉じる</button></div>';
+    wrap.querySelectorAll('[data-dup]').forEach((b) => b.addEventListener('click', async () => {
+      const x = dups[Number(b.dataset.dup)];
+      b.disabled = true; b.textContent = '書きかえています…';
+      try {
+        await api('addOrderLine', { code: x.code, quantity: x.quantity, staffName: S.staff, replaceRow: x.row });
+        b.textContent = x.quantity + '個に書きかえました';
+        loadOrderList();
+      } catch (e) { b.disabled = false; b.textContent = x.quantity + '個に書きかえる'; alert(e.message); }
+    }));
+    $('btn-next2').addEventListener('click', closeCard);
+  } catch (e) {
+    if (isLoginError(e)) { toLogin(e.message); return; }
+    wrap.innerHTML = '<div class="scan-card warn"><div class="scan-name">送れませんでした</div><div class="hint">' + esc(e.message) + '<br>リストはそのまま残っています。もう一度「発注表に送る」を押してください。</div><button class="btn btn-ghost" id="btn-next2">閉じる</button></div>';
+    $('btn-next2').addEventListener('click', closeCard);
+  } finally {
+    renderOrderDraft();
+    loadOrderList();
+  }
+});
 
 // ---- 在庫を調べる(読み取り) ----
 let lookupFrom = 's-home';
