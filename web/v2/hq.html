@@ -190,7 +190,7 @@ const S = {
   monthRev: {},        // 「店舗|年月」-> getStocktakeReview の結果(納品分の確認で月ごとに使う)
   delStore: STORES[0], delFilter: 'zero',
   loading: {}, errors: {},
-  revStore: STORES[0], revFilter: 'diff', revSearch: '',
+  revStore: STORES[0], revFilter: 'diff', revSearch: '', revBase: 'base', // revBase: 'base'=前回の棚卸と比べる / 'month'=前月末と比べる
   stockSearch: '', stockOnlyZero: false, openBrand: '',
   prodStore: STORES[0], prodBrand: 'すべて', prodCode: 'qr', prodSearch: '', selected: new Set(),
   workStore: lsGet('v2_hq_work_store') || '', log: [], last: null, busy: false,
@@ -231,8 +231,20 @@ function statsOf(d) {
     out: items.filter((i) => i.currentStock <= 0).length,
     qr: items.filter((i) => isQr(i.code) && i.currentStock > 0).length,
     incoming: items.reduce((n, i) => n + (i.incoming || 0), 0),
-    diff: items.filter((i) => i.diff !== 0).length
+    diff: revItems(d).filter((i) => i.diff !== 0).length
   };
+}
+// 棚卸の確認で「何と比べるか」(11/25〜)。前回の棚卸と比べられるとき(サーバーが baseDate を返したとき)は、
+// prevStock・incoming・disposal・diff を前回の棚卸からの数に置きかえた写しを返す。
+// 今月の入荷(statsOf の incoming)や納品分の確認は前月末の区切りのまま使うので、元の items は変えない。
+function useBase(d) { return S.revBase === 'base' && !!(d && d.baseDate); }
+function revItems(d) {
+  const items = (d && d.items) || [];
+  return useBase(d) ? items.map((i) => Object.assign({}, i, { prevStock: i.baseStock, incoming: i.baseIncoming, disposal: i.baseDisposal, diff: i.baseDiff })) : items;
+}
+function revPrevLabel(d) {
+  if (useBase(d)) { const t = new Date(d.baseDate); return '前回 ' + (t.getMonth() + 1) + '/' + t.getDate(); }
+  return monthShort(d.previousMonth || S.month) + '末';
 }
 const chipClass = (st) => ({ '承認済み': 'ok', '承認待ち': 'wait', '差し戻し': 'ng' }[st] || '');
 
@@ -360,12 +372,12 @@ function homeHtml() {
 // 承認の前に見る「確認リスト」(11/4)：あるはずの数(先月末＋今月の入荷−今月の廃棄)と棚卸の数を比べ、
 // 少ない・多い商品を理由の見当ごとに分ける。いちばん大事なのは「今月入荷したのに0」(数え漏れの可能性が高い)。
 const REV_CATS = [
-  ['in0', '今月入荷したのに0', '数え漏れの可能性が高い', '#B91C1C'],
-  ['gone', '先月あったのに0', '使い切り？ 数え漏れ？', '#B45309'],
+  ['in0', '入荷したのに0', '数え漏れの可能性が高い', '#B91C1C'],
+  ['gone', '前回あったのに0', '使い切り？ 数え漏れ？', '#B45309'],
   ['less', '数が減っている', '数えまちがい？ 廃棄の書き忘れ？', '#92400E'],
   ['more', '数が増えている', '数えまちがい？ 入荷の登録漏れ？', '#1E40AF']
 ];
-function prevL0(d) { return monthShort(d.previousMonth || S.month) + '末'; }
+function prevL0(d) { return revPrevLabel(d); }
 function revCat(i) {
   if (i.diff === 0) return '';
   if (i.diff > 0) return 'more';
@@ -377,7 +389,7 @@ function reviewHtml() {
   const tabs = '<div class="seg">' + STORES.map((x) => '<button data-rev-store="' + esc(x) + '" class="' + (x === s ? 'on' : '') + '">' + esc(x) + '</button>').join('') + '</div>';
   if (!d) return '<div class="page"><div class="row-flex">' + tabs + '</div><div class="card"><p class="hint">' + (S.errors[s] ? '読み込めませんでした：' + esc(S.errors[s]) : '読み込み中…（少し時間がかかります）') + '</p></div></div>';
   const st = statsOf(d), ms = d.monthlyStatus || {};
-  const items = d.items.slice().sort(byBrand);
+  const items = revItems(d).slice().sort(byBrand);
   const words = norm(S.revSearch).split(/\s+/).filter(Boolean);
   const order = { in0: 0, gone: 1, less: 2, more: 3, '': 4 };
   const shown = items.filter((i) => (S.revFilter === 'all' || (S.revFilter === 'diff' ? i.diff !== 0 : revCat(i) === S.revFilter)) && (!words.length || words.every((w) => norm([i.brand, i.name, i.colorNo, i.code].join(' ')).includes(w))))
@@ -389,12 +401,15 @@ function reviewHtml() {
   const cols = 'grid-template-columns: 130px minmax(0,1fr) 70px 60px 60px 70px 80px 150px';
   const catInfo = (c) => REV_CATS.find((x) => x[0] === c);
   const checkCard = '<div class="card" style="display:flex; flex-direction:column; gap:10px"><b style="font-size:15px">承認の前の確認リスト</b>' +
-    '<p class="hint">「あるはずの数（' + prevL0(d) + '＋今月の入荷−今月の廃棄）」と「棚卸で数えた数」がちがう商品です。押すと下の表がしぼられます。</p>' +
+    '<p class="hint">「あるはずの数（' + prevL0(d) + '＋そのあとの入荷−廃棄）」と「棚卸で数えた数」がちがう商品です。押すと下の表がしぼられます。</p>' +
     '<div class="grid4">' + REV_CATS.map((c) => '<button class="stat" data-rev-filter="' + c[0] + '" style="text-align:left; cursor:pointer;' + (S.revFilter === c[0] ? ' outline:2px solid var(--blue);' : '') + '"><div class="stat-label">' + c[1] + '</div><div class="stat-num" style="color:' + c[3] + '">' + (catCount[c[0]] || 0) + '品</div><div class="stat-label">' + c[2] + '</div></button>').join('') + '</div></div>';
-  const prevL = monthShort(d.previousMonth || S.month) + '末', curL = monthShort(S.month) + '末';
+  const prevL = revPrevLabel(d), curL = monthShort(S.month) + '末';
+  const baseSeg = d.baseDate ? '<span class="hint" style="margin-left:8px">比べる相手：</span><div class="seg">' +
+    '<button data-rev-base="base" class="' + (S.revBase === 'base' ? 'on' : '') + '">前回の棚卸（' + (new Date(d.baseDate).getMonth() + 1) + '/' + new Date(d.baseDate).getDate() + '）</button>' +
+    '<button data-rev-base="month" class="' + (S.revBase === 'month' ? 'on' : '') + '">' + monthShort(d.previousMonth || S.month) + '末</button></div>' : '';
   const note = ms.status === '承認済み' ? '<p class="hint">' + esc(ms.approver || '') + ' が承認済みです。直すときは「差し戻す」を押すと、お店でもう一度数えられるようになります。</p>'
     : ms.status === '差し戻し' ? '<p class="hint" style="color:var(--red)">差し戻し中：' + esc(ms.rejectedReason || '理由の記載なし') + '</p>' : '';
-  return '<div class="page"><div class="row-flex">' + tabs + '<span class="chip ' + chipClass(st.status) + '">' + monthShort(S.month) + ' ' + esc(st.status) + '</span>' +
+  return '<div class="page"><div class="row-flex">' + tabs + '<span class="chip ' + chipClass(st.status) + '">' + monthShort(S.month) + ' ' + esc(st.status) + '</span>' + baseSeg +
     '<div class="row-flex" style="margin-left:auto"><button class="btn" id="btn-csv">CSVで保存</button>' +
     '<button class="btn" id="btn-reject"' + (st.status === '未実施' ? ' disabled' : '') + '>差し戻す</button>' +
     '<button class="btn btn-primary" id="btn-approve"' + (st.status === '未実施' ? ' disabled' : '') + '>' + (st.status === '承認済み' ? '再承認する' : '承認する') + '</button></div></div>' + note +
@@ -770,8 +785,8 @@ function printLabelList(list) {
 
 function downloadCsv() {
   const d = S.review[S.revStore]; if (!d) return;
-  const rows = [['ブランド', '品名', 'カラーNO', 'コード', monthShort(d.previousMonth || S.month) + '末', '入荷', '廃棄', monthShort(S.month) + '末', '差異', '見当']]
-    .concat(d.items.slice().sort(byBrand).map((i) => [i.brand, i.name, i.colorNo, i.code, i.prevStock, i.incoming, i.disposal, i.currentStock, i.diff, (REV_CATS.find((x) => x[0] === revCat(i)) || ['', ''])[1]]));
+  const rows = [['ブランド', '品名', 'カラーNO', 'コード', revPrevLabel(d), '入荷', '廃棄', monthShort(S.month) + '末', '差異', '見当']]
+    .concat(revItems(d).slice().sort(byBrand).map((i) => [i.brand, i.name, i.colorNo, i.code, i.prevStock, i.incoming, i.disposal, i.currentStock, i.diff, (REV_CATS.find((x) => x[0] === revCat(i)) || ['', ''])[1]]));
   const csv = '﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -789,6 +804,7 @@ function bindPage() {
     go(b.dataset.todoPage);
   }));
   document.querySelectorAll('[data-rev-store]').forEach((b) => b.addEventListener('click', () => { S.revStore = b.dataset.revStore; render(); loadReview(S.revStore, false); }));
+  document.querySelectorAll('[data-rev-base]').forEach((b) => b.addEventListener('click', () => { S.revBase = b.dataset.revBase; render(); }));
   document.querySelectorAll('[data-rev-filter]').forEach((b) => b.addEventListener('click', () => { S.revFilter = b.dataset.revFilter; render(); }));
   if ($('rev-search')) $('rev-search').addEventListener('input', (e) => { S.revSearch = e.target.value; render(); });
   if ($('btn-approve')) $('btn-approve').addEventListener('click', () => { S.modal = 'approve'; render(); });

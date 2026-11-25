@@ -779,14 +779,14 @@ async function toStart() {
     html += '<p class="h2">どちらで始めますか？</p><p class="hint">今月はすでに ' + esc(dateStr) + ' に送信されています</p>' +
       '<div class="choice-list">' +
       '<label class="choice"><input type="radio" name="mode" value="add" checked><div><div class="choice-title">続きから数える</div><div class="choice-text">これまで送った数に足していきます。棚ごとに分けて数えるときはこちら</div></div></label>' +
-      '<label class="choice"><input type="radio" name="mode" value="overwrite"><div><div class="choice-title">最初から数え直す</div><div class="choice-text" style="color:#B45309">今月送った棚卸の数はすべて消えます</div></div></label>' +
+      '<label class="choice"><input type="radio" name="mode" value="overwrite"><div><div class="choice-title">最初から数え直す</div><div class="choice-text" style="color:#B45309">今月送った数は使わずに、はじめから数えます（前回の数は記録に残ります）</div></div></label>' +
       '</div><div class="spacer"></div><div class="error" id="start-error"></div><button class="btn btn-primary" id="btn-start">カメラを起動して始める</button>';
     body.innerHTML = html;
     $('btn-start').addEventListener('click', async (ev) => {
       const mode = document.querySelector('input[name="mode"]:checked').value;
       if (mode === 'overwrite') {
-        if (!confirm('今月送った棚卸の数をすべて消して、最初から数え直します。\nこの操作は取り消せません。よろしいですか？')) return;
-        const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '消しています…';
+        if (!confirm('今月送った数は使わずに、最初から数え直します。\nよろしいですか？')) return;
+        const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '準備しています…';
         try { await api('resetStocktakeThisMonth', {}); } catch (e) { $('start-error').textContent = e.message; btn.disabled = false; btn.textContent = 'カメラを起動して始める'; return; }
       }
       S.tally = {}; S.mode = mode; toScan();

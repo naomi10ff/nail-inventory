@@ -4,6 +4,9 @@
  * text/plain として送信する(preflight回避のため。詳細はREADME参照)。
  */
 
+/** 「最初から数え直す」を押したときに取引ログへ足す印の行の種別(2026-11-25〜。それまでは行を消していた)。 */
+var STOCKTAKE_RESET_TYPE = '棚卸リセット';
+
 function doGet(e) {
   return jsonOutput_({ ok: true, message: 'Nail Salon Inventory API is running' });
 }
@@ -655,16 +658,13 @@ function resetStocktakeThisMonth_(session, p) {
     throw new Error('今月は本社承認済みのため棚卸はできません。修正が必要な場合は本社に差し戻しを依頼してください');
   }
 
+  // 以前は今月の棚卸の行を1行ずつ消していた。消すと前回の数が残らず(11/25 宝来で11/11の数が
+  // 消えて比べられなかった)、行数が多いと数分かかっていた。いまは「ここから数え直し」の印の行を
+  // 1行足すだけにする。今月の棚卸の数(加算・0で送る判定・実施日)は、この印より後の行だけを見る。
+  // 印の行は種別が「棚卸リセット」なので、在庫の計算(棚卸・調整・入荷・廃棄だけを見る)には影響しない。
   var sheet = getSheet_(SHEET_LOG);
-  var data = sheet.getDataRange().getValues();
+  sheet.appendRow([new Date(), store, p.staffName || session.username || '', '', '（最初から数え直し）', '', STOCKTAKE_RESET_TYPE, 0, '最初から数え直す']);
   var deletedCount = 0;
-  for (var i = data.length - 1; i >= 1; i--) {
-    var row = data[i];
-    if (row[1] === store && row[6] === '棚卸' && Utilities.formatDate(new Date(row[0]), 'Asia/Tokyo', 'yyyy-MM') === month) {
-      sheet.deleteRow(i + 1);
-      deletedCount++;
-    }
-  }
 
   var approvalSheet = getSheet_(SHEET_APPROVALS);
   var approvalData = approvalSheet.getDataRange().getValues();
@@ -708,9 +708,10 @@ function getThisMonthStocktakeMap_(store, month) {
   var map = {};
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (row[1] !== store || row[6] !== '棚卸') continue;
+    if (row[1] !== store || (row[6] !== '棚卸' && row[6] !== STOCKTAKE_RESET_TYPE)) continue;
     var ts = new Date(row[0]).getTime();
     if (ts < prevCutoff.getTime() || ts >= curCutoff.getTime()) continue;
+    if (row[6] === STOCKTAKE_RESET_TYPE) { map = {}; continue; } // 「最初から数え直す」より前の数は使わない
     map[row[3]] = Number(row[7]) || 0; // ログは追記順なので、後の行が常に最新の値になる
   }
   return map;
@@ -1022,9 +1023,10 @@ function getLatestStocktakeDateThisMonth_(store, month) {
   var latest = null;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (row[1] !== store || row[6] !== '棚卸') continue;
+    if (row[1] !== store || (row[6] !== '棚卸' && row[6] !== STOCKTAKE_RESET_TYPE)) continue;
     var ts = new Date(row[0]);
     if (ts.getTime() < prevCutoff.getTime() || ts.getTime() >= curCutoff.getTime()) continue;
+    if (row[6] === STOCKTAKE_RESET_TYPE) { latest = null; continue; } // 数え直しの印のあとは「まだ送っていない」に戻す
     if (!latest || ts.getTime() > latest.getTime()) latest = ts;
   }
   return latest;
@@ -1065,12 +1067,53 @@ function getStocktakeReview_(session, storeParam, month) {
   var logSheet = getSheet_(SHEET_LOG);
   var logData = logSheet.getDataRange().getValues();
   var prevCutoffMs = prevCutoff.getTime(), curCutoffMs = curCutoff.getTime();
+
+  // 「前回の棚卸」と比べるための区切り(2026-11-25〜)。今回の棚卸は、今月の「最初から数え直す」の
+  // 印があればその印から、なければ今月はじめて送った棚卸から始まる。それより前で最後に送られた
+  // 棚卸が「前回の棚卸」。前月末と比べる今までの数(prevStock・incoming・disposal・diff)はそのまま残し
+  // (今月の入荷・納品分の確認で使っている)、前回の棚卸と比べる数は base〜 の名前で別に返す。
+  var stTimes = [], resetMs = null;
+  for (var r = 1; r < logData.length; r++) {
+    if (logData[r][1] !== store) continue;
+    var rts = new Date(logData[r][0]).getTime();
+    if (rts >= curCutoffMs) continue;
+    if (logData[r][6] === '棚卸') stTimes.push(rts);
+    else if (logData[r][6] === STOCKTAKE_RESET_TYPE && rts >= prevCutoffMs) resetMs = rts;
+  }
+  var cycleStartMs = resetMs;
+  if (cycleStartMs === null) {
+    for (var s = 0; s < stTimes.length; s++) {
+      if (stTimes[s] >= prevCutoffMs) { cycleStartMs = stTimes[s]; break; }
+    }
+  }
+  var baseStocktakeMs = null;
+  if (cycleStartMs !== null) {
+    for (var s2 = 0; s2 < stTimes.length; s2++) {
+      if (stTimes[s2] < cycleStartMs) baseStocktakeMs = stTimes[s2];
+    }
+  }
+  // 前回の棚卸の送信までを「前回の数」に入れ、そのあとの入荷・廃棄を今回までの動きとして数える。
+  // 今月まだ数えていないときは、前月末と同じ区切りにする。
+  var baseCutoffMs = cycleStartMs === null ? prevCutoffMs : (baseStocktakeMs === null ? 0 : baseStocktakeMs + 1);
+  var eventStartMs = resetMs !== null ? resetMs : prevCutoffMs;
+  var baseMap = {}, baseIncomingMap = {}, baseDisposalMap = {};
+
   for (var i = 1; i < logData.length; i++) {
     var row = logData[i];
     if (row[1] !== store) continue;
     var ts = new Date(row[0]).getTime();
     if (ts >= curCutoffMs) continue; // 今月より後の記録は集計に関係ない
     var code = row[3], type = row[6], qty = Number(row[7]) || 0;
+
+    if (ts < baseCutoffMs) {
+      if (type === '棚卸' || type === '調整') baseMap[code] = qty;
+      else if (type === '入荷') baseMap[code] = (baseMap[code] || 0) + qty;
+      else if (type === '廃棄') baseMap[code] = (baseMap[code] || 0) - qty;
+    } else if (type === '入荷') {
+      baseIncomingMap[code] = (baseIncomingMap[code] || 0) + qty;
+    } else if (type === '廃棄') {
+      baseDisposalMap[code] = (baseDisposalMap[code] || 0) + qty;
+    }
 
     // 前月末・今月末それぞれの時点までの状態を、computeAllSummaryAsOf_と同じ規則
     // (棚卸/調整は絶対値としてセット、入荷/廃棄は加減算)でその場で更新する。
@@ -1088,7 +1131,7 @@ function getStocktakeReview_(session, storeParam, month) {
       incomingMap[code] = (incomingMap[code] || 0) + qty;
     } else if (type === '廃棄') {
       disposalMap[code] = (disposalMap[code] || 0) + qty;
-    } else if (type === '棚卸') {
+    } else if (type === '棚卸' && ts >= eventStartMs) { // 数え直しの印より前の送信は今回の棚卸に数えない
       var eventKey = String(ts) + '||' + row[2];
       if (!stocktakeEventMap[eventKey]) {
         stocktakeEventMap[eventKey] = { timestamp: row[0], staffName: row[2], itemCount: 0 };
@@ -1111,10 +1154,15 @@ function getStocktakeReview_(session, storeParam, month) {
     var disposal = disposalMap[p.code] || 0;
     var currentStock = hasKey_(curMap, p.code) ? curMap[p.code] : prevStock + incoming - disposal;
     var expected = prevStock + incoming - disposal;
+    var baseStock = baseMap[p.code] || 0;
+    var baseIncoming = baseIncomingMap[p.code] || 0;
+    var baseDisposal = baseDisposalMap[p.code] || 0;
     return {
       code: p.code, brand: p.brand, name: p.name, colorNo: p.colorNo,
       prevStock: prevStock, incoming: incoming, disposal: disposal,
-      currentStock: currentStock, diff: currentStock - expected
+      currentStock: currentStock, diff: currentStock - expected,
+      baseStock: baseStock, baseIncoming: baseIncoming, baseDisposal: baseDisposal,
+      baseDiff: currentStock - (baseStock + baseIncoming - baseDisposal)
     };
   });
 
@@ -1142,6 +1190,8 @@ function getStocktakeReview_(session, storeParam, month) {
     store: store,
     month: month,
     previousMonth: previousMonthString_(month),
+    // 前回の棚卸の日時(今月まだ数えていない・一度も数えていないときはnull)
+    baseDate: baseStocktakeMs === null ? null : new Date(baseStocktakeMs),
     items: items,
     stocktakeEvents: stocktakeEvents,
     approval: approval,
