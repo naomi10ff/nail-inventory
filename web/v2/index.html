@@ -146,6 +146,10 @@
   .done-icon { width: 84px; height: 84px; border-radius: 42px; background: var(--green); display: flex; align-items: center; justify-content: center; margin: 24px auto 0; animation: popIn .35s ease; }
   .center { text-align: center; }
   .error { color: var(--red); font-size: 14px; min-height: 1em; }
+  /* 商品名を直す(11/27) */
+  .rename-link { background: none; border: none; color: var(--blue); font-size: 12px; padding: 2px 0; cursor: pointer; text-decoration: underline; }
+  .rename-bg { position: fixed; inset: 0; background: rgba(17,24,39,.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .rename-box { background: #fff; width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 18px 16px 22px; display: flex; flex-direction: column; gap: 10px; max-height: 90vh; overflow-y: auto; }
 
   /* ホーム */
   .hello { display: flex; align-items: center; gap: 12px; }
@@ -739,6 +743,60 @@ async function loadProducts(force) {
 }
 const findProduct = (code) => S.products.find((x) => String(x.code) === String(code)) || null;
 
+// ---- 商品名を直す(11/27 賀田さん要望：まちがえて登録した商品名を、お店で直せるように) ----
+// 直せるのはブランド・商品名・カラー番号だけ。コード(バーコード・QR)は変えない。
+// 在庫の一覧・入荷の一覧・在庫を調べる の「商品名を直す」から開く。
+function openRename(product, onDone) {
+  if (!product || !product.code) return;
+  const base = findProduct(product.code) || product;
+  const brands = Array.from(new Set(S.products.map((x) => x.brand).concat([base.brand]).filter(Boolean)))
+    .sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
+  const bg = document.createElement('div');
+  bg.className = 'rename-bg';
+  bg.innerHTML = '<div class="rename-box" role="dialog" aria-label="商品名を直す">' +
+    '<div style="font-size:17px; font-weight:700">商品名を直す</div>' +
+    '<div class="hint">今の名前：' + esc(base.brand || '') + '　' + productLabel(base) + '</div>' +
+    '<label class="field">ブランド<select class="input" id="rn-brand">' +
+    brands.map((b) => '<option value="' + esc(b) + '"' + (b === base.brand ? ' selected' : '') + '>' + esc(b) + '</option>').join('') + '</select></label>' +
+    '<label class="field">新しいブランド名（上のリストにないときだけ）<input class="input" id="rn-brand-new"></label>' +
+    '<label class="field">商品名<input class="input" id="rn-name" value="' + esc(base.name || '') + '"></label>' +
+    '<label class="field">カラー番号（あれば）<input class="input" id="rn-color" value="' + esc(base.colorNo || '') + '"></label>' +
+    '<div class="hint">バーコード・QRコードはそのままです。在庫の数も変わりません。</div>' +
+    '<div class="error" id="rn-error"></div>' +
+    '<button class="btn btn-primary" id="rn-save">この名前に直す</button>' +
+    '<button class="btn btn-ghost" id="rn-cancel">やめる</button></div>';
+  document.body.appendChild(bg);
+  const close = () => bg.remove();
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  bg.querySelector('#rn-cancel').addEventListener('click', close);
+  bg.querySelector('#rn-save').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    const brand = bg.querySelector('#rn-brand-new').value.trim() || bg.querySelector('#rn-brand').value;
+    const name = bg.querySelector('#rn-name').value.trim();
+    const colorNo = bg.querySelector('#rn-color').value.trim();
+    const err = bg.querySelector('#rn-error');
+    err.textContent = '';
+    if (!brand) { err.textContent = 'ブランドを選んでください'; return; }
+    if (!name) { err.textContent = '商品名を入れてください'; return; }
+    if (!confirm('「' + (base.brand || '') + ' ' + (base.name || '') + '」を\n「' + brand + ' ' + name + (colorNo ? '（' + colorNo + '）' : '') + '」に直します。よろしいですか？')) return;
+    btn.disabled = true; btn.textContent = '直しています…';
+    try {
+      const r = await api('renameProduct', { code: String(base.code), brand, name, colorNo, staffName: S.staff });
+      const p = findProduct(base.code);
+      if (p) Object.assign(p, { name: r.name, brand: r.brand, colorNo: r.colorNo });
+      if (S.stock) S.stock.forEach((i) => { if (String(i.code) === String(base.code)) Object.assign(i, { name: r.name, brand: r.brand, colorNo: r.colorNo }); });
+      const t = S.incoming && S.incoming[String(base.code)];
+      if (t) { t.name = r.name + (r.colorNo ? '（' + r.colorNo + '）' : ''); t.brand = r.brand; Object.assign(t.product, { name: r.name, brand: r.brand, colorNo: r.colorNo }); }
+      close();
+      if (onDone) onDone(r);
+    } catch (e) {
+      if (isLoginError(e)) { close(); toLogin(e.message); return; }
+      err.textContent = '直せませんでした：' + e.message;
+      btn.disabled = false; btn.textContent = 'この名前に直す';
+    }
+  });
+}
+
 // ---- 棚卸 ステップ1 はじめ方 ----
 async function toStart() {
   renderSteps();
@@ -1116,9 +1174,12 @@ function renderIncomingList() {
   $('incoming-store').textContent = S.store || '';
   const list = $('incoming-list');
   list.innerHTML = items.length
-    ? items.map(([k, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div></div>' +
+    ? items.map(([k, t]) => '<div class="row"><div class="row-name">' + esc(t.name) + '<div class="scan-brand">' + esc(t.brand || '') + '</div><button class="rename-link" data-rename="' + esc(k) + '">商品名を直す</button></div>' +
       '<div class="stepper"><button data-code="' + esc(k) + '" data-d="-1" aria-label="1つ取り消す">−</button><span class="num">' + t.count + '</span><button data-code="' + esc(k) + '" data-d="1" aria-label="1つ増やす">＋</button></div></div>').reverse().join('')
     : '<div class="empty">まだありません</div>';
+  list.querySelectorAll('button[data-rename]').forEach((b) => b.addEventListener('click', () => {
+    const t = S.incoming[b.dataset.rename]; if (t) openRename(t.product, renderIncomingList);
+  }));
   list.querySelectorAll('button[data-code]').forEach((b) => b.addEventListener('click', async () => {
     const t = S.incoming[b.dataset.code]; if (!t || S.busy) return;
     const d = Number(b.dataset.d);
@@ -1441,10 +1502,16 @@ async function onLookupScan(code) {
       ? '<div class="scan-card ' + (r.currentStock > 0 ? 'ok' : 'warn') + '"><div><div class="scan-name">' + productLabel(r) + '</div><div class="scan-brand">' + esc(r.brand || '') + '</div></div>' +
         '<div><div class="hint">' + esc(S.store) + ' の在庫</div><div class="big-num">' + esc(r.currentStock) + '<small>個</small></div>' +
         (r.currentStock > 0 ? '' : '<div style="color:var(--red); font-weight:700; font-size:14px; margin-top:4px">在庫がありません</div>') + '</div>' +
+        '<button class="btn btn-ghost btn-small" id="btn-lookup-rename">商品名を直す</button>' +
         '<button class="btn btn-primary" id="btn-next">ほかの商品を調べる</button></div>'
       : '<div class="scan-card ng"><div class="scan-name">商品リストにないコードです</div><div style="font-size:20px; font-weight:700">' + esc(code) + '</div>' +
         '<div class="hint">まだ登録されていない商品です。届いた商品なら「入荷登録」で登録できます。</div><button class="btn btn-ghost" id="btn-next">ほかの商品を調べる</button></div>';
     $('btn-next').addEventListener('click', next);
+    if (r.found) $('btn-lookup-rename').addEventListener('click', () => openRename(r, (x) => {
+      Object.assign(r, { name: x.name, brand: x.brand, colorNo: x.colorNo });
+      wrap.querySelector('.scan-name').innerHTML = productLabel(r);
+      wrap.querySelector('.scan-brand').textContent = r.brand || '';
+    }));
   } catch (e) {
     if (isLoginError(e)) { toLogin(e.message); return; }
     wrap.innerHTML = '<div class="scan-card warn"><div class="scan-name">調べられませんでした</div><div class="hint">' + esc(e.message) + '</div><button class="btn btn-ghost" id="btn-next">もう一度読む</button></div>';
@@ -1494,9 +1561,13 @@ function renderStock() {
   $('stock-count').textContent = items.length + '品目' + (items.length > 300 ? '（多いので最初の300品目だけ表示しています。ブランドや検索でしぼってください）' : '');
   const shown = items.slice(0, 300).map((i) => Object.assign({}, i, { brand: i.brand || '(ブランドなし)' }));
   $('stock-list').innerHTML = shown.length ? groupHtml(shown, (i) =>
-    '<div class="row"><div class="row-name">' + productLabel(i) + '</div>' +
+    '<div class="row"><div class="row-name">' + productLabel(i) + '<div><button class="rename-link" data-rename="' + esc(i.code) + '">商品名を直す</button></div></div>' +
     (i.currentStock > 0 ? '<div class="row-count">' + esc(i.currentStock) + '個</div>' : '<div class="row-count zero">在庫なし</div>') + '</div>')
     : '<div class="empty">見つかりませんでした</div>';
+  $('stock-list').querySelectorAll('button[data-rename]').forEach((b) => b.addEventListener('click', () => {
+    const i = S.stock.find((x) => String(x.code) === b.dataset.rename);
+    if (i) openRename(i, renderStock);
+  }));
 }
 $('stock-search').addEventListener('input', renderStock);
 $('stock-brand').addEventListener('change', renderStock);

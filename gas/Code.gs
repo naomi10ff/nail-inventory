@@ -119,6 +119,8 @@ function routeAction_(action, p) {
       return addOrderLine_(validateToken_(p.token), p);
     case 'addOrderLines':
       return addOrderLines_(validateToken_(p.token), p);
+    case 'renameProduct':
+      return renameProduct_(validateToken_(p.token), p);
     default:
       throw new Error('不明なactionです: ' + action);
   }
@@ -299,6 +301,48 @@ function updateProduct_(session, p) {
   // 直結してしまう。「現在庫サマリ」は画面表示では使っておらず参考シートのため、
   // 最新化したい場合はApps ScriptエディタからrefreshCurrentStockSummary()を手動実行する。
   return { store: p.store, code: newCode || p.code };
+}
+
+/**
+ * お店のアプリから、まちがえて登録した商品のブランド・商品名・カラー番号を直す(11/27 賀田さん要望。
+ * 店舗アカウントは自店の商品だけ)。コード・カテゴリ・品番などは変えない。
+ * 在庫の一覧や棚卸の確認は取引ログの商品名を表示に使うため、数量0の「名前変更」の行も残す
+ * (在庫の計算には入らない。だれがいつ何を何に直したかの記録にもなる)。承認は取り消さない。
+ */
+function renameProduct_(session, p) {
+  requireRole_(session, ['hq', 'store']);
+  var store = session.role === 'hq' ? p.store : session.store;
+  if (!store || !p.code) throw new Error('店舗と商品を指定してください');
+  var name = String(p.name || '').trim();
+  var brand = String(p.brand || '').trim();
+  var colorNo = String(p.colorNo || '').trim();
+  if (!name) throw new Error('商品名を入れてください');
+  if (!brand) throw new Error('ブランドを選んでください');
+
+  var sheet = getSheet_(SHEET_PRODUCTS);
+  var lastRow = sheet.getLastRow();
+  var row = -1;
+  if (lastRow >= 2) {
+    var finder = sheet.getRange(2, 2, lastRow - 1, 1).createTextFinder(String(p.code)).matchEntireCell(true);
+    var match = finder.findNext();
+    while (match) {
+      if (sheet.getRange(match.getRow(), 1).getValue() === store) { row = match.getRow(); break; }
+      match = finder.findNext();
+    }
+  }
+  if (row === -1) throw new Error('商品が見つかりません');
+
+  var before = sheet.getRange(row, 1, 1, 11).getValues()[0];
+  var oldLabel = before[3] + ' ' + before[2] + (before[9] ? '（' + before[9] + '）' : '');
+  var newLabel = brand + ' ' + name + (colorNo ? '（' + colorNo + '）' : '');
+  if (oldLabel === newLabel) return { store: store, code: String(before[1]), name: name, brand: brand, colorNo: colorNo, changed: false };
+
+  ensureBrandExists_(store, brand);
+  sheet.getRange(row, 3).setValue(name);
+  sheet.getRange(row, 4).setValue(brand);
+  sheet.getRange(row, 10).setValue(colorNo);
+  getSheet_(SHEET_LOG).appendRow([new Date(), store, recorderName_(session, p), String(before[1]), name, brand, '名前変更', 0, oldLabel + ' → ' + newLabel]);
+  return { store: store, code: String(before[1]), name: name, brand: brand, colorNo: colorNo, changed: true };
 }
 
 /**
