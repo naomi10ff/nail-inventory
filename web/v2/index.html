@@ -497,7 +497,8 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwGwA8PfZjVi_IgDPvjcQkJ
 const S = {
   token: localStorage.getItem('token') || null,
   role: localStorage.getItem('role') || null,
-  store: localStorage.getItem('role') === 'hq' ? (localStorage.getItem('v2_hq_store') || null) : (localStorage.getItem('store') || null),
+  // 本社は開くたびに店舗を選び直す(前回の店舗が残っていて、別の店舗に入荷登録してしまったため 11/27)
+  store: localStorage.getItem('role') === 'hq' ? null : (localStorage.getItem('store') || null),
   staff: null,
   mode: 'overwrite',      // 'add'(続きから=今月の数に足す) / 'overwrite'(数えた数で置き換え)
   tally: {},              // code -> { code, name, brand, count }
@@ -608,7 +609,7 @@ $('btn-login').addEventListener('click', async (ev) => {
   }
 });
 function logout() {
-  ['token', 'store', 'role'].forEach((k) => localStorage.removeItem(k));
+  ['token', 'store', 'role', 'v2_hq_store'].forEach((k) => localStorage.removeItem(k));
   S.token = S.role = S.store = S.staff = null;
   S.products = []; S.productsLoaded = false; S.stock = null;
   show('s-login');
